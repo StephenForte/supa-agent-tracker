@@ -151,3 +151,13 @@ clients accept them (PRD "Accounts and authorization", "Integration deliverables
   approval, **not** via the root render.yaml Blueprint. The operator connects each client and records results. The planner
   writes the outcome as the auth decision that gates P1-B/P1-C.
 - Probe tokens are generated at deploy time and live only in Render env vars and the operator's client config, never in git.
+
+### D-018 — Phase 1 MCP auth: personal bearer tokens first, OAuth later
+Status: Proposed (2026-10-15), awaiting operator decision
+Evidence: docs/plan/p1-a2-results.md. All three initial clients (Cursor 3.24.18, Claude Desktop 2.42304.0 Max, Grok Bot)
+connected to the probe with a pasted `Authorization: Bearer` header.
+Proposal: Phase 1 implements only the PRD's scoped, revocable, copy-once personal bearer tokens (hash-stored, project-scoped,
+server-enforced). OAuth 2.1 (DCR/CIMD, per the Claude auth reference) is deferred until a user's client can't send headers;
+the MCP endpoint keeps returning a spec-shaped 401 + `resource_metadata` so OAuth can be added without breaking clients.
+Run attribution comes only from the check-in payload (agent_name, harness, model, parent_run_id, all optional except the PRD's
+required fields). Observed clientInfo and user-agent are stored as metadata, never as identity.
