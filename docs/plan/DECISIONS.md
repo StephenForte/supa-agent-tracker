@@ -138,3 +138,16 @@ Decisions on docs/ux-review.md findings:
 9. Run-metadata editor: **defer** to Phase 1.
 Defect found in review: "+N more" on a run's PR cell gives no visible result. It must bring the run's Pull requests list into view and move focus there.
 Implemented by T0-07a.
+
+### D-017 — Phase 1 starts with a client-compatibility spike (P1-A)
+Status: Proposed (2026-10-15)
+Before any Phase 1 schema, auth or MCP API design, establish what Cursor, Claude Desktop (macOS) and Grok Bot actually
+support for a remote MCP server: transport, auth (static bearer header vs OAuth 2.1), and what they expose (subagent tool
+inheritance, model identity, hooks for heartbeats). The PRD says bearer tokens are a product requirement, not evidence that
+clients accept them (PRD "Accounts and authorization", "Integration deliverables").
+- P1-A1 (worker): documented research with citations, plus a throwaway probe server in `spike/mcp-probe/` (own
+  package.json; excluded from the app's lint/test/build; never imported by `src/`).
+- P1-A2 (operator + planner): the planner deploys the probe as a separate **free-plan** Render web service, with operator
+  approval, **not** via the root render.yaml Blueprint. The operator connects each client and records results. The planner
+  writes the outcome as the auth decision that gates P1-B/P1-C.
+- Probe tokens are generated at deploy time and live only in Render env vars and the operator's client config, never in git.
