@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { TrackerState } from './seed';
+import { DEMO_LIVE_RUN_IDS, type TrackerState } from './seed';
 import type { PrivateNote } from '../../domain/privateNotes';
 const time = z.iso.datetime();
 const nullableText = z.string().nullable();
@@ -30,6 +30,8 @@ const waiting = z.object({ projectId: z.string(), text: z.string(), sourceRunId:
 const token = z.object({ id: z.string(), label: z.string(), projectIds: z.array(z.string()), display: z.string().startsWith('sat_demo_…'), createdAt: time, lastUsedAt: time.nullable(), revokedAt: time.nullable() });
 export const runMetadataPatchSchema = run.pick({ title: true, taskId: true, harness: true, model: true, completionSummary: true, blocker: true, noPrReason: true, prReferences: true }).partial();
 export const trackerSchema: z.ZodType<TrackerState> = z.object({
+  // Default preserves pre-heartbeat v1 demo edits instead of discarding saved state.
+  demoLiveRunIds: z.array(z.enum(DEMO_LIVE_RUN_IDS)).default(() => [...DEMO_LIVE_RUN_IDS]),
   account: z.object({ id: z.literal('usr_demo'), name: z.string(), email: z.email(), emailVerified: z.boolean(), demo: z.literal(true) }),
   projects: z.array(project), agents: z.array(agent), runs: z.array(run.refine(value => value.executionState === 'running' ? value.finishedAt === null : value.finishedAt !== null)), steps: z.array(step), waitingNotes: z.array(waiting), tokens: z.array(token), sequence: z.number().int().nonnegative(),
 }).refine(state => {
@@ -37,7 +39,7 @@ export const trackerSchema: z.ZodType<TrackerState> = z.object({
   const agents = new Map(state.agents.map(item => [item.id, item]));
   const runs = new Map(state.runs.map(item => [item.id, item]));
   const unique = (ids: string[]) => new Set(ids).size === ids.length;
-  return unique(state.projects.map(item => item.id)) && unique(state.agents.map(item => item.id)) && unique(state.runs.map(item => item.id)) && unique(state.steps.map(item => item.id)) && unique(state.tokens.map(item => item.id)) &&
+  return unique(state.demoLiveRunIds) && state.demoLiveRunIds.every(id => runs.has(id)) && unique(state.projects.map(item => item.id)) && unique(state.agents.map(item => item.id)) && unique(state.runs.map(item => item.id)) && unique(state.steps.map(item => item.id)) && unique(state.tokens.map(item => item.id)) &&
     state.projects.every(item => item.ownerId === state.account.id) && state.agents.every(item => projects.has(item.projectId)) &&
     state.runs.every(item => agents.get(item.agentId)?.projectId === item.projectId && item.events.every(event => event.runId === item.id) &&
       (item.parentRunId === null || (runs.get(item.parentRunId)?.projectId === item.projectId && runs.get(item.parentRunId)?.childRunIds.includes(item.id))) &&

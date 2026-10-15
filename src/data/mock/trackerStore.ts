@@ -5,12 +5,29 @@ import { seedTracker, type TrackerState } from './seed';
 import { observable } from './observable';
 import { projectInputSchema, runMetadataPatchSchema } from './schema';
 export interface TrackerStoreOptions { clock: Clock; initial?: TrackerState; persist(state: TrackerState): void; onReset(now: number): void }
-export function createTrackerStore({ clock, initial, persist, onReset }: TrackerStoreOptions): TrackerDataSource {
+export function createTrackerStore({ clock, initial, persist, onReset }: TrackerStoreOptions) {
   let state = structuredClone(initial ?? seedTracker(clock.now()));
   const changes = observable();
   const copy = <T,>(value: T): T => structuredClone(value);
   const timestamp = () => new Date(clock.now()).toISOString();
   const commit = () => { persist(copy(state)); changes.notify(); };
+  /** Synthetic liveness only: preserve narrative activity, revisions, history and elapsed origins.
+   * Clock notifications update the shared state before readers run; no read method mutates it.
+   * Refresh at most once per minute (sooner for short project thresholds), including after sleep.
+   */
+  function heartbeat() {
+    const now = clock.now();
+    let changed = false;
+    for (const run of state.runs) {
+      if (run.executionState !== 'running' || !state.demoLiveRunIds.includes(run.id)) continue;
+      const project = state.projects.find(item => item.id === run.projectId)!;
+      const interval = Math.min(60_000, project.reportingPolicy.staleThresholdMinutes * 30_000);
+      if (now - Date.parse(run.lastContactAt) < interval) continue;
+      run.lastContactAt = new Date(now).toISOString();
+      changed = true;
+    }
+    if (changed) commit();
+  }
   function issue(label: string, projectIds: string[]): TokenIssueResult {
     if (!label.trim() || !projectIds.length || projectIds.some(id => !state.projects.some(project => project.id === id))) return { status: 'invalid', message: 'Provide a label and at least one existing project scope.' };
     const suffix = crypto.randomUUID();
@@ -18,7 +35,7 @@ export function createTrackerStore({ clock, initial, persist, onReset }: Tracker
     state.tokens.push(token);
     return { status: 'created', token: copy(token), plaintext: `sat_demo_NOT_A_REAL_TOKEN_${suffix}` };
   }
-  return {
+  const source: TrackerDataSource = {
     subscribe: changes.subscribe, getSnapshot: changes.getSnapshot,
     async getAccount() { return copy(state.account); },
     async listProjects() { return copy(state.projects); },
@@ -103,4 +120,8 @@ export function createTrackerStore({ clock, initial, persist, onReset }: Tracker
     },
     async resetDemo() { const now = clock.now(); state = seedTracker(now); onReset(now); changes.notify(); },
   };
+  // Reconcile persisted contacts immediately, then keep them fresh for this store's lifetime.
+  const stopHeartbeat = clock.subscribe(heartbeat);
+  heartbeat();
+  return { source, dispose: stopHeartbeat };
 }

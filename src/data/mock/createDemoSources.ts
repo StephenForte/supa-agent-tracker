@@ -9,13 +9,14 @@ export function createDemoSources(options: { clock?: Clock; storage?: StorageAda
   const persistence = createPersistence(options.storage);
   const now = clock.now();
   let envelope: DemoEnvelope = persistence.load() ?? { version: 1, tracker: seedTracker(now), privateNotes: seedPrivateNotes(now) };
-  const tracker = createTrackerStore({ clock, initial: envelope.tracker,
+  const trackerStore = createTrackerStore({ clock, initial: envelope.tracker,
     persist(state) { envelope.tracker = state; persistence.save(envelope); },
     onReset(resetAt) {
       envelope = { version: 1, tracker: seedTracker(resetAt), privateNotes: seedPrivateNotes(resetAt) };
       notes.reset(resetAt); persistence.clear();
     },
   });
+  const tracker = trackerStore.source;
   const notes = createPrivateNotesStore(clock, envelope.privateNotes, value => { envelope.privateNotes = value; persistence.save(envelope); }, async id => (await tracker.getProject(id)) !== null);
-  return { tracker, privateNotes: notes.source };
+  return { tracker, privateNotes: notes.source, dispose: trackerStore.dispose };
 }
