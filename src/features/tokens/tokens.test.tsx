@@ -129,6 +129,33 @@ describe('MCP tokens', () => {
     sources.dispose();
   });
 
+  it('clears a previous copy status when rotation replaces the revealed plaintext', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    const { sources, storage } = renderTokens();
+    await screen.findByRole('article', { name: 'Demo coding client tok_1' });
+    await user.click(screen.getByRole('button', { name: 'Create token' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Create a fake token' });
+    await user.type(within(dialog).getByRole('textbox', { name: 'Label' }), 'Copied once');
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Offers workspace' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Create token' }));
+    const first = (await screen.findByRole('textbox', { name: 'Fake demo token' }) as HTMLInputElement).value;
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    await user.click(screen.getByRole('button', { name: 'Copy' }));
+    expect(await screen.findByText('Copied.')).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Rotate Demo coding client' }));
+    const rotateDialog = await screen.findByRole('dialog', { name: 'Rotate token?' });
+    await user.click(within(rotateDialog).getByRole('button', { name: 'Rotate token' }));
+    const second = (await screen.findByRole('textbox', { name: 'Fake demo token' }) as HTMLInputElement).value;
+    expect(second).not.toBe(first);
+    expect(screen.queryByText('Copied.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Dismiss' }));
+    assertSecretGone(first, storage);
+    assertSecretGone(second, storage);
+    sources.dispose();
+  });
+
   it('rotates tok_1 into a new one-time reveal and revokes tok_2', async () => {
     const user = userEvent.setup();
     const { sources, storage } = renderTokens();

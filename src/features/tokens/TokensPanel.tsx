@@ -23,6 +23,7 @@ export function TokensPanel() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [pending, setPending] = useState<{ kind: 'revoke' | 'rotate'; tokenId: string; label: string } | null>(null);
   const [plaintext, setPlaintext] = useState<string | null>(null);
+  const [revealGeneration, setRevealGeneration] = useState(0);
   const query = useSourceQuery(tracker, useCallback(async () => {
     void attempt;
     const [tokens, projects] = await Promise.all([tracker.listTokens(), tracker.listProjects()]);
@@ -30,6 +31,7 @@ export function TokensPanel() {
   }, [tracker, attempt]));
 
   function dismissReveal() { setPlaintext(null); }
+  function showPlaintext(value: string) { setRevealGeneration(generation => generation + 1); setPlaintext(value); }
   function closeCreate() { setCreateOpen(false); setFormError(null); }
 
   async function createToken() {
@@ -39,7 +41,7 @@ export function TokensPanel() {
       setLabel('');
       setProjectIds([]);
       setFormError(null);
-      setPlaintext(result.plaintext);
+      showPlaintext(result.plaintext);
       return;
     }
     setFormError(result.status === 'invalid' ? result.message : 'The demo could not create a token.');
@@ -56,7 +58,7 @@ export function TokensPanel() {
     }
     const result = await tracker.rotateToken(current.tokenId);
     if (result.status === 'created') {
-      setPlaintext(result.plaintext);
+      showPlaintext(result.plaintext);
       return;
     }
     setActionError(result.status === 'invalid' ? result.message : 'The demo could not rotate that token.');
@@ -68,7 +70,7 @@ export function TokensPanel() {
   return <div className="flex min-w-0 flex-col gap-4">
     <p className="lede">MCP tokens in this demo are fake. A new value is shown once, then discarded.</p>
     {actionError && <p role="alert">{actionError}</p>}
-    {plaintext && <TokenReveal plaintext={plaintext} onDismiss={dismissReveal} />}
+    {plaintext && <TokenReveal key={revealGeneration} plaintext={plaintext} onDismiss={dismissReveal} />}
     {tokens.length === 0 ? <EmptyState title="No MCP tokens"><p>Create a fake demo token to preview the one-time reveal.</p></EmptyState> : <ul className="m-0 flex list-none flex-col gap-3 p-0">
       {tokens.map(token => <li key={token.id}><article aria-label={`${token.label} ${token.id}`} className="slot">
         <h2 className="break-words">{token.label}</h2>
