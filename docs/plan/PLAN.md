@@ -22,8 +22,8 @@ Last updated: 2026-10-14 (initial plan; nothing implemented, no repo yet).
 | 2 | T0-03 Project detail + RunGrid | T0-01 merged | 02, 04, 06 | Opus 5.5 | **Merged** PR #6 (2026-10-15) |
 | 2 | T0-04 Next steps + private notes | T0-01 merged | 02, 03, 06 | Sonnet 5.5 | **Merged** PR #8 (2026-10-15) |
 | 2 | T0-06 Account, tokens, setup UX | T0-01 merged | 02, 03, 04 | Sonnet 5.5 | **Merged** PR #7 (2026-10-15) |
-| 3 | T0-05 All agents view | T0-03 merged | — | Sonnet 5.5 | PR #13 approved @ 10c8a77 (2026-10-15); awaiting merge |
-| 4 | T0-07 Integration, Render, UX review | all above | — | Opus 5.5 | Not started |
+| 3 | T0-05 All agents view | T0-03 merged | — | Sonnet 5.5 | **Merged** PR #13 (2026-10-15) |
+| 4 | T0-07 Integration, Render, UX review | all above | — | Opus 5.5 | Brief ready: `briefs/T0-07.md` (2026-10-15) |
 
 Change from PRD: T0-04 moves into wave 2 (PRD has it integrating after 02/03). Made
 possible by slot files (D-008): T0-02/T0-03 import T0-04's components; T0-04 fills them.
@@ -78,6 +78,14 @@ case is reported in the handoff and the planner dispatches a small T0-01x follow
 Wave 1 (T0-01) runs in the Dropbox checkout. Wave 2 runs four workers at once; they cannot
 share one working tree. **Decided 2026-10-14:** each wave-2 worker runs in its harness's own
 worktree or cloud sandbox. Briefs make the worker stop if `pwd` is inside Dropbox.
+
+## Render deployment (after T0-07 merges)
+- Workspace: "Supa Workspace" `tea-d98533l7vvec738vva90` (checked via Render MCP 2026-10-15; no supa-agent-tracker
+  service exists yet; the workspace already builds static sites from StephenForte repos).
+- T0-07 ships `render.yaml` + `docs/deploy.md` only. The planner creates the static site from that config after merge,
+  **with explicit operator approval**, then smoke-tests the URL: every D-007 route loaded directly and reloaded.
+- Unverified until then: whether Render's GitHub app can read this private repo, and that the /* → /index.html rewrite
+  works on Render (vite preview masks its absence locally).
 
 ## Known traps (found in review)
 - UI time comes from `useNow()`, which always reads `systemClock`; there is no clock context. Injecting a clock into
