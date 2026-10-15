@@ -153,7 +153,7 @@ clients accept them (PRD "Accounts and authorization", "Integration deliverables
 - Probe tokens are generated at deploy time and live only in Render env vars and the operator's client config, never in git.
 
 ### D-018 — Phase 1 MCP auth: personal bearer tokens first, OAuth later
-Status: Proposed (2026-10-15), awaiting operator decision
+Status: **Confirmed by operator (2026-10-15)**
 Evidence: docs/plan/p1-a2-results.md. All three initial clients (Cursor 3.24.18, Claude Desktop 2.42304.0 Max, Grok Bot)
 connected to the probe with a pasted `Authorization: Bearer` header.
 Proposal: Phase 1 implements only the PRD's scoped, revocable, copy-once personal bearer tokens (hash-stored, project-scoped,
