@@ -1,0 +1,106 @@
+import type { TrackerDataSource } from '../contracts';
+import type { McpToken, Project, ProjectInput, TokenIssueResult } from '../../domain/types';
+import type { Clock } from '../../domain/clock';
+import { seedTracker, type TrackerState } from './seed';
+import { observable } from './observable';
+import { projectInputSchema, runMetadataPatchSchema } from './schema';
+export interface TrackerStoreOptions { clock: Clock; initial?: TrackerState; persist(state: TrackerState): void; onReset(now: number): void }
+export function createTrackerStore({ clock, initial, persist, onReset }: TrackerStoreOptions): TrackerDataSource {
+  let state = structuredClone(initial ?? seedTracker(clock.now()));
+  const changes = observable();
+  const copy = <T,>(value: T): T => structuredClone(value);
+  const timestamp = () => new Date(clock.now()).toISOString();
+  const commit = () => { persist(copy(state)); changes.notify(); };
+  function issue(label: string, projectIds: string[]): TokenIssueResult {
+    if (!label.trim() || !projectIds.length || projectIds.some(id => !state.projects.some(project => project.id === id))) return { status: 'invalid', message: 'Provide a label and at least one existing project scope.' };
+    const suffix = crypto.randomUUID();
+    const token: McpToken = { id: `tok_${++state.sequence}`, label: label.trim(), projectIds: [...new Set(projectIds)], display: `sat_demo_…${suffix.slice(-6)}`, createdAt: timestamp(), lastUsedAt: null, revokedAt: null };
+    state.tokens.push(token);
+    return { status: 'created', token: copy(token), plaintext: `sat_demo_NOT_A_REAL_TOKEN_${suffix}` };
+  }
+  return {
+    subscribe: changes.subscribe, getSnapshot: changes.getSnapshot,
+    async getAccount() { return copy(state.account); },
+    async listProjects() { return copy(state.projects); },
+    async getProject(id) { return copy(state.projects.find(project => project.id === id) ?? null); },
+    async createProject(input) {
+      const parsed = projectInputSchema.safeParse(input);
+      if (!parsed.success) return { status: 'invalid', message: 'A name, valid metadata, HTTP(S) links and positive stale threshold are required.' };
+      const project: Project = { ...parsed.data, id: `prj_demo_${++state.sequence}`, ownerId: state.account.id, revision: 1, createdAt: timestamp(), updatedAt: timestamp() };
+      state.projects.push(project); commit(); return { status: 'saved', value: copy(project) };
+    },
+    async updateProject(id, patch, expectedRevision) {
+      const project = state.projects.find(item => item.id === id);
+      if (!project) return { status: 'not_found' };
+      if (project.revision !== expectedRevision) return { status: 'conflict', current: copy(project) };
+      // Explicit allowlist prevents caller-supplied IDs, ownership or extra fields entering records.
+      const input: ProjectInput = { name: patch.name ?? project.name, description: patch.description ?? project.description,
+        type: patch.type ?? project.type, lifecycle: patch.lifecycle ?? project.lifecycle,
+        repositoryName: patch.repositoryName === undefined ? project.repositoryName : patch.repositoryName,
+        repositoryUrl: patch.repositoryUrl === undefined ? project.repositoryUrl : patch.repositoryUrl,
+        prdUrl: patch.prdUrl === undefined ? project.prdUrl : patch.prdUrl,
+        tags: patch.tags ?? project.tags, reportingPolicy: patch.reportingPolicy ?? project.reportingPolicy };
+      const parsed = projectInputSchema.safeParse(input);
+      if (!parsed.success) return { status: 'invalid', message: 'Invalid project metadata or reporting policy.' };
+      Object.assign(project, parsed.data, { revision: project.revision + 1, updatedAt: timestamp() });
+      commit(); return { status: 'saved', value: copy(project) };
+    },
+    async listAgents(projectId) { return copy(state.agents.filter(agent => !projectId || agent.projectId === projectId)); },
+    async listRuns(projectId) { return copy(state.runs.filter(run => !projectId || run.projectId === projectId)); },
+    async getRun(id) { return copy(state.runs.find(run => run.id === id) ?? null); },
+    async updateRunMetadata(id, patch, expectedRevision) {
+      const run = state.runs.find(item => item.id === id);
+      if (!run) return { status: 'not_found' };
+      if (run.revision !== expectedRevision) return { status: 'conflict', current: copy(run) };
+      const parsed = runMetadataPatchSchema.safeParse(patch);
+      if (!parsed.success || (parsed.data.title !== undefined && !parsed.data.title.trim())) return { status: 'invalid', message: 'Provide valid run metadata and HTTP(S) PR links.' };
+      const now = timestamp();
+      Object.assign(run, parsed.data, { updatedAt: now, revision: run.revision + 1 });
+      run.events.push({ id: `evt_demo_${++state.sequence}`, runId: id, kind: 'status', receivedAt: now, occurredAt: null, actorId: state.account.id, message: 'Operator corrected run metadata.', executionState: run.executionState, workStatus: run.workStatus });
+      commit(); return { status: 'saved', value: copy(run) };
+    },
+    async closeRun(id, outcome, reason) {
+      const run = state.runs.find(item => item.id === id);
+      if (!run) return { status: 'not_found' };
+      if (run.executionState !== 'running') return { status: 'invalid', message: 'Only running executions may be manually closed.' };
+      if (!['failed', 'cancelled'].includes(outcome) || !reason.trim()) return { status: 'invalid', message: 'Choose Failed or Cancelled and provide an audit reason.' };
+      const now = timestamp();
+      Object.assign(run, { executionState: outcome, workStatus: outcome, finishedAt: now, updatedAt: now, message: reason.trim(), revision: run.revision + 1 });
+      run.events.push({ id: `evt_demo_${++state.sequence}`, runId: id, kind: 'manual_close', receivedAt: now, occurredAt: null, actorId: state.account.id, message: reason.trim(), executionState: outcome, workStatus: outcome });
+      commit(); return { status: 'saved', value: copy(run) };
+    },
+    async listNextSteps(id) { return copy({ steps: state.steps.filter(step => step.projectId === id).sort((a, b) => a.position - b.position), waitingNote: state.waitingNotes.find(note => note.projectId === id) ?? null }); },
+    async setNextStepDone(id, done, expectedRevision) {
+      const step = state.steps.find(item => item.id === id);
+      if (!step) return { status: 'not_found' };
+      if (step.revision !== expectedRevision) return { status: 'conflict', current: copy(step) };
+      Object.assign(step, { done, revision: step.revision + 1, updatedAt: timestamp(), completionChangedBy: state.account.id, completionChangedAt: timestamp() });
+      commit(); return { status: 'saved', value: copy(step) };
+    },
+    async simulateAgentStepUpdate(id, instruction, sourceRunId, expectedRevision) {
+      const step = state.steps.find(item => item.id === id);
+      if (!step) return { status: 'not_found' };
+      if (step.revision !== expectedRevision) return { status: 'conflict', current: copy(step) };
+      if (sourceRunId !== step.sourceRunId || !state.runs.some(run => run.id === sourceRunId && run.projectId === step.projectId)) return { status: 'invalid', message: 'A worker can update only its own contributed step.' };
+      if (!instruction.trim()) return { status: 'invalid', message: 'An instruction is required.' };
+      Object.assign(step, { instruction: instruction.trim(), updatedAt: timestamp(), revision: step.revision + 1 });
+      commit(); return { status: 'saved', value: copy(step) };
+    },
+    async listTokens() { return copy(state.tokens); },
+    async createToken(input) { const result = issue(input.label, input.projectIds); if (result.status === 'created') commit(); return result; },
+    async revokeToken(id) {
+      const token = state.tokens.find(item => item.id === id);
+      if (!token) return { status: 'not_found' };
+      token.revokedAt ??= timestamp(); commit(); return { status: 'saved', value: copy(token) };
+    },
+    async rotateToken(id) {
+      const token = state.tokens.find(item => item.id === id);
+      if (!token) return { status: 'not_found' };
+      if (token.revokedAt !== null) return { status: 'invalid', message: 'Revoked tokens cannot be rotated.' };
+      const result = issue(token.label, token.projectIds);
+      if (result.status === 'created') { token.revokedAt = timestamp(); commit(); }
+      return result;
+    },
+    async resetDemo() { const now = clock.now(); state = seedTracker(now); onReset(now); changes.notify(); },
+  };
+}
