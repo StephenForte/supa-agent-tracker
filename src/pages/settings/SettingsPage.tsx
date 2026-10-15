@@ -1,3 +1,20 @@
-import { Link } from 'react-router';
-import { Placeholder } from '../../app/Placeholder';
-export function SettingsPage({ title }: { title: string }) { return <Placeholder title={title} owner="T0-06"><div className="link-list"><Link to="/settings">Account settings</Link><Link to="/settings/tokens">MCP tokens</Link><Link to="/settings/integrations">Integration setup</Link></div><p>Demo identity: demo@example.invalid</p>{title === 'Integration setup' && <p>Cursor, Claude Desktop/macOS, Grok Bot: Not connected · Not tested.</p>}</Placeholder>; }
+import { NavLink, useLocation } from 'react-router';
+import { IntegrationsPanel } from '../../features/integrations/IntegrationsPanel';
+import { TokensPanel } from '../../features/tokens/TokensPanel';
+import { AccountSettings } from './AccountSettings';
+
+export function SettingsPage({ title }: { title: string }) {
+  const { pathname } = useLocation();
+  return <>
+    <p className="eyebrow">Simulated account</p>
+    <h1>{title}</h1>
+    <nav aria-label="Settings sections" className="link-list">
+      <NavLink to="/settings" end>Account settings</NavLink>
+      <NavLink to="/settings/tokens">MCP tokens</NavLink>
+      <NavLink to="/settings/integrations">Integration setup</NavLink>
+    </nav>
+    {pathname === '/settings' && <AccountSettings />}
+    {pathname === '/settings/tokens' && <TokensPanel />}
+    {pathname === '/settings/integrations' && <IntegrationsPanel />}
+  </>;
+}
