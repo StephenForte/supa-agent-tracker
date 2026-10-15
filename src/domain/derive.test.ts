@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createClock } from './clock';
 import { activeFirstProjectSortKey, compareProjectsActiveFirst, elapsed, isStale, latestActivity, nextStepSummary, projectCounts } from './derive';
-import { formatElapsed, formatIdentity, formatNullable, formatTimestamp, formatToolTelemetry } from './format';
+import { formatDescription, formatElapsed, formatIdentity, formatNullable, formatTimestamp, formatToolTelemetry, lifecycleLabels, prdPresentation, projectCountLabels, projectTypeLabels, repositoryPresentation } from './format';
 import { seedTracker } from '../data/mock/seed';
 const now = Date.parse('2026-10-14T20:00:00Z');
 const seed = seedTracker(now);
@@ -25,4 +25,13 @@ describe('honest display formatters', () => {
   it('distinguishes null from zero and unknown identities', () => { expect(formatNullable(null)).toBe('—'); expect(formatNullable(0)).toBe('0'); expect(formatIdentity(null)).toBe('Unknown'); expect(formatIdentity(' ')).toBe('Unknown'); });
   it('distinguishes absent telemetry from zero-call rows', () => { expect(formatToolTelemetry(null)).toBe('No telemetry reported'); expect(formatToolTelemetry(seed.runs[1]!.tools)).toBe('0 calls reported'); });
   it('formats frozen durations and null timestamps', () => { expect(formatElapsed(3661_000)).toBe('1h 1m 1s'); expect(formatTimestamp(null)).toBe('—'); expect(formatTimestamp('2026-10-14T20:00:00Z', 'UTC')).toContain('2026'); });
+  it('uses one vocabulary for project type, lifecycle, counts and missing links', () => {
+    expect(projectTypeLabels).toEqual({ coding: 'Coding', automation: 'Automation' });
+    expect(lifecycleLabels.archived).toBe('Archived');
+    expect(projectCountLabels.map(([, label]) => label)).toEqual(['Live running', 'Stale running', 'Review needed', 'Live logical agents', 'Logical agents', 'Runs']);
+    expect(formatDescription('  ')).toBe('No description yet.');
+    expect(repositoryPresentation({ repositoryName: null, repositoryUrl: null })).toEqual({ href: null, text: 'Repository: —' });
+    expect(prdPresentation({ prdUrl: 'https://github.com/example-org/offers/blob/main/docs/PRD.md' }).text).toBe('Project PRD');
+    expect(prdPresentation({ prdUrl: null })).toEqual({ href: null, text: 'PRD: —' });
+  });
 });

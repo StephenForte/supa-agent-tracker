@@ -1,13 +1,17 @@
 import { compareProjectsActiveFirst, latestActivity, projectCounts } from '../derive';
-import { formatIdentity } from '../format';
-import type { LogicalAgent, Project, Run } from '../types';
+import { formatIdentity, lifecycleLabels, projectTypeLabels } from '../format';
+import type { Lifecycle, LogicalAgent, Project, ProjectType, Run } from '../types';
 
 export interface ProjectFilters { text: string; lifecycle: string; type: string; activity: string; harness: string; tag: string }
 export const defaultFilters: ProjectFilters = { text: '', lifecycle: 'unarchived', type: '', activity: '', harness: '', tag: '' };
 export type ProjectSort = 'active' | 'latest' | 'name' | 'created';
+/** Option labels for the project activity filter. The summary must use these words, not the stored values. */
+export const projectActivityLabels = { live: 'Live running', stale: 'Stale running', 'review-needed': 'Waiting for review', blocked: 'Blocked work' } as const;
 export function describeFilters(filters: ProjectFilters): string[] {
-  return [filters.text.trim() && `Text: ${filters.text.trim()}`, `Lifecycle: ${filters.lifecycle === 'unarchived' ? 'Archived hidden' : filters.lifecycle || 'All'}`,
-    filters.type && `Type: ${filters.type}`, filters.activity && `Activity: ${filters.activity}`, filters.harness && `Harness: ${filters.harness}`, filters.tag && `Tag: ${filters.tag}`].filter((value): value is string => !!value);
+  const lifecycle = filters.lifecycle === 'unarchived' ? 'Archived hidden' : filters.lifecycle ? lifecycleLabels[filters.lifecycle as Lifecycle] ?? filters.lifecycle : 'All';
+  const activity = projectActivityLabels[filters.activity as keyof typeof projectActivityLabels];
+  return [filters.text.trim() && `Text: ${filters.text.trim()}`, `Lifecycle: ${lifecycle}`,
+    filters.type && `Type: ${projectTypeLabels[filters.type as ProjectType] ?? filters.type}`, filters.activity && `Activity: ${activity ?? filters.activity}`, filters.harness && `Harness: ${filters.harness}`, filters.tag && `Tag: ${filters.tag}`].filter((value): value is string => !!value);
 }
 export function filterOptions(projects: readonly Project[], runs: readonly Run[]) {
   return { tags: [...new Set(projects.flatMap(project => project.tags))].sort(), harnesses: [...new Set(runs.map(run => formatIdentity(run.harness)))].sort() };

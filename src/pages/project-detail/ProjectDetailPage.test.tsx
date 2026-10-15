@@ -78,6 +78,9 @@ it('expands a deep link on first render and subsequent same-project URL changes'
 it('shows automation null links, all three historical runs and zero live runs', async () => {
   setup('/projects/prj_weather'); await screen.findByRole('heading', { level: 1, name: 'Daily weather briefing' });
   expect(screen.getByText('Repository: —')).toBeVisible();
+  expect(screen.getByText('PRD: —')).toBeVisible();
+  expect(screen.getByText('Automation')).toBeVisible();
+  expect(screen.getByText('Live logical agents')).toBeVisible();
   expect(document.querySelectorAll('[data-run-id]')).toHaveLength(3);
   expect(screen.queryByRole('button', { name: /Demo: close/ })).toBeNull();
 });
