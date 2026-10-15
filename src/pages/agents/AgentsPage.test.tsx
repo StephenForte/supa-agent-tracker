@@ -1,3 +1,4 @@
+import { StrictMode } from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -102,6 +103,41 @@ it('lets the grid stale activity leave the presets without falling back to activ
   fireEvent.click(screen.getByRole('button', { name: 'Live' }));
   expect(ids()).toEqual(['run_1', 'run_10', 'run_2']);
   expect(router.state.location.search).toBe('?view=live');
+});
+
+it('applies a view again when navigation returns to the value this page last wrote', async () => {
+  const { router } = await shown();
+  fireEvent.click(screen.getByRole('button', { name: 'Live' }));
+  expect(ids()).toEqual(['run_1', 'run_10', 'run_2']);
+  await act(() => router.navigate('/agents?view=review'));
+  expect(ids()).toEqual(['run_3']);
+  await act(() => router.navigate('/agents?view=live'));
+  expect(ids()).toEqual(['run_1', 'run_10', 'run_2']);
+  expect(screen.getByRole('button', { name: 'Live' })).toHaveAttribute('aria-pressed', 'true');
+});
+
+it('restores the previous preset when history goes back', async () => {
+  const { router } = await shown();
+  fireEvent.click(screen.getByRole('button', { name: 'Live' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Waiting for review' }));
+  expect(ids()).toEqual(['run_3']);
+  await act(() => router.navigate(-1));
+  expect(router.state.location.search).toBe('?view=live');
+  expect(ids()).toEqual(['run_1', 'run_10', 'run_2']);
+});
+
+it('keeps stale activity under Strict Mode and still follows a later view link', async () => {
+  const sources = createDemoSources({ storage: memoryStorage() });
+  const router = createMemoryRouter(routes, { initialEntries: ['/agents?view=live'] });
+  disposers.push(sources.dispose, () => router.dispose());
+  render(<StrictMode><DataProvider sources={sources}><RouterProvider router={router} /></DataProvider></StrictMode>);
+  await screen.findByText(/Runs 1–3 of 3/);
+  fireEvent.change(screen.getByLabelText('Activity'), { target: { value: 'stale' } });
+  expect(ids()).toEqual(['run_4']);
+  await act(() => router.navigate('/agents?view=review'));
+  expect(ids()).toEqual(['run_3']);
+  await act(() => router.navigate('/agents?view=live'));
+  expect(ids()).toEqual(['run_1', 'run_10', 'run_2']);
 });
 
 it('selects a view from the keyboard and writes it into the URL', async () => {

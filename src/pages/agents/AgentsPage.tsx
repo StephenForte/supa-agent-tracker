@@ -17,7 +17,14 @@ export function AgentsPage() {
   const [state, setState] = useState(() => initialAgentViewState(viewParam));
   const wroteView = useRef<string | null | false>(false);
   useEffect(() => {
-    if (wroteView.current !== false && wroteView.current === viewParam) return;
+    // Skip the echo of our own preset write, then drop the mark. A later back/forward
+    // onto that same value has to apply. The timeout stays armed through Strict Mode's
+    // extra effect pass, which would otherwise treat the echo as a new navigation.
+    if (wroteView.current !== false && wroteView.current === viewParam) {
+      const timer = window.setTimeout(() => { wroteView.current = false; }, 0);
+      return () => window.clearTimeout(timer);
+    }
+    wroteView.current = false;
     setState(current => applyViewParam(current, viewParam));
   }, [viewParam]);
   const result = useSourceQuery(source, useCallback(async () => {
