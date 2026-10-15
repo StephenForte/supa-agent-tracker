@@ -18,11 +18,11 @@ Last updated: 2026-10-14 (initial plan; nothing implemented, no repo yet).
 | Wave | Task | Depends on | Parallel with | Model (recommended) | Status |
 |---|---|---|---|---|---|
 | 1 | T0-01 Foundation + mock contract | — | none | Opus 5.5 (ran in Codex) | **Merged** PR #1 → main 0fa4a10 (2026-10-14) |
-| 2 | T0-02 Projects dashboard + form | T0-01 merged | 03, 04, 06 | Sonnet 5.5 | PR #5 approved @ ee32ce6 (2026-10-15); awaiting merge |
-| 2 | T0-03 Project detail + RunGrid | T0-01 merged | 02, 04, 06 | Opus 5.5 | PR #6 approved @ 8602966 (2026-10-15); awaiting merge |
-| 2 | T0-04 Next steps + private notes | T0-01 merged | 02, 03, 06 | Sonnet 5.5 | PR #8 approved @ 0e7efe2 (2026-10-15); awaiting merge |
-| 2 | T0-06 Account, tokens, setup UX | T0-01 merged | 02, 03, 04 | Sonnet 5.5 | PR #7 approved @ 2477391 (2026-10-15); awaiting merge |
-| 3 | T0-05 All agents view | T0-03 merged | — | Sonnet 5.5 | Not started |
+| 2 | T0-02 Projects dashboard + form | T0-01 merged | 03, 04, 06 | Sonnet 5.5 | **Merged** PR #5 (2026-10-15) |
+| 2 | T0-03 Project detail + RunGrid | T0-01 merged | 02, 04, 06 | Opus 5.5 | **Merged** PR #6 (2026-10-15) |
+| 2 | T0-04 Next steps + private notes | T0-01 merged | 02, 03, 06 | Sonnet 5.5 | **Merged** PR #8 (2026-10-15) |
+| 2 | T0-06 Account, tokens, setup UX | T0-01 merged | 02, 03, 04 | Sonnet 5.5 | **Merged** PR #7 (2026-10-15) |
+| 3 | T0-05 All agents view | T0-03 merged | — | Sonnet 5.5 | Brief ready: `briefs/T0-05.md` (2026-10-15) |
 | 4 | T0-07 Integration, Render, UX review | all above | — | Opus 5.5 | Not started |
 
 Change from PRD: T0-04 moves into wave 2 (PRD has it integrating after 02/03). Made
