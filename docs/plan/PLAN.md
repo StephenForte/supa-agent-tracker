@@ -17,7 +17,7 @@ Last updated: 2026-10-14 (initial plan; nothing implemented, no repo yet).
 
 | Wave | Task | Depends on | Parallel with | Model (recommended) | Status |
 |---|---|---|---|---|---|
-| 1 | T0-01 Foundation + mock contract | — | none | Opus 5.5 | Brief ready: `briefs/T0-01.md` (2026-10-14) |
+| 1 | T0-01 Foundation + mock contract | — | none | Opus 5.5 (ran in Codex) | PR #1 — changes requested 2026-10-14 (live-run staleness) |
 | 2 | T0-02 Projects dashboard + form | T0-01 merged | 03, 04, 06 | Sonnet 5.5 | Not started |
 | 2 | T0-03 Project detail + RunGrid | T0-01 merged | 02, 04, 06 | Opus 5.5 | Not started |
 | 2 | T0-04 Next steps + private notes | T0-01 merged | 02, 03, 06 | Sonnet 5.5 | Not started |
@@ -119,3 +119,4 @@ in Dropbox — or a separate clone outside Dropbox. Decide before wave 2.
 
 ## Verification log
 (Planner appends: task, PR, what was checked, how, result.)
+- 2026-10-14 · T0-01 · PR #1 @ ffeb514 · Fresh scratch clone, Node 26.9.0: base = main ede3f88; no docs/plan|prd changes; ci/typecheck/lint/build pass; vitest 4 files / 60 tests (matches handoff); CI `verify` pass. Read contracts/store/seed/notes/persistence line-by-line. Note separation is structural; token plaintext is not stored; close/step/conflict semantics are correct; seed covers all PLAN scenarios. **Blocker:** probe with an injected clock showed prj_offers liveRunning 3 → 0 at +16 min and 0 after reload +24h, because seeded live runs never refresh lastContactAt. Crude scratch patch proved 3/0 is reachable without a contract change. Changes requested: https://github.com/StephenForte/supa-agent-tracker/pull/1#issuecomment-6184054985 . Worker ran in Codex, not Claude/Opus as dispatched. Worker left the Dropbox checkout on branch t0-01-foundation.
