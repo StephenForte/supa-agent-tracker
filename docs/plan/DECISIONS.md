@@ -169,7 +169,9 @@ browser session) and `/mcp` (Streamable HTTP, bearer per D-018) from one Render 
 operations"). Framework Fastify. Postgres via Drizzle ORM with versioned SQL migrations committed under
 `server/db/migrations/`. Browser auth via an established library (better-auth proposed: email/password, verification,
 reset, sessions, rate limiting); passwords never hashed by hand-rolled code. Local dev/test Postgres via Docker; CI runs a
-Postgres service. Web UI swaps `src/data/mock` for HTTP implementations of the same `TrackerDataSource` /
+Postgres service. **Amended 2026-10-15:** the operator's Mac has no Docker but runs Postgres.app (PostgreSQL 18) on
+localhost:5432; local tests use it, creating and dropping uniquely named scratch databases only. CI uses a postgres:18
+service. Web UI swaps `src/data/mock` for HTTP implementations of the same `TrackerDataSource` /
 `PrivateNotesSource` contracts (D-004), so screens don't change.
 
 ### D-020 — Phase 1 hosting
