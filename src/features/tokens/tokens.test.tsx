@@ -1,0 +1,225 @@
+import { cleanup, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createMemoryRouter, RouterProvider } from 'react-router';
+import { routes } from '../../app/routes';
+import { DataProvider } from '../../data/hooks';
+import type { PrivateNotesSource, TrackerDataSource } from '../../data/contracts';
+import { createDemoSources } from '../../data/mock/createDemoSources';
+import type { StorageAdapter } from '../../data/mock/persistence';
+import { createClock } from '../../domain/clock';
+import type { McpToken } from '../../domain/types';
+
+const NEEDLE = 'sat_demo_NOT_A_REAL_TOKEN';
+
+function memoryStorage(): StorageAdapter & { dump(): string } {
+  const items = new Map<string, string>();
+  return {
+    getItem: key => items.get(key) ?? null,
+    setItem: (key, value) => { items.set(key, value); },
+    removeItem: key => { items.delete(key); },
+    dump: () => [...items.entries()].map(([key, value]) => `${key}=${value}`).join('\n'),
+  };
+}
+
+function browserStorageDump(): string {
+  const parts: string[] = [];
+  for (const storage of [localStorage, sessionStorage]) {
+    for (let index = 0; index < storage.length; index += 1) {
+      const key = storage.key(index) ?? '';
+      parts.push(`${key}=${storage.getItem(key) ?? ''}`);
+    }
+  }
+  return parts.join('\n');
+}
+
+function assertSecretGone(secret: string, storage: { dump(): string }) {
+  expect(document.documentElement.innerHTML).not.toContain(secret);
+  expect(document.documentElement.innerHTML).not.toContain(NEEDLE);
+  expect(storage.dump()).not.toContain(NEEDLE);
+  expect(browserStorageDump()).not.toContain(NEEDLE);
+}
+
+function renderTokens() {
+  const storage = memoryStorage();
+  const sources = createDemoSources({ clock: createClock(Date.parse('2026-10-14T20:00:00Z')), storage });
+  const router = createMemoryRouter(routes, { initialEntries: ['/settings/tokens'] });
+  render(<DataProvider sources={sources}><RouterProvider router={router} /></DataProvider>);
+  return { sources, storage, router };
+}
+
+function quietConsole() {
+  return (['log', 'info', 'debug', 'warn', 'error'] as const).map(method => vi.spyOn(console, method).mockImplementation(() => {}));
+}
+
+function installDialogPolyfill() {
+  const proto = HTMLDialogElement.prototype;
+  if (typeof proto.showModal !== 'function') proto.showModal = function showModal() { this.open = true; };
+  if (typeof proto.close !== 'function') proto.close = function close() { this.open = false; };
+}
+
+describe('MCP tokens', () => {
+  afterEach(() => { cleanup(); localStorage.clear(); sessionStorage.clear(); vi.restoreAllMocks(); });
+  installDialogPolyfill();
+
+  it('shows last used for tok_1, Never for tok_2, and masked values', async () => {
+    const { sources } = renderTokens();
+    expect(await screen.findByRole('heading', { level: 1, name: 'MCP tokens' })).toBeVisible();
+    const first = screen.getByRole('article', { name: 'Demo coding client tok_1' });
+    const second = screen.getByRole('article', { name: 'Demo weather bot tok_2' });
+    expect(within(first).getByText('Active')).toBeVisible();
+    expect(within(first).getByText('Offers workspace')).toBeVisible();
+    expect(within(first).getByText('sat_demo_…FAKE_1')).toBeVisible();
+    expect(within(first).queryByText('Never')).not.toBeInTheDocument();
+    expect(within(second).getByText('Never')).toBeVisible();
+    expect(within(second).getByText('Daily weather briefing')).toBeVisible();
+    expect(within(second).getByText('sat_demo_…FAKE_2')).toBeVisible();
+    sources.dispose();
+  });
+
+  it('creates a scoped token, copies it once, and drops the plaintext on dismiss', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    const logs = quietConsole();
+    const user = userEvent.setup();
+    const { sources, storage } = renderTokens();
+    await screen.findByRole('article', { name: 'Demo coding client tok_1' });
+    await user.click(screen.getByRole('button', { name: 'Create token' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Create a fake token' });
+    await user.type(within(dialog).getByRole('textbox', { name: 'Label' }), 'Preview client');
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Offers workspace' }));
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Daily weather briefing' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Create token' }));
+
+    const revealed = await screen.findByRole('textbox', { name: 'Fake demo token' });
+    const secret = (revealed as HTMLInputElement).value;
+    expect(secret).toMatch(/^sat_demo_NOT_A_REAL_TOKEN_/);
+    expect(screen.getByText('Fake demo token — cannot authenticate anything')).toBeVisible();
+    const created = screen.getByRole('article', { name: /Preview client/ });
+    expect(within(created).getByText('Offers workspace, Daily weather briefing')).toBeVisible();
+    expect(within(created).getByText('Never')).toBeVisible();
+    expect(created).not.toHaveTextContent(NEEDLE);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    await user.click(screen.getByRole('button', { name: 'Copy' }));
+    expect(await screen.findByText('Copied.')).toBeVisible();
+    expect(writeText).toHaveBeenCalledWith(secret);
+    await user.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(screen.queryByRole('textbox', { name: 'Fake demo token' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Fake demo token — cannot authenticate anything')).not.toBeInTheDocument();
+    assertSecretGone(secret, storage);
+    for (const spy of logs) expect(JSON.stringify(spy.mock.calls)).not.toContain(NEEDLE);
+    sources.dispose();
+  });
+
+  it('discards a revealed token when navigating away and does not restore it', async () => {
+    const user = userEvent.setup();
+    const { sources, storage } = renderTokens();
+    await screen.findByRole('article', { name: 'Demo coding client tok_1' });
+    await user.click(screen.getByRole('button', { name: 'Create token' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Create a fake token' });
+    await user.type(within(dialog).getByRole('textbox', { name: 'Label' }), 'Ephemeral');
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Offers workspace' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Create token' }));
+    const secret = (await screen.findByRole('textbox', { name: 'Fake demo token' }) as HTMLInputElement).value;
+    await user.click(screen.getByRole('link', { name: 'Account settings' }));
+    expect(await screen.findByRole('heading', { level: 1, name: 'Account settings' })).toBeVisible();
+    assertSecretGone(secret, storage);
+    await user.click(screen.getByRole('link', { name: 'MCP tokens' }));
+    expect(await screen.findByRole('article', { name: /Ephemeral/ })).toBeVisible();
+    assertSecretGone(secret, storage);
+    sources.dispose();
+  });
+
+  it('clears a previous copy status when rotation replaces the revealed plaintext', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    const { sources, storage } = renderTokens();
+    await screen.findByRole('article', { name: 'Demo coding client tok_1' });
+    await user.click(screen.getByRole('button', { name: 'Create token' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Create a fake token' });
+    await user.type(within(dialog).getByRole('textbox', { name: 'Label' }), 'Copied once');
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Offers workspace' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Create token' }));
+    const first = (await screen.findByRole('textbox', { name: 'Fake demo token' }) as HTMLInputElement).value;
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    await user.click(screen.getByRole('button', { name: 'Copy' }));
+    expect(await screen.findByText('Copied.')).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Rotate Demo coding client' }));
+    const rotateDialog = await screen.findByRole('dialog', { name: 'Rotate token?' });
+    await user.click(within(rotateDialog).getByRole('button', { name: 'Rotate token' }));
+    const second = (await screen.findByRole('textbox', { name: 'Fake demo token' }) as HTMLInputElement).value;
+    expect(second).not.toBe(first);
+    expect(screen.queryByText('Copied.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Dismiss' }));
+    assertSecretGone(first, storage);
+    assertSecretGone(second, storage);
+    sources.dispose();
+  });
+
+  it('rotates tok_1 into a new one-time reveal and revokes tok_2', async () => {
+    const user = userEvent.setup();
+    const { sources, storage } = renderTokens();
+    await screen.findByRole('article', { name: 'Demo coding client tok_1' });
+    await user.click(screen.getByRole('button', { name: 'Rotate Demo coding client' }));
+    const rotateDialog = await screen.findByRole('dialog', { name: 'Rotate token?' });
+    await user.click(within(rotateDialog).getByRole('button', { name: 'Rotate token' }));
+    const secret = (await screen.findByRole('textbox', { name: 'Fake demo token' }) as HTMLInputElement).value;
+    expect(secret).toMatch(/^sat_demo_NOT_A_REAL_TOKEN_/);
+    expect(within(screen.getByRole('article', { name: 'Demo coding client tok_1' })).getByText('Revoked')).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Dismiss' }));
+    assertSecretGone(secret, storage);
+    await user.click(screen.getByRole('button', { name: 'Revoke Demo weather bot' }));
+    const revokeDialog = await screen.findByRole('dialog', { name: 'Revoke token?' });
+    await user.click(within(revokeDialog).getByRole('button', { name: 'Revoke token' }));
+    expect(await within(screen.getByRole('article', { name: 'Demo weather bot tok_2' })).findByText('Revoked')).toBeVisible();
+    expect(within(screen.getByRole('article', { name: 'Demo weather bot tok_2' })).getByText('Never')).toBeVisible();
+    sources.dispose();
+  });
+
+  it('shows an error and selects the token when clipboard write fails', async () => {
+    const writeText = vi.fn().mockRejectedValue(new Error('denied'));
+    const user = userEvent.setup();
+    const { sources, storage } = renderTokens();
+    await screen.findByRole('article', { name: 'Demo coding client tok_1' });
+    await user.click(screen.getByRole('button', { name: 'Create token' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Create a fake token' });
+    await user.type(within(dialog).getByRole('textbox', { name: 'Label' }), 'Clipboard');
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Offers workspace' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Create token' }));
+    const revealed = await screen.findByRole('textbox', { name: 'Fake demo token' });
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    await user.click(screen.getByRole('button', { name: 'Copy' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Clipboard copy failed. The token is selected so you can copy it manually.');
+    expect(revealed).toHaveFocus();
+    expect((revealed as HTMLInputElement).selectionStart).toBe(0);
+    expect((revealed as HTMLInputElement).selectionEnd).toBe((revealed as HTMLInputElement).value.length);
+    await user.click(screen.getByRole('button', { name: 'Dismiss' }));
+    assertSecretGone((revealed as HTMLInputElement).value, storage);
+    sources.dispose();
+  });
+
+  it('shows the data-layer message when creation is invalid', async () => {
+    const user = userEvent.setup();
+    const { sources } = renderTokens();
+    await screen.findByRole('article', { name: 'Demo coding client tok_1' });
+    await user.click(screen.getByRole('button', { name: 'Create token' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Create a fake token' });
+    await user.click(within(dialog).getByRole('button', { name: 'Create token' }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Provide a label and at least one existing project scope.');
+    expect(screen.queryByRole('textbox', { name: 'Fake demo token' })).not.toBeInTheDocument();
+    sources.dispose();
+  });
+
+  it('shows an empty state when the demo has no tokens', async () => {
+    const tracker = {
+      subscribe() { return () => {}; },
+      getSnapshot: () => 1,
+      async listTokens() { return [] as McpToken[]; },
+      async listProjects() { return []; },
+    } as unknown as TrackerDataSource;
+    const privateNotes = { subscribe: () => () => {}, getSnapshot: () => 0, get: () => Promise.reject(new Error('unused')), save: () => Promise.reject(new Error('unused')) } as PrivateNotesSource;
+    render(<DataProvider sources={{ tracker, privateNotes }}><RouterProvider router={createMemoryRouter(routes, { initialEntries: ['/settings/tokens'] })} /></DataProvider>);
+    expect(await screen.findByRole('heading', { name: 'No MCP tokens' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Create token' })).toBeVisible();
+  });
+});
