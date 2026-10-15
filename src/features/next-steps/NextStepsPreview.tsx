@@ -22,12 +22,13 @@ function NextStepsPreviewBody({ projectId, onRetry }: { projectId: string; onRet
     return { bundle, runs, agents };
   }, [source, projectId]);
   const result = useSourceQuery(source, read);
-  if (result.status === 'loading') return <div role="group" aria-label="Next steps preview" data-project-id={projectId}><p role="status">Loading next steps…</p></div>;
-  if (result.status === 'error') return <div role="group" aria-label="Next steps preview" data-project-id={projectId}><ErrorState message={result.error.message} onRetry={onRetry} /></div>;
+  if (result.status === 'loading') return <div role="group" aria-label="Next steps preview" data-project-id={projectId}><p className="m-0 font-semibold">Next steps preview</p><p role="status">Loading next steps…</p></div>;
+  if (result.status === 'error') return <div role="group" aria-label="Next steps preview" data-project-id={projectId}><p className="m-0 font-semibold">Next steps preview</p><ErrorState message={result.error.message} onRetry={onRetry} /></div>;
   const { bundle, runs, agents } = result.data;
   const summary = nextStepSummary(bundle.steps);
   const waiting = bundle.waitingNote;
   return <div role="group" aria-label="Next steps preview" className="min-w-0" data-project-id={projectId}>
+    <p className="m-0 font-semibold">Next steps preview</p>
     {summary.first ? <>
       <InstructionText instruction={summary.first.instruction} />
       <p className="text-sm text-[#526670]">Remaining: {summary.remaining}</p>
