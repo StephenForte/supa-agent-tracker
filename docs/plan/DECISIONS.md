@@ -161,3 +161,31 @@ server-enforced). OAuth 2.1 (DCR/CIMD, per the Claude auth reference) is deferre
 the MCP endpoint keeps returning a spec-shaped 401 + `resource_metadata` so OAuth can be added without breaking clients.
 Run attribution comes only from the check-in payload (agent_name, harness, model, parent_run_id, all optional except the PRD's
 required fields). Observed clientInfo and user-agent are stored as metadata, never as identity.
+
+### D-019 — Phase 1 server stack
+Status: Proposed by planner (2026-10-15). P1-B0 verifies current versions and may argue alternatives in its handoff.
+One Node 24 + TypeScript server in `server/` (same repo and package as the web app) serves the built SPA, `/api/*` (JSON,
+browser session) and `/mcp` (Streamable HTTP, bearer per D-018) from one Render web service (PRD "Deployment and
+operations"). Framework Fastify. Postgres via Drizzle ORM with versioned SQL migrations committed under
+`server/db/migrations/`. Browser auth via an established library (better-auth proposed: email/password, verification,
+reset, sessions, rate limiting); passwords never hashed by hand-rolled code. Local dev/test Postgres via Docker; CI runs a
+Postgres service. Web UI swaps `src/data/mock` for HTTP implementations of the same `TrackerDataSource` /
+`PrivateNotesSource` contracts (D-004), so screens don't change.
+
+### D-020 — Phase 1 hosting
+Status: **Confirmed by operator (2026-10-15)**
+Render web service on the **Starter** plan (no sleep, so heartbeats and stale detection behave) plus **Render Postgres Basic**
+(backups). Operator-estimated about $13/month; the planner confirms current prices on Render and gets explicit approval
+before provisioning in P1-G. The Phase 0 static site stays until the Phase 1 service replaces it.
+
+### D-021 — Transactional email provider
+Status: **Confirmed by operator (2026-10-15)**
+Resend for verification and reset emails. It requires an operator-controlled sender domain and an API key held only in Render
+env vars. The server talks to email through an interface with a console/log implementation for local dev and tests, so no
+task needs the real key until P1-G.
+
+### D-022 — Phase 1 registration is invite-only
+Status: **Confirmed by operator (2026-10-15)**. Supersedes the PRD's "open registration" for Phase 1 only.
+Registration is accepted only for emails on an operator-managed allowlist (env or DB table). Email verification, reset,
+sessions, rate limits and per-account isolation stay exactly as the PRD specifies. Open registration can be enabled later
+without schema changes.
