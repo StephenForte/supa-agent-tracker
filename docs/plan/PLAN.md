@@ -18,7 +18,7 @@ Last updated: 2026-10-14 (initial plan; nothing implemented, no repo yet).
 | Wave | Task | Depends on | Parallel with | Model (recommended) | Status |
 |---|---|---|---|---|---|
 | 1 | T0-01 Foundation + mock contract | — | none | Opus 5.5 (ran in Codex) | **Merged** PR #1 → main 0fa4a10 (2026-10-14) |
-| 2 | T0-02 Projects dashboard + form | T0-01 merged | 03, 04, 06 | Sonnet 5.5 | Brief ready: `briefs/T0-02.md` (2026-10-14) |
+| 2 | T0-02 Projects dashboard + form | T0-01 merged | 03, 04, 06 | Sonnet 5.5 | PR #5 approved @ ee32ce6 (2026-10-15); awaiting merge |
 | 2 | T0-03 Project detail + RunGrid | T0-01 merged | 02, 04, 06 | Opus 5.5 | Brief ready: `briefs/T0-03.md` (2026-10-14) |
 | 2 | T0-04 Next steps + private notes | T0-01 merged | 02, 03, 06 | Sonnet 5.5 | Brief ready: `briefs/T0-04.md` (2026-10-14) |
 | 2 | T0-06 Account, tokens, setup UX | T0-01 merged | 02, 03, 04 | Sonnet 5.5 | Brief ready: `briefs/T0-06.md` (2026-10-14) |
@@ -79,6 +79,13 @@ Wave 1 (T0-01) runs in the Dropbox checkout. Wave 2 runs four workers at once; t
 share one working tree. **Decided 2026-10-14:** each wave-2 worker runs in its harness's own
 worktree or cloud sandbox. Briefs make the worker stop if `pwd` is inside Dropbox.
 
+## Known traps (found in review)
+- UI time comes from `useNow()`, which always reads `systemClock`; there is no clock context. Injecting a clock into
+  `createDemoSources` does not move the UI's `now`. To test elapsed/stale in rendered components, use
+  `vi.useFakeTimers()` + `vi.setSystemTime()` with the default sources. An injected clock plus a rendered page
+  produces mismatched store and UI times (seen while reviewing T0-02, 2026-10-15). Production is unaffected: both use
+  `systemClock`.
+
 ## Where conflicts are still likely
 - `src/app/routes.tsx`: frozen by D-007; any edit there is a review flag.
 - Shared UI primitives (`src/components/ui/`): wave-2 tasks will want tweaks. Rule: add a new
@@ -120,3 +127,4 @@ worktree or cloud sandbox. Briefs make the worker stop if `pwd` is inside Dropbo
 (Planner appends: task, PR, what was checked, how, result.)
 - 2026-10-14 · T0-01 · PR #1 @ ffeb514 · Fresh scratch clone, Node 26.9.0: base = main ede3f88; no docs/plan|prd changes; ci/typecheck/lint/build pass; vitest 4 files / 60 tests (matches handoff); CI `verify` pass. Read contracts/store/seed/notes/persistence line-by-line. Note separation is structural; token plaintext is not stored; close/step/conflict semantics are correct; seed covers all PLAN scenarios. **Blocker:** probe with an injected clock showed prj_offers liveRunning 3 → 0 at +16 min and 0 after reload +24h, because seeded live runs never refresh lastContactAt. Crude scratch patch proved 3/0 is reachable without a contract change. Changes requested: https://github.com/StephenForte/supa-agent-tracker/pull/1#issuecomment-6184054985 . Worker ran in Codex, not Claude/Opus as dispatched. Worker left the Dropbox checkout on branch t0-01-foundation.
 - 2026-10-14 · T0-01 re-review · PR #1 @ 360d907 · Fresh clone: base = main 89a7ffa. The delta is limited to src/data/mock/**, README and fixtures; no contract, Run type, package or docs/plan changes. Gate pass, vitest 5 files / 64 tests, CI pass. Independent probe (live/stale): real clock via fake timers at +16 min and +3 h gives offers 3/0, dashboard 0/1. Manual close of run_1 then +20 min gives 2/0 with contact frozen. Reset then +20 min gives 3/0. Persisted reload +24 h gives 3/0. The same probe on pre-fix cb924d4 gives 0/3 everywhere, so the probe can fail. **Approved:** https://github.com/StephenForte/supa-agent-tracker/pull/1#issuecomment-6184194638
+- 2026-10-15 · T0-02 · PR #5 @ ee32ce6 · Fresh clone: base = main 32919ce; scope limited to projects pages/features/domain; gate pass, vitest 7 files / 82 tests (matches); CI + Bugbot pass; no file overlap with #6/#7/#8. Probe rendered /projects with fake system timers: Offers live 3 / stale 0 / review 1, Dashboard 0/1/0, Weather 0/0/0 at t0, +20 min and +3 h 20. Order Offers > Dashboard > Weather, archived hidden. A name-only create, a link-clearing edit and a restore all saved. **Approved:** https://github.com/StephenForte/supa-agent-tracker/pull/5#issuecomment-6194187536
