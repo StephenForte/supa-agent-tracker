@@ -23,7 +23,7 @@ Last updated: 2026-10-14 (initial plan; nothing implemented, no repo yet).
 | 2 | T0-04 Next steps + private notes | T0-01 merged | 02, 03, 06 | Sonnet 5.5 | **Merged** PR #8 (2026-10-15) |
 | 2 | T0-06 Account, tokens, setup UX | T0-01 merged | 02, 03, 04 | Sonnet 5.5 | **Merged** PR #7 (2026-10-15) |
 | 3 | T0-05 All agents view | T0-03 merged | — | Sonnet 5.5 | **Merged** PR #13 (2026-10-15) |
-| 4 | T0-07 Integration, Render, UX review | all above | — | Opus 5.5 | Brief ready: `briefs/T0-07.md` (2026-10-15) |
+| 4 | T0-07 Integration, Render, UX review | all above | — | Opus 5.5 | Re-dispatched 2026-10-15 (first attempt launched in Dropbox checkout, stopped at Step 0, nothing created); brief now clones to ~/src/supa-agent-tracker-t0-07 |
 
 Change from PRD: T0-04 moves into wave 2 (PRD has it integrating after 02/03). Made
 possible by slot files (D-008): T0-02/T0-03 import T0-04's components; T0-04 fills them.
@@ -77,7 +77,8 @@ case is reported in the handoff and the planner dispatches a small T0-01x follow
 ## Parallel checkouts
 Wave 1 (T0-01) runs in the Dropbox checkout. Wave 2 runs four workers at once; they cannot
 share one working tree. **Decided 2026-10-14:** each wave-2 worker runs in its harness's own
-worktree or cloud sandbox. Briefs make the worker stop if `pwd` is inside Dropbox.
+worktree or cloud sandbox. **Updated 2026-10-15:** the operator's launcher opens workers in the Dropbox folder, so
+briefs now have the worker clone itself to `~/src/supa-agent-tracker-<task>` in Step 0 and delete it at teardown. Briefs make the worker stop if `pwd` is inside Dropbox.
 
 ## Render deployment (after T0-07 merges)
 - Workspace: "Supa Workspace" `tea-d98533l7vvec738vva90` (checked via Render MCP 2026-10-15; no supa-agent-tracker
