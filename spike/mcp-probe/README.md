@@ -51,7 +51,7 @@ Public `/.well-known/oauth-protected-resource` and `/.well-known/oauth-protected
 
 ## Exact later manual Render settings (planner + operator approval)
 
-Create a **new Web Service**, manually; do not modify root `render.yaml` or the synced Blueprint.
+Create a **new Web Service**, manually; do not modify root `render.yaml` or the synced Blueprint. Settings checked against Render’s [web service](https://render.com/docs/web-services), [monorepo root directory](https://render.com/docs/monorepo-support), and [Node version precedence](https://render.com/docs/node-version) documentation, read 2026-10-15.
 
 | Setting | Value |
 |---|---|
