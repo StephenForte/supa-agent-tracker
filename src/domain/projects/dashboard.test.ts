@@ -23,7 +23,7 @@ describe('project selection', () => {
     const project = projects.find(project => project.id === 'prj_dashboard')!;
     const filters = { ...defaultFilters, text: project.repositoryName!.toUpperCase(), type: 'coding', lifecycle: 'active', activity: 'blocked', harness: 'Unknown', tag: project.tags[0]! };
     expect(selectProjects(projects, runs, agents, filters, 'name', now)).toEqual([project]);
-    expect(describeFilters(filters)).toHaveLength(6);
+    expect(describeFilters(filters)).toEqual(['Text: EXAMPLE-ORG/DASHBOARD', 'Lifecycle: Active', 'Type: Coding', 'Activity: Blocked work', 'Harness: Unknown', 'Tag: product']);
     expect(selectProjects(projects, runs, agents, { ...filters, type: 'automation' }, 'name', now)).toEqual([]);
     expect(selectProjects(projects, runs, agents, { ...defaultFilters, lifecycle: 'archived' }, 'name', now).map(project => project.id)).toEqual(['prj_archive']);
     expect(filterOptions(projects, runs).harnesses).toContain('Unknown');

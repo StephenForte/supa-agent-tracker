@@ -22,6 +22,12 @@ describe('dashboard interactions', () => {
     const offers = within(list[0]!);
     expect(offers.getByText('Live running').nextElementSibling).toHaveTextContent('3');
     expect(offers.getByText('Review needed').nextElementSibling).toHaveTextContent('1');
+    expect(offers.getByText('Live logical agents').nextElementSibling).toHaveTextContent('2');
+    expect(offers.getByText('Logical agents').nextElementSibling).toHaveTextContent('2');
+    expect(offers.getByText('Runs').nextElementSibling).toHaveTextContent('4');
+    expect(offers.getByText('Active')).toBeVisible();
+    expect(offers.getByText('Coding')).toBeVisible();
+    expect(offers.getByRole('link', { name: 'Project PRD' })).toBeVisible();
     const dashboard = within(list[1]!);
     expect(dashboard.getByText('Live running').nextElementSibling).toHaveTextContent('0');
     expect(dashboard.getByText('Stale running').nextElementSibling).toHaveTextContent('1');
@@ -30,7 +36,9 @@ describe('dashboard interactions', () => {
     const external = offers.getAllByRole('link').filter(link => link.getAttribute('target') === '_blank');
     expect(external).toHaveLength(2);
     for (const link of external) { expect(link).toHaveAttribute('rel', 'noopener noreferrer'); await user.click(link); expect(router.state.location.pathname).toBe('/projects'); }
-    expect(within(list[2]!).queryByRole('link', { name: 'PRD' })).not.toBeInTheDocument();
+    expect(within(list[2]!).queryByRole('link', { name: 'Project PRD' })).not.toBeInTheDocument();
+    expect(within(list[2]!).getByText('Repository: —')).toBeVisible();
+    expect(within(list[2]!).getByText('PRD: —')).toBeVisible();
     const latest = offers.getByRole('region', { name: 'Latest update' });
     await user.click(within(latest).getByRole('link'));
     expect(router.state.location.pathname).toBe('/projects/prj_offers');
@@ -42,7 +50,7 @@ describe('dashboard interactions', () => {
     expect(screen.getAllByRole('article')).toHaveLength(1);
     await user.selectOptions(screen.getByLabelText('Project type'), 'automation');
     expect(screen.getByRole('heading', { name: 'No matching projects' })).toBeVisible();
-    expect(screen.getAllByText(/Activity: stale/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Activity: Stale running/).length).toBeGreaterThan(0);
     await user.click(screen.getAllByRole('button', { name: 'Clear filters' })[0]!);
     expect(screen.getAllByRole('article')).toHaveLength(3);
     expect(screen.getByLabelText('Activity')).toHaveValue('');

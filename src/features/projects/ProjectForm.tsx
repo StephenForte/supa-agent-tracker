@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { Button } from '../../components/ui/Button';
 import { useTrackerData } from '../../data/hooks';
-import { formatTimestamp } from '../../domain/format';
+import { formatTimestamp, lifecycleLabels, projectTypeLabels } from '../../domain/format';
 import { draftInput, projectDraft, validateDraft, type ProjectDraft } from '../../domain/projects/form';
 import type { Project } from '../../domain/types';
 
@@ -47,7 +47,7 @@ export function ProjectForm({ project }: { project?: Project }) {
       <legend className="mb-4 font-semibold">Project details</legend>
       {field('name', 'Name (required)')}
       <label className="block text-sm font-medium" htmlFor="description">Description<textarea id="description" className={control} rows={3} value={draft.description} onChange={event => change('description', event.target.value)} /></label>
-      <div className="grid gap-5 sm:grid-cols-2"><label className="text-sm font-medium" htmlFor="type">Project type<select id="type" className={control} value={draft.type} onChange={event => change('type', event.target.value as ProjectDraft['type'])}><option value="coding">Coding</option><option value="automation">Automation</option></select></label><label className="text-sm font-medium" htmlFor="lifecycle">Lifecycle<select id="lifecycle" className={control} value={draft.lifecycle} onChange={event => change('lifecycle', event.target.value as ProjectDraft['lifecycle'])}><option value="active">Active</option><option value="paused">Paused</option><option value="completed">Completed</option><option value="archived">Archived</option></select></label></div>
+      <div className="grid gap-5 sm:grid-cols-2"><label className="text-sm font-medium" htmlFor="type">Project type<select id="type" className={control} value={draft.type} onChange={event => change('type', event.target.value as ProjectDraft['type'])}>{Object.entries(projectTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label className="text-sm font-medium" htmlFor="lifecycle">Lifecycle<select id="lifecycle" className={control} value={draft.lifecycle} onChange={event => change('lifecycle', event.target.value as ProjectDraft['lifecycle'])}>{Object.entries(lifecycleLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label></div>
       {field('repositoryName', 'Repository name')}{field('repositoryUrl', 'Repository URL', 'url')}{field('prdUrl', 'PRD URL', 'url')}{field('tags', 'Tags (comma separated)')}
     </fieldset>
     <fieldset disabled={saving} className="min-w-0 space-y-5 border-t border-slate-200 pt-4"><legend className="font-semibold">Reporting preferences</legend>

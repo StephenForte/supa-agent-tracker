@@ -3,8 +3,9 @@ import { Link, useParams, useSearchParams } from 'react-router';
 import { useSourceQuery, useTrackerData } from '../../data/hooks';
 import { useNow } from '../../domain/clock';
 import { projectCounts } from '../../domain/derive';
-import { formatNullable } from '../../domain/format';
+import { formatDescription, lifecycleLabels, projectCountLabels, projectTypeLabels } from '../../domain/format';
 import { Badge } from '../../components/ui/Badge';
+import { ProjectResources } from '../../features/projects/ProjectResources';
 import { NotFound } from '../../app/NotFound';
 import { RunGrid } from '../../features/runs/RunGrid';
 import { NextStepsPanel } from '../../features/next-steps/NextStepsPanel';
@@ -25,14 +26,13 @@ export function ProjectDetailPage() {
   if (!project) return <NotFound project />;
   const counts = projectCounts(project, runs, agents, now);
   return <div className="min-w-0">
-    <header><p className="eyebrow">Project activity</p><h1>{project.name}</h1><p>{project.description}</p>
-      <div className="flex flex-wrap gap-2"><Badge>{project.type}</Badge><Badge tone={project.lifecycle}>{project.lifecycle}</Badge>{project.tags.map(tag => <Badge key={tag}>{tag}</Badge>)}</div>
+    <header><p className="eyebrow">Project activity</p><h1>{project.name}</h1><p>{formatDescription(project.description)}</p>
+      <div className="flex flex-wrap gap-2"><Badge>{projectTypeLabels[project.type]}</Badge><Badge tone={project.lifecycle}>{lifecycleLabels[project.lifecycle]}</Badge>{project.tags.map(tag => <Badge key={tag}>{tag}</Badge>)}</div>
       <div className="link-list"><Link to={`/projects/${project.id}/edit`}>Edit project</Link>
-        {project.repositoryUrl ? <a href={project.repositoryUrl} target="_blank" rel="noopener noreferrer">{project.repositoryName ?? 'Repository'}</a> : <span>Repository: {formatNullable(project.repositoryName)}</span>}
-        {project.prdUrl ? <a href={project.prdUrl} target="_blank" rel="noopener noreferrer">Project PRD</a> : <span>PRD: —</span>}
+        <ProjectResources project={project} />
       </div><p className="text-sm text-slate-600">Stale after {project.reportingPolicy.staleThresholdMinutes} minutes without contact</p>
       <dl className="grid grid-cols-2 gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-3 lg:grid-cols-6" aria-label="Project counts">
-        {[[counts.liveRunning, 'Live running'], [counts.staleRunning, 'Stale running'], [counts.reviewNeeded, 'Review needed'], [counts.liveRunningAgents, 'Live logical agents'], [counts.totalLogicalAgents, 'Logical agents'], [counts.totalRuns, 'Runs']].map(([value, label]) => <div key={label}><dt className="text-sm text-slate-600">{label}</dt><dd className="text-2xl font-semibold">{value}</dd></div>)}
+        {projectCountLabels.map(([key, label]) => <div key={label}><dt className="text-sm text-slate-600">{label}</dt><dd className="text-2xl font-semibold">{counts[key]}</dd></div>)}
       </dl>
     </header>
     <RunGrid key={`${project.id}:${params.get('run') ?? ''}`} runs={runs} agents={agents} projects={[project]} defaultExpandedRunIds={params.get('run') ? [params.get('run')!] : []} />

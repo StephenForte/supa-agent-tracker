@@ -1,6 +1,6 @@
 # Supa Agent Tracker
 
-Phase 0 foundation for a dashboard that monitors AI work across projects. **Demo only — simulated data.** Routes contain titled placeholders owned by T0-02 through T0-06, not finished product screens. No backend, authentication, MCP connection, credential validation or deployment is implemented.
+Phase 0 demo shell for a dashboard that monitors AI work across projects. **Demo only — simulated data.** No backend, authentication, MCP connection, or credential validation is implemented. Hosting is a static site; see [docs/deploy.md](docs/deploy.md). Creating the Render service is a separate step and is not done from this repository.
 
 ## Run locally
 
@@ -30,10 +30,40 @@ npm run preview           # production assets; localhost:4173, SPA fallback
 Gate: `npm ci && npm run typecheck && npm run lint && npm test && npm run build`.
 CI runs that sequence on Node 24 for pull requests and pushes to main.
 
+## Deploy
+
+The production build is a static `dist/` directory. [docs/deploy.md](docs/deploy.md) records the Render Blueprint settings, how to create the service, how redeploys and rollbacks work, and the direct-route check. The deployed shell is still this demo: simulated data, no backend.
+
+## Routes
+
+| Path | Screen |
+|---|---|
+| `/` | Redirects to `/projects` in the browser |
+| `/projects` | Project cards, search, sort, and filters. `?demo=loading\|error\|empty` shows those states |
+| `/projects/new` | Create a project (demo state only) |
+| `/projects/:projectId` | Project detail, run grid, next steps, private notes. `?run=<runId>` expands that run |
+| `/projects/:projectId/edit` | Edit project metadata and reporting preferences |
+| `/agents` | All agents. `?view=live\|review\|completed` selects a preset (`active` is the default) |
+| `/settings` | Account settings |
+| `/settings/tokens` | Fake MCP tokens |
+| `/settings/integrations` | Setup placeholders. Status is **Not connected · Not tested** |
+| `/login`, `/register`, `/verify-email`, `/forgot-password`, `/reset-password`, `/logout` | Simulated account navigation. Password fields are disabled |
+| Any other path | Page not found |
+
+## Feature map
+
+- `src/pages/projects/`, `src/features/projects/`: dashboard cards, filters, and the create/edit form.
+- `src/pages/project-detail/`, `src/features/runs/`: project header and the shared run grid.
+- `src/features/next-steps/`, `src/features/private-notes/`: agent instructions and the separate private-note editor. Cards use the compact previews.
+- `src/pages/agents/`, `src/features/agents/`: cross-project grid. It reuses `RunGrid`.
+- `src/pages/auth/`, `src/pages/settings/`, `src/features/tokens/`, `src/features/integrations/`: simulated account, tokens, and setup.
+- `src/app/`: shell, demo banner, reset, and the frozen route map.
+- `src/domain/`: shared counts, status words, and formatters. `src/data/`: async contracts and the mock store.
+
 ## Folder map and contracts
 
 - `src/app/`: frozen D-007 data-router map, responsive shared shell, reset confirmation.
-- `src/pages/`: titled placeholders divided by the screen owner's directory.
+- `src/pages/`: one directory per screen owner. Routes above are the finished Phase 0 screens.
 - `src/features/`: final-prop slots for RunGrid, next steps and private notes; other owner directories have `.gitkeep` files.
 - `src/components/ui/`: Button, native Disclosure/Dialog, status Badge, EmptyState and ErrorState.
 - `src/styles/`: Tailwind v4 and shared status tokens.
@@ -53,6 +83,6 @@ Token create/rotate returns fake `sat_demo_NOT_A_REAL_TOKEN_…` plaintext once,
 
 Mock state persists in one localStorage key, `supa-agent-tracker:demo:v1`. Both sections are separately validated, including nested records and project references. Invalid/incompatible JSON falls back to seed; unavailable/full storage falls back to the live memory store. No confidential data should be entered. Reset clears the key, reseeds both stores relative to the injected clock and notifies all subscribers; it does not immediately persist the seed. A mock-only `demoLiveRunIds` list keeps run_1, run_2 and run_10 live: clock notifications refresh and persist their contacts at most once per minute (sooner for shorter stale thresholds), and startup reconciles contacts after a long absence before any reads. Reads never mutate state. The stale run_4 and ended runs are excluded; start times, narrative activity, revisions and history are unchanged. Reset restores the seed and resumes its heartbeat participants on the next clock notification. Older v1 saves acquire the marker without losing edits. Mock compositions expose `dispose()` to stop their clock subscription when discarded. Token identifiers are generated using browser UUIDs; only the seed is deterministic.
 
-Native `<dialog>` supplies modal focus trapping, Escape handling and inert background. Dialog restores trigger focus; disclosure uses native keyboard behavior. All routes retain the demo banner and reset control. Auth placeholders contain navigation only and collect no passwords. No network APIs are used by application source.
+Native `<dialog>` supplies modal focus trapping, Escape handling and inert background. Dialog restores trigger focus; disclosure uses native keyboard behavior. All routes retain the demo banner and reset control. Auth screens are simulated navigation and collect no passwords. No network APIs are used by application source.
 
 Task boundaries and hand-back rules are in [AGENTS.md](AGENTS.md) and the planner-owned [plan](docs/plan/PLAN.md).
