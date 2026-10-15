@@ -19,3 +19,17 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+  mcp-probe:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: spike/mcp-probe
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: spike/mcp-probe/package-lock.json
+      - run: npm ci
+      - run: npm test
