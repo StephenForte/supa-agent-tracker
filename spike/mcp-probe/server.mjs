@@ -77,7 +77,7 @@ export async function startProbe({ token = process.env.PROBE_TOKEN || '', port =
       const path = new URL(req.url, 'http://localhost').pathname;
       const state = auth(req);
       // Deny browser-origin requests; these clients connect server-to-server.
-      if (req.headers.origin) return json(res, 403, { error: 'origin_not_allowed' });
+      if (req.headers.origin) { record({ tool: 'http:origin_rejected', origin: String(req.headers.origin).slice(0, 200), path, auth: state }); return json(res, 403, { error: 'origin_not_allowed' }); }
       if (path === '/health' && req.method === 'GET') return json(res, 200, { status: 'ok' });
       if (req.method === 'GET' && ['/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/mcp'].includes(path)) {
         record({ tool: 'discovery:protected-resource', auth: state });

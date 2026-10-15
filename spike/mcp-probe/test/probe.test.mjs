@@ -141,3 +141,22 @@ test('authenticated check-in and heartbeat echo only synthetic fields', async (t
   assert.equal(beat.run_id, check.run_id);
   assert.ok(Number.isFinite(Date.parse(beat.timestamp)));
 });
+
+test('Origin-bearing initialize is rejected and recorded without the valid token', async (t) => {
+  const token = randomBytes(32).toString('hex');
+  const p = await fixture(t, token);
+  const response = await fetch(`${p.url}/mcp`, {
+    method: 'POST',
+    headers: { ...p.headers, Origin: 'https://client.example', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'origin-test', version: '1.0.0' } } }),
+  });
+  assert.equal(response.status, 403);
+  const log = await p.log();
+  assert.equal(log.length, 1);
+  assert.equal(log[0].tool, 'http:origin_rejected');
+  assert.equal(log[0].origin, 'https://client.example');
+  assert.equal(log[0].path, '/mcp');
+  assert.deepEqual(log[0].auth, { present: true, valid: true });
+  assert.equal(JSON.stringify(log).includes(token), false);
+  assert.equal(p.stdout.join('').includes(token), false);
+});
