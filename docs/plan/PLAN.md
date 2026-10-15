@@ -99,12 +99,32 @@ Per the PRD backlog, nothing past P1-A is decomposed until the spike answers the
 
 | Order | Task | Depends on | Model | Status |
 |---|---|---|---|---|
-| 1 | P1-A1 Client-compat research + MCP probe server | Phase 0 done | Opus 5.5 | PR #23 approved @ eb4540d (2026-10-15); awaiting merge |
-| 2 | P1-A2 Deploy probe (planner) + live client tests (operator) | P1-A1 merged | planner + operator | Not started |
-| 3 | Auth decision → decompose P1-B…P1-G | P1-A2 | planner | Not started |
+| 1 | P1-A1 Client-compat research + MCP probe server | Phase 0 done | Opus 5.5 | **Merged** PR #23 (2026-10-15) |
+| 2 | P1-A2 Deploy probe (planner) + live client tests (operator) | P1-A1 merged | planner + operator | Done 2026-10-15: all 3 clients connected with bearer header; see p1-a2-results.md |
+| 3 | Auth decision → decompose P1-B…P1-G | P1-A2 | planner | D-018 **confirmed** 2026-10-15 |
 
 Identifiers reserved for P1-A: branch `p1-a1-compat-spike`; probe dir `spike/mcp-probe/`; Render service name
 `supa-mcp-probe` (separate free web service, not in root render.yaml).
+
+## Phase 1 task tree (drafted 2026-10-15)
+Decisions in force: D-018 (bearer tokens), D-019 (stack, proposed), D-020 (hosting), D-021 (Resend), D-022 (invite-only).
+Probe torn down 2026-10-15 (Render service deleted, Cursor/Claude/Grok connectors removed, local token deleted).
+
+| Wave | Task | Owns | Depends on | Model |
+|---|---|---|---|---|
+| 1 | **P1-B0 Server foundation**: `server/` skeleton, Fastify, config/env, Docker Postgres for dev/test, Drizzle + migration runner (no tables), `/health` `/ready`, SPA serving, API conventions (errors, pagination, request_id), a `requireUser` middleware **interface** with a test stub, CI Postgres job, `docs/api.md` skeleton | server/app/**, server/db/ (runner only), docker-compose, CI | Phase 0 | Opus |
+| 2 | **P1-B1 Schema + data access**: migration **0001_initial**, the full PRD data model (users, sessions, invites, projects, agents, runs, run_events, PR refs, tool aggregates, next_steps, waiting notes, **private_notes in their own table**, audit_events, mcp_credentials + project scopes), FK/ownership constraints, repository layer where every query takes the acting user or credential scope, isolation tests | server/db/**, server/repo/** | B0 | Opus |
+| 3 | **P1-B2 Browser auth + invites**: better-auth wiring, register (allowlist), verify email, login/logout, reset, session expiry/revocation, CSRF, login rate limit, email interface (console + Resend), real `requireUser`. Migration **0002** if the library needs tables | server/auth/**, server/email/** | B1 | Sonnet |
+| 3 | **P1-C1 MCP endpoint + tokens**: token issue/rotate/revoke REST (behind `requireUser`), hash-only storage, scope enforcement; `/mcp` with bearer auth and a spec-shaped 401; tools list_projects, get_project, check_in, update_status, heartbeat, check_out, record_tool_usage; request_id idempotency, expected_revision conflicts; clientInfo/UA stored as metadata only (D-018) | server/mcp/**, server/tokens/** | B1 (uses the requireUser stub) | Opus |
+| 3 | **P1-D Next steps + private notes**: MCP list/create/update_next_step (own-step edits, dispatcher reconcile, completion preserved), REST user complete/reopen, private notes REST (session only, never MCP), audit events | server/steps/**, server/notes/** | B1 | Sonnet |
+| 4 | **P1-E Wire the web app**: HTTP `TrackerDataSource`/`PrivateNotesSource`, real auth and token screens, 5–10 s polling, server-side counts/stale derivation parity with `src/domain` | src/data/http/**, src/pages/auth|settings (wiring) | B2, C1, D | Opus |
+| 5 | **P1-F Integrations**: reporting protocol + base prompt; setup guides for Cursor (`mcp.json` header), Claude Desktop (connector + request header), Grok Bot (settings screen, not chat); optional Cursor hook heartbeat adapter (R7) | docs/integrations/**, adapters/** | C1, D | Sonnet |
+| 6 | **P1-G Deploy + QA**: Render web Starter + Postgres Basic via Blueprint (planner provisions with operator approval, D-020), migrations on deploy, backup/restore doc, account-isolation tests, 25-concurrent-run load check, Resend domain | render.yaml, docs/ops/** | E, F | Opus |
+
+Pre-assigned migration numbers: 0001 = P1-B1, 0002 = P1-B2 (only if needed), 0003 = P1-C1, 0004 = P1-D. Wave-3 tasks
+must not add migrations outside their number; a later need gets a new number from the planner.
+Known conflict points in wave 3: `server/app/routes.ts` (each task registers its routes: append-only, one line each) and
+`docs/api.md` (append-only sections). The planner resolves these at merge.
 
 ## Known traps (found in review)
 - UI time comes from `useNow()`, which always reads `systemClock`; there is no clock context. Injecting a clock into
@@ -173,3 +193,4 @@ Identifiers reserved for P1-A: branch `p1-a1-compat-spike`; probe dir `spike/mcp
 - 2026-10-15 · T0-07a live recheck · Render deploy dep-db8kcu7avr4c7383062g (419ccf8, includes #20) live. Real browser, 610 px viewport, /projects/prj_offers?run=run_3: before the click the Pull requests list sat at 962 px; "+1 more" from the expanded state moved it to 0 px with focus on #pull-requests-run_3 (contains #77); from the collapsed state it expanded the row, list at 0 px, same focus. No console errors. The D-016 defect is closed. **Phase 0 status:** all T0 tasks merged and deployed, operator UX review done, decisions in D-016. Phase 0 completion criterion 7 (review incorporated before Phase 1 backend wiring) is met. Next: Phase 1 planning (P1-A auth/MCP compatibility spike first, per PRD).
 - 2026-10-15 · P1-A1 · PR #23 @ 9e8e1f9 · Fresh clone: base = main 2747c13; scope within the brief; root gate 22 files / 221 (unchanged); spike 8/8; CI verify + mcp-probe + Bugbot pass. Fetched citations G1, G2, A2, C2 and confirmed them. Key finding: Claude static headers are an org-wide Owner-set beta ("not a person's" credential), so per-user bearer tokens can't be assumed for Claude Desktop, and OAuth (DCR/CIMD) is the default path there. Probe security: token absent from whoami and log even when smuggled in other headers; /probe/log returns 401 without a token. **Blocker:** an Origin-bearing request returns 403 with 0 log entries, so P1-A2 could misrecord a client as "didn't connect". A one-line record-before-reject fix was proven in scratch (403 plus one http:origin_rejected entry, 8/8). Changes requested: https://github.com/StephenForte/supa-agent-tracker/pull/23#issuecomment-6203353082 . Worker ran in Codex, not Opus.
 - 2026-10-15 · P1-A1 re-review · PR #23 @ eb4540d · Delta is exactly the requested record-before-reject line, +1 regression and +1 test-plan line. Root 22 files / 221 pass; spike 9/9; CI pass. Live local probe: an Origin initialize gives 403 with 1 http:origin_rejected entry, token absent from log and stdout. **Approved.**
+- 2026-10-15 · P1-A2 · Probe deployed (srv-db8lfanavr4c73879p1g, free plan, operator-approved; token set by the operator in the Render dashboard, never in chat). 401 enforcement checked. Live, operator-driven: Cursor 3.24.18, Claude Desktop 2.42304.0 (Max) and Grok Bot all completed whoami → check-in → heartbeat with a valid bearer header. Cursor and Claude attempt OAuth discovery without a header; Cursor subagents inherit tools on the parent session; Grok presents as "Cursor (via mcp-remote 0.15.1)"; model was reliably reported only by Claude. Details: docs/plan/p1-a2-results.md. Proposal D-018.
