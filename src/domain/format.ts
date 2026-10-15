@@ -6,7 +6,7 @@ export const projectTypeLabels: Record<ProjectType, string> = { coding: 'Coding'
 export const lifecycleLabels: Record<Lifecycle, string> = { active: 'Active', paused: 'Paused', completed: 'Completed', archived: 'Archived' };
 /** Same count, same words, on the project card and the detail header. */
 export const projectCountLabels = [
-  ['liveRunning', 'Live running'], ['staleRunning', 'Stale running'], ['reviewNeeded', 'Review needed'],
+  ['liveRunning', 'Live running'], ['staleRunning', 'Stale running'], ['reviewNeeded', 'Waiting for review'],
   ['liveRunningAgents', 'Live logical agents'], ['totalLogicalAgents', 'Logical agents'], ['totalRuns', 'Runs'],
 ] as const;
 export const formatDescription = (description: string): string => description.trim() || 'No description yet.';
@@ -21,7 +21,19 @@ export function formatTimestamp(value: string | null, timeZone?: string): string
 }
 export function formatElapsed(milliseconds: number): string {
   const seconds = Math.floor(milliseconds / 1000);
-  return `${Math.floor(seconds / 3600)}h ${Math.floor(seconds % 3600 / 60)}m ${seconds % 60}s`;
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor(seconds % 3600 / 60);
+  const remainder = seconds % 60;
+  if (hours > 0) return `${hours}h ${minutes}m ${remainder}s`;
+  if (minutes > 0) return `${minutes}m ${remainder}s`;
+  return `${remainder}s`;
+}
+/** Projects list status. Names archived projects the lifecycle filter hides, and says what any other filter hides. Never "N of M", which counted hidden archived projects as if they were in the total. */
+export function projectsShownLine(visible: number, hiddenArchived: number, hiddenOther: number): string {
+  const parts = [`${visible} ${visible === 1 ? 'project' : 'projects'} shown`];
+  if (hiddenOther > 0) parts.push(`${hiddenOther} hidden by filters`);
+  if (hiddenArchived > 0) parts.push(`${hiddenArchived} archived hidden`);
+  return parts.join(' · ');
 }
 export function formatToolTelemetry(tools: readonly ToolAggregate[] | null): string {
   return tools === null ? 'No telemetry reported' : `${tools.reduce((sum, tool) => sum + tool.callCount, 0)} calls reported`;

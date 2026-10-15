@@ -58,23 +58,34 @@ export function RunGrid(props: RunGridProps) {
   }
   const page = paginate(ordered, requestedPage);
   const [closing, setClosing] = useState<Run | null>(null);
+  const prFocusId = useRef<string | null>(null);
+  const [prFocusRequest, setPrFocusRequest] = useState(0);
   const region = useRef<HTMLDivElement>(null);
   const filterId = useId();
   useEffect(() => {
     const id = expandedKey.split(',').at(-1);
     if (id) Array.from(region.current?.querySelectorAll<HTMLElement>('[data-run-id]') ?? []).find(row => row.dataset.runId === id)?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
   }, [expandedKey, page.page]);
+  // +N more must land on the pull-request list. Scrolling the row leaves that list below the fold, and a second click on an already expanded row does not change expandedKey.
+  useEffect(() => {
+    if (!prFocusRequest || !prFocusId.current) return;
+    const list = region.current?.querySelector<HTMLElement>(`#pull-requests-${CSS.escape(prFocusId.current)}`);
+    if (!list) return;
+    list.scrollIntoView?.({ block: 'start', inline: 'nearest' });
+    list.focus({ preventScroll: true });
+  }, [prFocusRequest]);
   function changeFilters(next: RunGridFilters) { if (props.filters === undefined) setLocalFilters(next); props.onFiltersChange?.(next); }
   function changeSort(next: RunGridSort) { if (props.sort === undefined) setLocalSort(next); props.onSortChange?.(next); }
   function changeExpanded(next: string[]) { if (props.expandedRunIds === undefined) setLocalExpanded(next); props.onExpandedRunIdsChange?.(next); }
   function toggle(id: string) { changeExpanded(expanded.includes(id) ? expanded.filter(value => value !== id) : [...expanded, id]); }
-  function reveal(id: string) {
+  function reveal(id: string, focusPullRequests = false) {
     const matchesFilters = ordered.some(run => run.id === id);
     const nextFilters = matchesFilters ? filters : {};
     if (!matchesFilters) changeFilters(nextFilters);
     const targetList = matchesFilters ? ordered : sortRuns(runs, sort, context);
     setPage({ index: pageForRun(targetList, id), signature: JSON.stringify([nextFilters, sort]), expandedKey: [...expanded.filter(value => value !== id), id].join(',') });
     changeExpanded([...expanded.filter(value => value !== id), id]);
+    if (focusPullRequests) { prFocusId.current = id; setPrFocusRequest(request => request + 1); }
   }
   const visibleColumns = columns.filter(column => showProjectColumn || column.field !== 'project');
   const identityFilter = (field: 'harness' | 'model') => {
@@ -104,9 +115,9 @@ export function RunGrid(props: RunGridProps) {
           {showProjectColumn && <td className="max-w-48 p-3 break-words"><Link to={`/projects/${run.projectId}`}>{projectName(run, projects)}</Link></td>}
           <td className="p-3"><Badge tone={run.executionState}>{executionLabels[run.executionState]}</Badge>{run.executionState === 'running' && <button className="mt-3 block text-left text-xs underline" onClick={() => setClosing(run)}>Demo: close {run.id}</button>}</td>
           <td className="p-3"><Badge tone={run.workStatus}>{workLabels[run.workStatus]}</Badge></td><td className="p-3">{stale(run, context) ? <Badge tone="stale">Stale</Badge> : '—'}</td>
-          <td className="max-w-60 p-3 break-words">{pr ? <><a href={pr.url} target="_blank" rel="noopener noreferrer">#{pr.number} {pr.title}</a>{more > 0 && <button className="mt-2 block underline" onClick={() => reveal(run.id)}>+{more} more</button>}</> : '—'}</td>
+          <td className="max-w-60 p-3 break-words">{pr ? <><a href={pr.url} target="_blank" rel="noopener noreferrer">#{pr.number} {pr.title}</a>{more > 0 && <button className="mt-2 block underline" onClick={() => reveal(run.id, true)}>+{more} more</button>}</> : '—'}</td>
           <td className="p-3">{formatTimestamp(run.startedAt)}</td><td className="whitespace-nowrap p-3">{formatElapsed(elapsed(run, now))}</td><td className="p-3">{formatTimestamp(run.finishedAt)}</td><td className="p-3">{formatIdentity(run.harness)}</td><td className="p-3">{formatIdentity(run.model)}</td>
-        </tr>{open && <tr className="border-t border-slate-200 bg-slate-50"><td colSpan={visibleColumns.length + 2}><RunDetails run={run} runs={runs} onReveal={reveal} /></td></tr>}</Fragment>;
+        </tr>{open && <tr className="border-t border-slate-200 bg-slate-50"><td colSpan={visibleColumns.length + 2}><RunDetails run={run} runs={runs} agents={agents} onReveal={reveal} /></td></tr>}</Fragment>;
       })}</tbody></table>
     </div><div className="mt-4 flex flex-wrap items-center justify-between gap-3"><p role="status">Runs {page.start}–{page.end} of {page.total} · Page {page.page + 1} of {page.pages}</p><div className="flex gap-2"><Button disabled={page.page === 0} onClick={() => setPage({ index: page.page - 1, signature, expandedKey })}>Previous</Button><Button disabled={page.page + 1 === page.pages} onClick={() => setPage({ index: page.page + 1, signature, expandedKey })}>Next</Button></div></div></>}
     {closing && <CloseRunDialog key={closing.id} run={closing} onClose={() => setClosing(null)} />}

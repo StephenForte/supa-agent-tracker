@@ -22,7 +22,8 @@ it('keeps concurrent rows separate, distinguishes stale/work and exposes complet
   expect(screen.getByText('No telemetry reported')).toBeVisible();
   fireEvent.click(within(row('run_2')).getByRole('button', { expanded: false }));
   expect(screen.getByText('0 calls reported')).toBeVisible();
-  expect(screen.getAllByRole('cell', { name: 'shell' })).toHaveLength(2);
+  expect(screen.getByRole('cell', { name: 'shell' })).toBeVisible();
+  expect(screen.getByRole('cell', { name: 'Shell' })).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: '+1 more' }));
   expect(screen.getByText('8 calls reported')).toBeVisible();
   const toolRow = screen.getByRole('cell', { name: 'edit_file' }).closest('tr')!;
@@ -135,6 +136,46 @@ it('opening additional PRs preserves every active filter and the filtered page',
   expect(screen.getByText('Runs 1–25 of 33 · Page 1 of 2')).toBeVisible();
   expect(within(row('generated_30')).getByRole('button', { expanded: true })).toBeVisible();
   expect(onFiltersChange).not.toHaveBeenCalled();
+});
+function pullRequests(id = 'run_3') {
+  const list = document.getElementById(`pull-requests-${id}`);
+  if (!list) throw new Error(`missing pull requests list for ${id}`);
+  return list;
+}
+it('focuses the pull request list after +N more when the row starts collapsed, and again on a second click', () => {
+  show();
+  const more = () => within(row('run_3')).getByRole('button', { name: '+1 more' });
+  fireEvent.click(more());
+  expect(within(row('run_3')).getByRole('button', { expanded: true })).toBeVisible();
+  expect(pullRequests()).toHaveFocus();
+  expect(pullRequests()).toHaveTextContent('#77');
+  expect(screen.getByText('Check-in')).toBeVisible();
+  expect(screen.getByText('Check-out')).toBeVisible();
+  expect(screen.getAllByText(/Actor: T0-11b/)).toHaveLength(2);
+  expect(screen.getByRole('cell', { name: 'Native' })).toBeVisible();
+  pullRequests().blur();
+  fireEvent.click(more());
+  expect(pullRequests()).toHaveFocus();
+  expect(pullRequests()).toHaveTextContent('#77');
+  expect(screen.getByLabelText('Activity')).toHaveValue('all');
+});
+it('focuses the pull request list after +N more when the row is already expanded', async () => {
+  const run = structuredClone(props.runs.find(item => item.id === 'run_3')!);
+  run.events = [...run.events, { ...run.events[0]!, id: 'evt_user', kind: 'manual_close', actorId: 'usr_demo', message: 'Closed by the operator.' }, { ...run.events[0]!, id: 'evt_other', kind: 'status', actorId: 'somebody_else', message: 'Unknown actor.' }];
+  show({ runs: props.runs.map(item => item.id === 'run_3' ? run : item), defaultExpandedRunIds: ['run_3'] });
+  expect(within(row('run_3')).getByRole('button', { expanded: true })).toBeVisible();
+  expect(pullRequests()).not.toHaveFocus();
+  fireEvent.click(within(row('run_3')).getByRole('button', { name: '+1 more' }));
+  expect(pullRequests()).toHaveFocus();
+  expect(pullRequests()).toHaveTextContent('#77');
+  expect(await screen.findByText(/Actor: Demo operator/)).toBeVisible();
+  expect(screen.getByText(/Actor: somebody_else/)).toBeVisible();
+  expect(screen.getByText('Manual close')).toBeVisible();
+  expect(screen.getByText('Status update')).toBeVisible();
+  expect(screen.queryByText('usr_demo')).not.toBeInTheDocument();
+  pullRequests().blur();
+  fireEvent.click(within(row('run_3')).getByRole('button', { name: '+1 more' }));
+  expect(pullRequests()).toHaveFocus();
 });
 it('expanding extra PRs under controlled filters never requests clearing them', () => {
   const onFiltersChange = vi.fn(), onExpandedRunIdsChange = vi.fn();
