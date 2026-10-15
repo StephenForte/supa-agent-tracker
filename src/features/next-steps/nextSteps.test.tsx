@@ -53,6 +53,34 @@ describe('agent next steps', () => {
     expect(within(preview()).getByText('Remaining: 1')).toBeVisible();
   });
 
+  it('keeps the checkbox disabled until the refreshed step replaces the pre-write snapshot', async () => {
+    const user = userEvent.setup();
+    const { sources } = setup();
+    const waiting: Array<() => void> = [];
+    let holdReads = false;
+    const tracker: TrackerDataSource = Object.create(sources.tracker);
+    const listNextSteps = sources.tracker.listNextSteps.bind(sources.tracker);
+    tracker.listNextSteps = async projectId => {
+      const bundle = await listNextSteps(projectId);
+      if (holdReads) await new Promise<void>(resolve => { waiting.push(resolve); });
+      return bundle;
+    };
+    show('prj_offers', sources, tracker);
+    const checkbox = await screen.findByRole('checkbox', { name: 'Mark done: Review and merge PR #74 after checking the form.' });
+    holdReads = true;
+    await user.click(checkbox);
+    await waitFor(() => expect(checkbox).toBeDisabled());
+    expect(checkbox).not.toBeChecked();
+    await user.click(checkbox);
+    await act(async () => { waiting.splice(0).forEach(resolve => resolve()); });
+    const completed = await screen.findByRole('checkbox', { name: 'Reopen: Review and merge PR #74 after checking the form.' });
+    expect(completed).toBeChecked();
+    await waitFor(() => expect(completed).toBeEnabled());
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    const saved = (await sources.tracker.listNextSteps('prj_offers')).steps.find(step => step.id === 'step_1');
+    expect(saved).toMatchObject({ done: true, revision: 2 });
+  });
+
   it('keeps the earliest open step as the preview after another step is reopened', async () => {
     const user = userEvent.setup();
     show('prj_offers', setup().sources);

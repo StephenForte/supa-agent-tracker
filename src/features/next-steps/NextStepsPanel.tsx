@@ -32,20 +32,31 @@ function NextStepsBody({ projectId, onRetry }: { projectId: string; onRetry: () 
   }, [source, projectId]);
   const result = useSourceQuery(source, read);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [userPendingId, setUserPendingId] = useState<string | null>(null);
+  const [userHold, setUserHold] = useState<{ id: string; revision: number } | null>(null);
   const [userConflict, setUserConflict] = useState<{ intent: boolean; current: NextStep } | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [demoPending, setDemoPending] = useState(false);
+  const [demoHold, setDemoHold] = useState<{ id: string; revision: number } | null>(null);
   const [demoMessage, setDemoMessage] = useState<string | null>(null);
   const [demoInstruction, setDemoInstruction] = useState<string | null>(null);
   const pendingFocus = useRef<string | null>(null);
   const loaded = result.status === 'ready' ? result.data : null;
+  const refreshing = result.status === 'ready' && result.refreshing;
+  // The query keeps the previous steps while it refreshes. Drop the hold only
+  // once that snapshot shows a new revision, so a second click cannot write
+  // with the revision the first save already consumed.
+  const snapshotCaughtUp = (hold: { id: string; revision: number } | null) => {
+    if (!hold || !loaded || refreshing) return false;
+    const step = loaded.bundle.steps.find(item => item.id === hold.id);
+    return !step || step.revision !== hold.revision;
+  };
+  if (snapshotCaughtUp(userHold)) setUserHold(null);
+  if (snapshotCaughtUp(demoHold)) setDemoHold(null);
   useEffect(() => {
     const id = pendingFocus.current;
-    if (!id) return;
+    if (!id || userHold || demoHold) return;
     pendingFocus.current = null;
     document.getElementById(`step-${projectId}-${id}`)?.focus();
-  }, [loaded, projectId]);
+  }, [loaded, projectId, userHold, demoHold]);
 
   if (result.status === 'loading') return <section className="slot min-w-0" aria-labelledby={headingId} data-project-id={projectId}><h2 id={headingId}>Agent next steps</h2><p role="status">Loading next steps…</p></section>;
   if (result.status === 'error') return <section className="slot min-w-0" aria-labelledby={headingId} data-project-id={projectId}><h2 id={headingId}>Agent next steps</h2><ErrorState message={result.error.message} onRetry={onRetry} /></section>;
@@ -56,12 +67,12 @@ function NextStepsBody({ projectId, onRetry }: { projectId: string; onRetry: () 
   const preferredId = completed[0]?.id ?? open[0]?.id ?? null;
   if (selectedId === null && preferredId !== null) setSelectedId(preferredId);
   const selected = orderedSteps(bundle.steps).find(step => step.id === selectedId) ?? null;
-  const busy = userPendingId !== null || demoPending;
+  const busy = userHold !== null || demoHold !== null;
 
   async function toggle(step: NextStep) {
     const desired = !step.done;
     pendingFocus.current = step.id;
-    setUserPendingId(step.id);
+    setUserHold({ id: step.id, revision: step.revision });
     setActionError(null);
     setUserConflict(null);
     const before = source.getSnapshot();
@@ -70,16 +81,19 @@ function NextStepsBody({ projectId, onRetry }: { projectId: string; onRetry: () 
     if (outcome.status === 'conflict') {
       const fresh = await source.listNextSteps(projectId);
       setUserConflict({ intent: desired, current: fresh.steps.find(item => item.id === step.id) ?? outcome.current });
+      setUserHold(null);
     } else if (outcome.status === 'saved') setUserConflict(null);
-    else setActionError(outcome.status === 'invalid' ? outcome.message : 'That step could not be found.');
-    setUserPendingId(null);
+    else {
+      setActionError(outcome.status === 'invalid' ? outcome.message : 'That step could not be found.');
+      setUserHold(null);
+    }
   }
 
   async function retryConflict() {
     if (!userConflict) return;
     const { intent, current } = userConflict;
     pendingFocus.current = current.id;
-    setUserPendingId(current.id);
+    setUserHold({ id: current.id, revision: current.revision });
     setActionError(null);
     const before = source.getSnapshot();
     const outcome = await source.setNextStepDone(current.id, intent, current.revision);
@@ -87,13 +101,16 @@ function NextStepsBody({ projectId, onRetry }: { projectId: string; onRetry: () 
     if (outcome.status === 'conflict') {
       const fresh = await source.listNextSteps(projectId);
       setUserConflict({ intent, current: fresh.steps.find(item => item.id === current.id) ?? outcome.current });
+      setUserHold(null);
     } else if (outcome.status === 'saved') setUserConflict(null);
-    else setActionError(outcome.status === 'invalid' ? outcome.message : 'That step could not be found.');
-    setUserPendingId(null);
+    else {
+      setActionError(outcome.status === 'invalid' ? outcome.message : 'That step could not be found.');
+      setUserHold(null);
+    }
   }
 
   async function simulate(step: NextStep, kind: 'current' | 'stale') {
-    setDemoPending(true);
+    setDemoHold({ id: step.id, revision: step.revision });
     setDemoMessage(null);
     setDemoInstruction(null);
     setActionError(null);
@@ -107,8 +124,11 @@ function NextStepsBody({ projectId, onRetry }: { projectId: string; onRetry: () 
       const current = fresh.steps.find(item => item.id === step.id) ?? outcome.current;
       setDemoMessage('This update used a stale revision. The agent must re-read and reconcile. Nothing was overwritten.');
       setDemoInstruction(current.instruction);
-    } else setDemoMessage(outcome.status === 'invalid' ? outcome.message : 'That step could not be found.');
-    setDemoPending(false);
+      setDemoHold(null);
+    } else {
+      setDemoMessage(outcome.status === 'invalid' ? outcome.message : 'That step could not be found.');
+      setDemoHold(null);
+    }
   }
 
   return <section className="slot min-w-0" aria-labelledby={headingId} data-project-id={projectId}>
