@@ -93,6 +93,8 @@ it('moves to a controlled expansion on another page and distinguishes reported e
   expect(screen.queryByText('No telemetry reported')).toBeNull();
   expect(screen.getByText('1–5 of 62')).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Show more history' })); expect(screen.getByText('6–10 of 62')).toBeVisible();
+  view.rerender(<MemoryRouter><RunGrid {...props} runs={many} expandedRunIds={[]} /></MemoryRouter>);
+  expect(screen.getByText('Runs 51–63 of 63 · Page 3 of 3')).toBeVisible();
 });
 it('renders every sort control and every filter kind as usable state changes', () => {
   show({ showProjectColumn: true });

@@ -47,7 +47,16 @@ export function RunGrid(props: RunGridProps) {
   const expandedKey = expanded.join(',');
   const [pageState, setPage] = useState(() => ({ index: pageForRun(ordered, expanded.at(-1) ?? ''), signature: JSON.stringify([filters, sort]), expandedKey }));
   const signature = JSON.stringify([filters, sort]);
-  const page = paginate(ordered, expandedKey !== pageState.expandedKey ? pageForRun(ordered, expanded.at(-1) ?? '') : signature === pageState.signature ? pageState.index : 0);
+  let requestedPage = signature === pageState.signature ? pageState.index : 0;
+  // Reconcile external expansion during render so collapsing never sends a later page back to page one.
+  // The guard settles after one render, and also handles controlled updates without an effect waterfall.
+  if (expandedKey !== pageState.expandedKey) {
+    const previousIds = pageState.expandedKey.split(',');
+    const addedId = expanded.filter(id => !previousIds.includes(id)).at(-1);
+    if (addedId) requestedPage = pageForRun(ordered, addedId);
+    setPage({ index: requestedPage, signature, expandedKey });
+  }
+  const page = paginate(ordered, requestedPage);
   const [closing, setClosing] = useState<Run | null>(null);
   const region = useRef<HTMLDivElement>(null);
   const filterId = useId();
