@@ -17,7 +17,7 @@ Last updated: 2026-10-14 (initial plan; nothing implemented, no repo yet).
 
 | Wave | Task | Depends on | Parallel with | Model (recommended) | Status |
 |---|---|---|---|---|---|
-| 1 | T0-01 Foundation + mock contract | — | none | Opus 5.5 | Not started |
+| 1 | T0-01 Foundation + mock contract | — | none | Opus 5.5 | Brief ready: `briefs/T0-01.md` (2026-10-14) |
 | 2 | T0-02 Projects dashboard + form | T0-01 merged | 03, 04, 06 | Sonnet 5.5 | Not started |
 | 2 | T0-03 Project detail + RunGrid | T0-01 merged | 02, 04, 06 | Opus 5.5 | Not started |
 | 2 | T0-04 Next steps + private notes | T0-01 merged | 02, 03, 06 | Sonnet 5.5 | Not started |
@@ -39,7 +39,7 @@ report the need in the handoff.
 
 | Task | Owns | May add files in | Must not touch |
 |---|---|---|---|
-| T0-01 | everything at creation; afterwards `src/app/**`, `src/data/**`, `src/domain/**`, `src/components/ui/**`, `src/styles/**`, `package*.json`, configs, `README.md`, `docs/fixtures.md` | — | `docs/plan/**`, `docs/prd/**` |
+| T0-01 | everything at creation incl. `.github/`, `AGENTS.md`, `CLAUDE.md` (planner owns AGENTS.md/CLAUDE.md after merge); afterwards `src/app/**`, `src/data/**`, `src/domain/**`, `src/components/ui/**`, `src/styles/**`, `package*.json`, configs, `README.md`, `docs/fixtures.md` | — | `docs/plan/**`, `docs/prd/**` |
 | T0-02 | `src/pages/projects/**` (list, new, edit), `src/features/projects/**` | `src/domain/projects/` (pure helpers + tests) | `src/data/**`, slot files of others |
 | T0-03 | `src/pages/project-detail/**`, `src/features/runs/**` (incl. `RunGrid.tsx`) | `src/domain/runs/` | `src/data/**`, `src/features/next-steps/**`, `src/features/private-notes/**` |
 | T0-04 | `src/features/next-steps/**`, `src/features/private-notes/**` | `src/domain/next-steps/` | page files of 02/03 |
