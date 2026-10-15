@@ -93,6 +93,19 @@ briefs now have the worker clone itself to `~/src/supa-agent-tracker-<task>` in 
 - First deploy dep-db8hqjjncjis73b3jm30 (f145df4) went live in 24 s. The build log shows "Using Node.js version 24.22.0
   via .node-version".
 
+## Phase 1 plan (started 2026-10-15)
+PRD build sequence: schema/auth → projects/MCP lifecycle → dashboard/grids/checklists → integrations → deployment/QA.
+Per the PRD backlog, nothing past P1-A is decomposed until the spike answers the auth question (D-017).
+
+| Order | Task | Depends on | Model | Status |
+|---|---|---|---|---|
+| 1 | P1-A1 Client-compat research + MCP probe server | Phase 0 done | Opus 5.5 | Brief ready (2026-10-15), pasted in planner chat |
+| 2 | P1-A2 Deploy probe (planner) + live client tests (operator) | P1-A1 merged | planner + operator | Not started |
+| 3 | Auth decision → decompose P1-B…P1-G | P1-A2 | planner | Not started |
+
+Identifiers reserved for P1-A: branch `p1-a1-compat-spike`; probe dir `spike/mcp-probe/`; Render service name
+`supa-mcp-probe` (separate free web service, not in root render.yaml).
+
 ## Known traps (found in review)
 - UI time comes from `useNow()`, which always reads `systemClock`; there is no clock context. Injecting a clock into
   `createDemoSources` does not move the UI's `now`. To test elapsed/stale in rendered components, use
