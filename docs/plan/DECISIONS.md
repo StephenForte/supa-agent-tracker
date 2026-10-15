@@ -121,3 +121,20 @@ Status: Confirmed by planner for wave 2 (2026-10-14)
 Each page keeps the h1 text asserted by src/app/routes.test.tsx (T0-01-owned; not edited in wave 2).
 /projects accepts ?demo=loading|error|empty to show those states without changing store data;
 it's handled inside the projects page, not as a route.
+
+### D-016 — Phase 0 UX review outcomes
+Status: Confirmed by operator (2026-10-15, live review of https://supa-agent-tracker.onrender.com)
+Usage: All agents (`/agents`) is the operator's all-day screen; Projects is for start and end of day. `/` stays
+on `/projects`. Grid wording and elapsed formatting therefore get the most exposure.
+Decisions on docs/ux-review.md findings:
+1. Project filter "Stale running" vs run filter "Stale": **keep**. They filter different subjects.
+2. Count label "Review needed" becomes **"Waiting for review"**, the same phrase as the work status and the All agents view.
+3. "3 of 4 projects shown" becomes **"3 projects shown · 1 archived hidden"** (archived count only when hidden).
+4. Card "Remaining: N" becomes **"N open"**.
+5. Timeline event kinds are shown as words: Check-in, Status update, Heartbeat, Check-out, Manual close.
+6. Tool source is shown as MCP / Native / Shell / Other; event actors are shown as the agent's name or the account's display name.
+7. Elapsed omits leading zero units: `21m 59s`, `45s`, `1h 1m 1s`.
+8. Narrow-screen demo banner: **keep**.
+9. Run-metadata editor: **defer** to Phase 1.
+Defect found in review: "+N more" on a run's PR cell gives no visible result. It must bring the run's Pull requests list into view and move focus there.
+Implemented by T0-07a.
