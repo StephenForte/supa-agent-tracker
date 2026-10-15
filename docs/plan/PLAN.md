@@ -5,9 +5,13 @@ Requirements: `docs/prd/PRD-v0.6.md` (Phase 0 section + T0 tasks). Decisions: `D
 Last updated: 2026-10-14 (initial plan; nothing implemented, no repo yet).
 
 ## Current state (verified 2026-10-14)
-- Project folder contained nothing before this plan. Not a git repo. No GitHub repo exists
-  (`gh repo list` checked). Node v26.9.0 and npm present locally; gh authenticated.
+- Repo: https://github.com/StephenForte/supa-agent-tracker (private), default branch `main`.
+  Local checkout: the Dropbox folder `~/Library/CloudStorage/Dropbox-Personal/Dev/SupaAgentDashboard`
+  (operator decision 2026-10-14: stay in Dropbox for now). `main` = planning docs only.
+- Node v26.9.0 and npm present locally; gh authenticated as StephenForte.
 - Nothing built. Nothing deployed.
+- Dropbox hazard mitigation: `node_modules/` and `dist/` must be marked Dropbox-ignored
+  (`xattr -w com.dropbox.ignored 1 <dir>`) — T0-01 does this on creation.
 
 ## Waves and run order
 
@@ -70,6 +74,12 @@ case is reported in the handoff and the planner dispatches a small T0-01x follow
    re-run `npm install` only if the task was approved to add a dependency (D-010).
 7. Workers never edit `docs/plan/**` or `docs/prd/**`.
 
+## Parallel checkouts
+Wave 1 (T0-01) runs in the Dropbox checkout. Wave 2 runs four workers at once; they cannot
+share one working tree. Operator chooses per worker: harness-managed worktree/sandbox
+(Claude Code worktree, Cursor background agent, Codex cloud) — preferred, no extra folders
+in Dropbox — or a separate clone outside Dropbox. Decide before wave 2.
+
 ## Where conflicts are still likely
 - `src/app/routes.tsx`: frozen by D-007; any edit there is a review flag.
 - Shared UI primitives (`src/components/ui/`): wave-2 tasks will want tweaks. Rule: add a new
@@ -100,10 +110,10 @@ case is reported in the handoff and the planner dispatches a small T0-01x follow
   granted, deliver `render.yaml` + instructions and stop (PRD).
 
 ## Open questions for the operator
-1. Repo location: this folder is inside Dropbox. Recommend the git repo live outside Dropbox
-   (e.g. `~/Dev/SupaAgentDashboard`) — Dropbox syncing `.git` and `node_modules` while agents
-   commit causes corrupt indexes and conflicted copies. **Blocking T0-01.**
-2. GitHub repo: create `StephenForte/supa-agent-tracker` (private)? **Blocking T0-01.**
+1. ~~Repo location~~ — resolved 2026-10-14: stays in Dropbox for now. Risk accepted; revisit
+   if conflicted copies or index corruption appear. Parallel wave-2 workers must not share this
+   one checkout — see "Parallel checkouts" below.
+2. ~~GitHub repo~~ — created 2026-10-14.
 3. Which harness/model runs each worker? Table above is a recommendation.
 4. Decisions marked Proposed (D-002…D-010, D-012) — object before T0-01 merges or they stand.
 
