@@ -36,7 +36,7 @@ describe('agent next steps', () => {
     const preview = () => screen.getByRole('group', { name: 'Next steps preview' });
     const checkbox = await screen.findByRole('checkbox', { name: 'Mark done: Review and merge PR #74 after checking the form.' });
     expect(checkbox).toBeEnabled();
-    expect(within(preview()).getByText('Remaining: 1')).toBeVisible();
+    expect(within(preview()).getByText('1 open')).toBeVisible();
     expect(within(preview()).getByText(/Source agent T0-11b/)).toBeVisible();
     expect(within(preview()).getByRole('link', { name: 'View source run run_3' })).toHaveAttribute('href', '/projects/prj_offers?run=run_3');
     expect(within(preview()).getByText(/T0-11a is still implementing/)).toBeVisible();
@@ -46,11 +46,11 @@ describe('agent next steps', () => {
     expect(completed).toBeChecked();
     await waitFor(() => expect(completed).toHaveFocus());
     expect(within(preview()).getByText('No open steps')).toBeVisible();
-    expect(within(preview()).queryByText('Remaining: 1')).not.toBeInTheDocument();
+    expect(within(preview()).queryByText('1 open')).not.toBeInTheDocument();
     expect(within(preview()).getByText(/T0-11a is still implementing/)).toBeVisible();
     await user.keyboard('[Space]');
     expect(await screen.findByRole('checkbox', { name: 'Mark done: Review and merge PR #74 after checking the form.' })).not.toBeChecked();
-    expect(within(preview()).getByText('Remaining: 1')).toBeVisible();
+    expect(within(preview()).getByText('1 open')).toBeVisible();
   });
 
   it('keeps the checkbox disabled until the refreshed step replaces the pre-write snapshot', async () => {
@@ -87,7 +87,7 @@ describe('agent next steps', () => {
     await screen.findByRole('checkbox', { name: /Mark done: Review and merge/ });
     await user.click(screen.getByRole('checkbox', { name: /Reopen: Confirm the preview opens/ }));
     const preview = screen.getByRole('group', { name: 'Next steps preview' });
-    expect(await within(preview).findByText('Remaining: 2')).toBeVisible();
+    expect(await within(preview).findByText('2 open')).toBeVisible();
     expect(within(preview).getByText('Review and merge PR #74 after checking the form.')).toBeVisible();
     expect(within(preview).queryByText('Confirm the preview opens on a narrow screen.')).not.toBeInTheDocument();
   });

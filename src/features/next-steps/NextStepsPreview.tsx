@@ -31,7 +31,7 @@ function NextStepsPreviewBody({ projectId, onRetry }: { projectId: string; onRet
     <p className="m-0 font-semibold">Next steps preview</p>
     {summary.first ? <>
       <InstructionText instruction={summary.first.instruction} />
-      <p className="text-sm text-[#526670]">Remaining: {summary.remaining}</p>
+      <p className="text-sm text-[#526670]">{summary.remaining} open</p>
       <p className="text-sm text-[#526670]">Source agent {formatNullable(sourceAgentName(summary.first.sourceRunId, runs, agents))}{' · '}<Link to={`/projects/${projectId}?run=${encodeURIComponent(summary.first.sourceRunId)}`} aria-label={`View source run ${summary.first.sourceRunId}`} onClick={stopCardActivation} onMouseDown={stopCardActivation}>View source run</Link>{' · '}Updated {formatTimestamp(summary.first.updatedAt)}</p>
     </> : <p className="m-0">No open steps</p>}
     {waiting && <p className="text-sm text-[#526670] [overflow-wrap:anywhere]">Waiting: {waiting.text} · Source agent {formatNullable(sourceAgentName(waiting.sourceRunId, runs, agents))} · Updated {formatTimestamp(waiting.updatedAt)}</p>}

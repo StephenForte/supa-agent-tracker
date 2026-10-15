@@ -21,7 +21,9 @@ describe('dashboard interactions', () => {
     expect(list[0]).toHaveAccessibleName('Offers workspace');
     const offers = within(list[0]!);
     expect(offers.getByText('Live running').nextElementSibling).toHaveTextContent('3');
-    expect(offers.getByText('Review needed').nextElementSibling).toHaveTextContent('1');
+    expect(offers.getByText('Waiting for review').nextElementSibling).toHaveTextContent('1');
+    expect(screen.getByText('3 projects shown · 1 archived hidden')).toBeVisible();
+    expect(screen.queryByText(/of \d+ projects shown/)).not.toBeInTheDocument();
     expect(offers.getByText('Live logical agents').nextElementSibling).toHaveTextContent('2');
     expect(offers.getByText('Logical agents').nextElementSibling).toHaveTextContent('2');
     expect(offers.getByText('Runs').nextElementSibling).toHaveTextContent('4');
@@ -48,6 +50,7 @@ describe('dashboard interactions', () => {
     const { user } = mount(); await cards();
     await user.selectOptions(screen.getByLabelText('Activity'), 'stale');
     expect(screen.getAllByRole('article')).toHaveLength(1);
+    expect(screen.getByText('1 project shown · 2 hidden by filters · 1 archived hidden')).toBeVisible();
     await user.selectOptions(screen.getByLabelText('Project type'), 'automation');
     expect(screen.getByRole('heading', { name: 'No matching projects' })).toBeVisible();
     expect(screen.getAllByText(/Activity: Stale running/).length).toBeGreaterThan(0);
@@ -55,6 +58,9 @@ describe('dashboard interactions', () => {
     expect(screen.getAllByRole('article')).toHaveLength(3);
     expect(screen.getByLabelText('Activity')).toHaveValue('');
     expect(screen.getByLabelText('Project type')).toHaveValue('');
+    expect(screen.getByText('3 projects shown · 1 archived hidden')).toBeVisible();
+    await user.selectOptions(screen.getByLabelText('Lifecycle'), '');
+    expect(screen.getByText('4 projects shown')).toBeVisible();
   });
   it('exercises text, lifecycle, type, activity, harness and tags individually, plus alternate sorts', async () => {
     const { user, sources } = mount(); await cards();

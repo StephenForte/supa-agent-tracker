@@ -68,16 +68,18 @@ Good: Waiting for review shows `run_3` and not the running rows. Live shows `run
 
 ## Findings
 
-Each item is an **operator decision**. The integration pass did not change these.
+The script above records the review as it was run. Each item was an operator decision. D-016 records the outcome; this column is the same decision. Findings 1, 8, and 9 are unchanged.
 
-| Severity | Screen | Proposed change |
-|---|---|---|
-| minor | Projects (`/projects`) and All agents (`/agents`) | The project activity filter says **Stale running**. The run-grid activity filter says **Stale**. Use one phrase if they should read as the same filter. **Operator decision.** |
-| minor | Project cards and project detail | The count is labelled **Review needed**. The work-status badge and the All agents preset say **Waiting for review**. Rename the count if one phrase should cover both. **Operator decision.** |
-| minor | Projects (`/projects`) | The line "3 of 4 projects shown" counts the archived prototype that the default filter hides. Say that the fourth project is archived, or count only projects in the current lifecycle set. **Operator decision.** |
-| minor | Project cards | **Remaining: 1** includes the step already printed above it. Say "1 open" if "remaining" sounds like further steps. **Operator decision.** |
-| minor | Run detail timeline | Event kinds are shown as `check_in`, `check_out`, `status`, `heartbeat`, and `manual_close`, next to the human execution and work labels. Spell them out if the audit row should read like the rest of the status vocabulary. **Operator decision.** |
-| minor | Run detail, tools and timeline | Tool source is the raw value (`shell`, `native`, `mcp`) and the actor is an id (`agt_…`, `usr_demo`). Replace them with names if the row is for reading rather than for checking the record. **Operator decision.** |
-| minor | Elapsed column, every grid | Durations always include hours, so a short run reads `0h 21m 59s`. Drop leading zero units if that is noisy. **Operator decision.** |
-| minor | Demo banner, narrow width | Below 700px the banner keeps **Demo — simulated data** and hides "Local browser state only". Keep that phrase on a narrow screen if it should stay visible. **Operator decision.** |
-| minor | Project detail | `updateRunMetadata` can correct a run's title, task, harness, model, or PR text, and there is no control for it. Phase 0's screen list does not require one. Add a clearly labelled demo editor only if the review needs to correct metadata before Phase 1. **Operator decision.** |
+| Severity | Screen | Proposed change | Decision |
+|---|---|---|---|
+| minor | Projects (`/projects`) and All agents (`/agents`) | The project activity filter says **Stale running**. The run-grid activity filter says **Stale**. Use one phrase if they should read as the same filter. **Operator decision.** | Keep (D-016.1). They filter different subjects. |
+| minor | Project cards and project detail | The count is labelled **Review needed**. The work-status badge and the All agents preset say **Waiting for review**. Rename the count if one phrase should cover both. **Operator decision.** | **Waiting for review** (D-016.2). Applied in T0-07a. |
+| minor | Projects (`/projects`) | The line "3 of 4 projects shown" counts the archived prototype that the default filter hides. Say that the fourth project is archived, or count only projects in the current lifecycle set. **Operator decision.** | **3 projects shown · 1 archived hidden** when archived projects are hidden; **N projects shown** when nothing is hidden (D-016.3). Applied in T0-07a. |
+| minor | Project cards | **Remaining: 1** includes the step already printed above it. Say "1 open" if "remaining" sounds like further steps. **Operator decision.** | **N open** (D-016.4). Applied in T0-07a. |
+| minor | Run detail timeline | Event kinds are shown as `check_in`, `check_out`, `status`, `heartbeat`, and `manual_close`, next to the human execution and work labels. Spell them out if the audit row should read like the rest of the status vocabulary. **Operator decision.** | Check-in, Status update, Heartbeat, Check-out, Manual close (D-016.5). Applied in T0-07a. |
+| minor | Run detail, tools and timeline | Tool source is the raw value (`shell`, `native`, `mcp`) and the actor is an id (`agt_…`, `usr_demo`). Replace them with names if the row is for reading rather than for checking the record. **Operator decision.** | MCP / Native / Shell / Other. Actor is the agent name, or the account display name (D-016.6). Applied in T0-07a. |
+| minor | Elapsed column, every grid | Durations always include hours, so a short run reads `0h 21m 59s`. Drop leading zero units if that is noisy. **Operator decision.** | Omit leading zero units: `21m 59s`, `45s`, `1h 1m 1s` (D-016.7). Applied in T0-07a. |
+| minor | Demo banner, narrow width | Below 700px the banner keeps **Demo — simulated data** and hides "Local browser state only". Keep that phrase on a narrow screen if it should stay visible. **Operator decision.** | Keep (D-016.8). |
+| minor | Project detail | `updateRunMetadata` can correct a run's title, task, harness, model, or PR text, and there is no control for it. Phase 0's screen list does not require one. Add a clearly labelled demo editor only if the review needs to correct metadata before Phase 1. **Operator decision.** | Defer to Phase 1 (D-016.9). |
+
+**Defect (step 4).** "+N more" on a run's PR cell gave no visible result: an already expanded row did not move, and a collapsed row opened its details below the viewport with focus left on the document. Fixed by T0-07a: the run expands, its Pull requests list scrolls into view, and keyboard focus moves to that list. A second click on the same run scrolls and focuses again.
