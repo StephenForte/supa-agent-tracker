@@ -17,11 +17,11 @@ Last updated: 2026-10-14 (initial plan; nothing implemented, no repo yet).
 
 | Wave | Task | Depends on | Parallel with | Model (recommended) | Status |
 |---|---|---|---|---|---|
-| 1 | T0-01 Foundation + mock contract | — | none | Opus 5.5 (ran in Codex) | PR #1 approved @ 360d907 (2026-10-14); awaiting operator merge |
-| 2 | T0-02 Projects dashboard + form | T0-01 merged | 03, 04, 06 | Sonnet 5.5 | Not started |
-| 2 | T0-03 Project detail + RunGrid | T0-01 merged | 02, 04, 06 | Opus 5.5 | Not started |
-| 2 | T0-04 Next steps + private notes | T0-01 merged | 02, 03, 06 | Sonnet 5.5 | Not started |
-| 2 | T0-06 Account, tokens, setup UX | T0-01 merged | 02, 03, 04 | Sonnet 5.5 | Not started |
+| 1 | T0-01 Foundation + mock contract | — | none | Opus 5.5 (ran in Codex) | **Merged** PR #1 → main 0fa4a10 (2026-10-14) |
+| 2 | T0-02 Projects dashboard + form | T0-01 merged | 03, 04, 06 | Sonnet 5.5 | Brief ready: `briefs/T0-02.md` (2026-10-14) |
+| 2 | T0-03 Project detail + RunGrid | T0-01 merged | 02, 04, 06 | Opus 5.5 | Brief ready: `briefs/T0-03.md` (2026-10-14) |
+| 2 | T0-04 Next steps + private notes | T0-01 merged | 02, 03, 06 | Sonnet 5.5 | Brief ready: `briefs/T0-04.md` (2026-10-14) |
+| 2 | T0-06 Account, tokens, setup UX | T0-01 merged | 02, 03, 04 | Sonnet 5.5 | Brief ready: `briefs/T0-06.md` (2026-10-14) |
 | 3 | T0-05 All agents view | T0-03 merged | — | Sonnet 5.5 | Not started |
 | 4 | T0-07 Integration, Render, UX review | all above | — | Opus 5.5 | Not started |
 
@@ -52,7 +52,7 @@ add a read-only derivation in its own `src/domain/<area>/`; a missing *mutation*
 case is reported in the handoff and the planner dispatches a small T0-01x follow-up.
 
 ## Pre-assigned identifiers
-- Decisions: D-001…D-012 used. Planner assigns next from the file at write time.
+- Decisions: D-001…D-015 used. Planner assigns next from the file at write time.
 - Follow-up tasks: `T0-01a`, `T0-01b`, … for data-layer patches; `T0-0Nx` for others.
 - Branches: `t0-01-foundation`, `t0-02-dashboard`, `t0-03-run-grid`, `t0-04-steps-notes`,
   `t0-05-all-agents`, `t0-06-account-tokens`, `t0-07-integrate-deploy`.
@@ -76,9 +76,8 @@ case is reported in the handoff and the planner dispatches a small T0-01x follow
 
 ## Parallel checkouts
 Wave 1 (T0-01) runs in the Dropbox checkout. Wave 2 runs four workers at once; they cannot
-share one working tree. Operator chooses per worker: harness-managed worktree/sandbox
-(Claude Code worktree, Cursor background agent, Codex cloud) — preferred, no extra folders
-in Dropbox — or a separate clone outside Dropbox. Decide before wave 2.
+share one working tree. **Decided 2026-10-14:** each wave-2 worker runs in its harness's own
+worktree or cloud sandbox. Briefs make the worker stop if `pwd` is inside Dropbox.
 
 ## Where conflicts are still likely
 - `src/app/routes.tsx`: frozen by D-007; any edit there is a review flag.

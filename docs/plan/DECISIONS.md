@@ -101,3 +101,23 @@ Status: Proposed (2026-10-14)
 Mock state persists to `localStorage` under one versioned key, wrapped in try/catch, and
 falls back to the seed. Reset-demo clears it. PRD marks this optional; chosen because the
 UX review (T0-07) involves reloads and direct-link checks.
+
+### D-013 — Status label vocabulary
+Status: Confirmed by planner for wave 2 (2026-10-14)
+Execution: Running, Finished, Failed, Cancelled. Work: In progress, Blocked, Waiting for review,
+Completed, Failed, Cancelled. Liveness: Stale. Null: "—". Unreported model/harness: "Unknown".
+Absent telemetry: "No telemetry reported". Fixed so T0-02, T0-03 and T0-05, built in parallel,
+render identical text. T0-07 may consolidate the label mapping into src/domain/.
+
+### D-014 — Styling and UI primitives after T0-01
+Status: Confirmed by planner for wave 2 (2026-10-14)
+src/styles/** and src/components/ui/** are frozen during wave 2. Tasks style with Tailwind
+utilities and existing tokens. New primitives live in the task's own folder and are proposed for
+promotion in the handoff; T0-07 promotes them. Reason: four parallel PRs editing shared CSS or
+primitives would conflict.
+
+### D-015 — Page headings, route smoke test, demo-state param
+Status: Confirmed by planner for wave 2 (2026-10-14)
+Each page keeps the h1 text asserted by src/app/routes.test.tsx (T0-01-owned; not edited in wave 2).
+/projects accepts ?demo=loading|error|empty to show those states without changing store data;
+it's handled inside the projects page, not as a route.
