@@ -117,3 +117,28 @@ it('renders every sort control and every filter kind as usable state changes', (
   expect(document.querySelectorAll('[data-run-id]')).toHaveLength(1); expect(row('run_4')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Clear filters' })); expect(document.querySelectorAll('[data-run-id]')).toHaveLength(10);
 });
+
+it('opening additional PRs preserves every active filter and the filtered page', () => {
+  const review = props.runs.find(run => run.id === 'run_3')!;
+  const many = Array.from({ length: 63 }, (_, index) => ({ ...review, id: `generated_${String(index).padStart(2, '0')}`, title: index < 30 ? 'Other work' : 'Keep me' }));
+  const onFiltersChange = vi.fn();
+  show({ runs: many, defaultSort: { field: 'agent', direction: 'asc' }, defaultFilters: { query: 'Keep me', activity: 'review', executionStates: ['finished'], workStatuses: ['waiting_for_review'], harnesses: [review.harness], models: [review.model], startedAfter: '2000-01-01T00:00', startedBefore: '2099-01-01T00:00' }, onFiltersChange });
+  fireEvent.click(within(row('generated_30')).getByRole('button', { name: '+1 more' }));
+  expect(screen.getByRole('searchbox')).toHaveValue('Keep me');
+  expect(screen.getByLabelText('Activity')).toHaveValue('review');
+  expect(screen.getByLabelText('Execution states')).toHaveValue(['finished']);
+  expect(screen.getByLabelText('Work statuses')).toHaveValue(['waiting_for_review']);
+  expect(screen.getByLabelText('Harness')).toHaveValue([JSON.stringify(review.harness)]);
+  expect(screen.getByLabelText('Model')).toHaveValue([JSON.stringify(review.model)]);
+  expect(screen.getByLabelText('Started after')).toHaveValue('2000-01-01T00:00');
+  expect(screen.getByLabelText('Started before')).toHaveValue('2099-01-01T00:00');
+  expect(screen.getByText('Runs 1–25 of 33 · Page 1 of 2')).toBeVisible();
+  expect(within(row('generated_30')).getByRole('button', { expanded: true })).toBeVisible();
+  expect(onFiltersChange).not.toHaveBeenCalled();
+});
+it('expanding extra PRs under controlled filters never requests clearing them', () => {
+  const onFiltersChange = vi.fn(), onExpandedRunIdsChange = vi.fn();
+  show({ filters: { activity: 'review' }, expandedRunIds: [], onFiltersChange, onExpandedRunIdsChange });
+  fireEvent.click(screen.getByRole('button', { name: '+1 more' }));
+  expect(onFiltersChange).not.toHaveBeenCalled(); expect(onExpandedRunIdsChange).toHaveBeenCalledWith(['run_3']);
+});

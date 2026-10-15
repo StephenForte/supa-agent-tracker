@@ -69,9 +69,11 @@ export function RunGrid(props: RunGridProps) {
   function changeExpanded(next: string[]) { if (props.expandedRunIds === undefined) setLocalExpanded(next); props.onExpandedRunIdsChange?.(next); }
   function toggle(id: string) { changeExpanded(expanded.includes(id) ? expanded.filter(value => value !== id) : [...expanded, id]); }
   function reveal(id: string) {
-    changeFilters({});
-    const all = sortRuns(runs, sort, context);
-    setPage({ index: pageForRun(all, id), signature: JSON.stringify([{}, sort]), expandedKey: [...expanded.filter(value => value !== id), id].join(',') });
+    const matchesFilters = ordered.some(run => run.id === id);
+    const nextFilters = matchesFilters ? filters : {};
+    if (!matchesFilters) changeFilters(nextFilters);
+    const targetList = matchesFilters ? ordered : sortRuns(runs, sort, context);
+    setPage({ index: pageForRun(targetList, id), signature: JSON.stringify([nextFilters, sort]), expandedKey: [...expanded.filter(value => value !== id), id].join(',') });
     changeExpanded([...expanded.filter(value => value !== id), id]);
   }
   const visibleColumns = columns.filter(column => showProjectColumn || column.field !== 'project');
