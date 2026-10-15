@@ -19,7 +19,7 @@ Last updated: 2026-10-14 (initial plan; nothing implemented, no repo yet).
 |---|---|---|---|---|---|
 | 1 | T0-01 Foundation + mock contract | — | none | Opus 5.5 (ran in Codex) | **Merged** PR #1 → main 0fa4a10 (2026-10-14) |
 | 2 | T0-02 Projects dashboard + form | T0-01 merged | 03, 04, 06 | Sonnet 5.5 | PR #5 approved @ ee32ce6 (2026-10-15); awaiting merge |
-| 2 | T0-03 Project detail + RunGrid | T0-01 merged | 02, 04, 06 | Opus 5.5 | Brief ready: `briefs/T0-03.md` (2026-10-14) |
+| 2 | T0-03 Project detail + RunGrid | T0-01 merged | 02, 04, 06 | Opus 5.5 | PR #6 approved @ 8602966 (2026-10-15); awaiting merge |
 | 2 | T0-04 Next steps + private notes | T0-01 merged | 02, 03, 06 | Sonnet 5.5 | Brief ready: `briefs/T0-04.md` (2026-10-14) |
 | 2 | T0-06 Account, tokens, setup UX | T0-01 merged | 02, 03, 04 | Sonnet 5.5 | PR #7 approved @ 2477391 (2026-10-15); awaiting merge |
 | 3 | T0-05 All agents view | T0-03 merged | — | Sonnet 5.5 | Not started |
@@ -86,6 +86,13 @@ worktree or cloud sandbox. Briefs make the worker stop if `pwd` is inside Dropbo
   produces mismatched store and UI times (seen while reviewing T0-02, 2026-10-15). Production is unaffected: both use
   `systemClock`.
 
+- `systemClock` is a module singleton, and `src/data/runtime.ts` subscribes it at import with a **real**
+  `setInterval`. `vi.useFakeTimers()` installed inside a test therefore never ticks `useNow()`: live elapsed looks
+  frozen under fake time. Assert live elapsed with a short real-time wait, or install fake timers before
+  importing app modules (seen while reviewing T0-03, 2026-10-15).
+- `RunGrid` computes stale from `props.projects`. A consumer that omits a run's project gets `stale = false` for that
+  run, silently. T0-05 must pass all projects.
+
 ## Where conflicts are still likely
 - `src/app/routes.tsx`: frozen by D-007; any edit there is a review flag.
 - Shared UI primitives (`src/components/ui/`): wave-2 tasks will want tweaks. Rule: add a new
@@ -129,3 +136,4 @@ worktree or cloud sandbox. Briefs make the worker stop if `pwd` is inside Dropbo
 - 2026-10-14 · T0-01 re-review · PR #1 @ 360d907 · Fresh clone: base = main 89a7ffa. The delta is limited to src/data/mock/**, README and fixtures; no contract, Run type, package or docs/plan changes. Gate pass, vitest 5 files / 64 tests, CI pass. Independent probe (live/stale): real clock via fake timers at +16 min and +3 h gives offers 3/0, dashboard 0/1. Manual close of run_1 then +20 min gives 2/0 with contact frozen. Reset then +20 min gives 3/0. Persisted reload +24 h gives 3/0. The same probe on pre-fix cb924d4 gives 0/3 everywhere, so the probe can fail. **Approved:** https://github.com/StephenForte/supa-agent-tracker/pull/1#issuecomment-6184194638
 - 2026-10-15 · T0-02 · PR #5 @ ee32ce6 · Fresh clone: base = main 32919ce; scope limited to projects pages/features/domain; gate pass, vitest 7 files / 82 tests (matches); CI + Bugbot pass; no file overlap with #6/#7/#8. Probe rendered /projects with fake system timers: Offers live 3 / stale 0 / review 1, Dashboard 0/1/0, Weather 0/0/0 at t0, +20 min and +3 h 20. Order Offers > Dashboard > Weather, archived hidden. A name-only create, a link-clearing edit and a restore all saved. **Approved:** https://github.com/StephenForte/supa-agent-tracker/pull/5#issuecomment-6194187536
 - 2026-10-15 · T0-06 · PR #7 @ 2477391 · Fresh clone with current main (e02ae19) merged in, no conflicts: gate pass, vitest 13 files / 98 tests (80 + T0-02's 18); CI pass; Bugbot rotation-copy finding fixed in 2477391. Probe through the real routes: the plaintext appears in 1 input after create, is absent after dismiss, and is absent after rotate → navigate away → back. Clean URL; no plaintext in demo storage, local/session storage or console. The integrations preview for all 4 projects contains no seeded private-note text. The probe was shown able to fail (no-op dismiss → present). Litter: an orphaned vite dev server (PID 70600, port 5176) was still running from the deleted clone and recreated ~/src/supa-agent-tracker-t0-06/.vite. **Approved:** https://github.com/StephenForte/supa-agent-tracker/pull/7#issuecomment-6194262314
+- 2026-10-15 · T0-03 · PR #6 @ 8602966 · Fresh clone: branch alone vitest 10 files / 152 (matches); merged with main 361f8de 16 / 168, no conflicts; typecheck/lint/build pass; CI pass; RunGridProps/Sort/Filters byte-identical to main; Bugbot "+N more clears filters" fixed in 8602966. Probe through the real routes: offers order run_1, run_10, run_2, run_3; concurrent badge only on run_1/run_2; Live filter excludes run_3; Review filter = run_3; Stale filter = run_4; closing run_4 as Cancelled took stale 1 → 0 with elapsed frozen across +10 min, a manual_close event and step_3 still open; ?run=run_3 expands. Real-time elapsed advances for run_1 and stays frozen for run_3. **Approved:** https://github.com/StephenForte/supa-agent-tracker/pull/6#issuecomment-6194372725
