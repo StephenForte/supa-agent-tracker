@@ -1,0 +1,3 @@
+import { Link } from 'react-router';
+import { Placeholder } from '../../app/Placeholder';
+export function AuthPage({ title }: { title: string }) { return <Placeholder title={title} owner="T0-06"><p>Simulated account flow. No credentials are collected.</p><div className="link-list"><Link to="/login">Log in</Link><Link to="/register">Register</Link><Link to="/verify-email">Verify email</Link><Link to="/forgot-password">Forgot password</Link><Link to="/reset-password">Reset password</Link><Link to="/logout">Log out</Link><Link to="/projects">Continue as demo operator</Link></div></Placeholder>; }

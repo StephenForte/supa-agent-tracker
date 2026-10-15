@@ -1,0 +1,15 @@
+@import "tailwindcss";
+@theme {
+  --color-status-running: #166253;
+  --color-status-stale: #824600;
+  --color-status-review: #5940a0;
+  --color-status-failed: #a12632;
+  --color-status-neutral: #485967;
+  --color-ink: #182d37;
+  --color-paper: #f4f6f6;
+  --color-accent: #166253;
+}
+:root {
+  --status-running-bg: #d9f1e8; --status-stale-bg: #fff0d3;
+  --status-review-bg: #eee8fc; --status-failed-bg: #fde5e8; --status-neutral-bg: #e7edf1;
+}
