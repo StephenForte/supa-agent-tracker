@@ -273,3 +273,14 @@ Status: **Confirmed by operator (2026-10-16)**. Supersedes D-025; still implemen
   register without an invite (bootstrap). There's no role column; multiple admins are Phase 2.
 - `REGISTRATION_ALLOWLIST` is removed. The operator sets `ADMIN_EMAIL` in the Render dashboard **before** the change merges.
 
+### D-032 — "Set it and forget it" tokens and project discovery in the prompt
+Status: **Confirmed by operator (2026-10-16)**, refining D-018/D-024 scope rules.
+- An MCP token can be issued with scope **"All my projects"**, which covers every current **and future** project of its
+  owner. This is the default on the issue form; the user can instead tick specific projects. A token's scope can also be
+  edited later (all ↔ specific list) without re-issuing the plaintext. Server-side enforcement is unchanged: every
+  read and write still checks the owner and the token's effective scope.
+- Project discovery lives in the agent prompt: match the current workspace's repository against project
+  `repository_name`/`repository_url` from `list_projects`; exactly one match → use it; none or several → ask the user
+  once; unattended (no one to ask) → continue the work without reporting (the protocol's never-block rule).
+- Task: P1-J.
+
