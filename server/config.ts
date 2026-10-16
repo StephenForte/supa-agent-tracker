@@ -2,11 +2,17 @@ import { z } from 'zod';
 
 const nodeEnvSchema = z.enum(['development', 'test', 'production']);
 
+const trustProxyHopsSchema = z.preprocess(
+  (value) => (value === undefined ? '0' : value),
+  z.string().regex(/^[0-5]$/, 'must be an integer from 0 to 5').transform((value) => Number(value)),
+);
+
 const envSchema = z.object({
   DATABASE_URL: z.string().trim().min(1, 'is required'),
   PORT: z.coerce.number().int().positive('must be a positive integer').default(3000),
   NODE_ENV: nodeEnvSchema.default('development'),
   PUBLIC_URL: z.url('must be an absolute URL'),
+  TRUST_PROXY_HOPS: trustProxyHopsSchema,
 });
 
 export type NodeEnv = z.infer<typeof nodeEnvSchema>;
@@ -18,6 +24,8 @@ export interface AppConfig {
   publicUrl: string;
   /** Derived from NODE_ENV. Production boots apply migrations; there is no separate env var. */
   migrateOnBoot: boolean;
+  /** Reverse-proxy hops trusted when deriving request.ip. 0 ignores X-Forwarded-For. Omission means 0. */
+  trustProxyHops?: number;
   auth?: AuthConfig;
 }
 
@@ -34,6 +42,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     PORT: env.PORT,
     NODE_ENV: env.NODE_ENV,
     PUBLIC_URL: env.PUBLIC_URL,
+    TRUST_PROXY_HOPS: env.TRUST_PROXY_HOPS,
   });
   if (!parsed.success) {
     throw new ConfigError(formatConfigError(parsed.error));
@@ -44,6 +53,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     nodeEnv: parsed.data.NODE_ENV,
     publicUrl: parsed.data.PUBLIC_URL,
     migrateOnBoot: parsed.data.NODE_ENV === 'production',
+    trustProxyHops: parsed.data.TRUST_PROXY_HOPS,
     auth: loadAuthConfig(env, parsed.data.NODE_ENV),
   };
 }

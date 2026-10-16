@@ -16,6 +16,10 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     bodyLimit: JSON_BODY_LIMIT_BYTES,
     logger: options.logger ?? (options.config.nodeEnv === 'test' ? false : createLoggerOptions()),
     genReqId: resolveRequestId,
+    // Fastify 5.12 treats a numeric trustProxy as "trust nothing", and `true` would
+    // accept the client-supplied leftmost X-Forwarded-For entry. A hop function
+    // trusts only the configured number of proxies, so hop 1 keeps the rightmost address.
+    trustProxy: (_address, hop) => hop < (options.config.trustProxyHops ?? 0),
   });
 
   app.addHook('onRequest', async (request, reply) => {
