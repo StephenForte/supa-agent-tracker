@@ -197,6 +197,8 @@ describe('MCP and tokens over real Postgres and the SDK HTTP client', () => {
       const result = await app.inject({ url: '/mcp', headers: { authorization } }); expect(result.statusCode).toBe(401); expect(result.headers['www-authenticate']).toContain('error="invalid_token"');
     }
     expect((await app.inject(`/mcp?access_token=${plaintext}`)).statusCode).toBe(401);
+    expect((await app.inject(`/.well-known/oauth-protected-resource?access_token=${plaintext}`)).statusCode).toBe(200);
+    expect((await app.inject({ url: `/api/tokens?access_token=${plaintext}`, headers: { 'x-test-user-id': owner.userId } })).statusCode).toBe(200);
     expect((await app.inject({ method: 'POST', url: '/api/tokens', payload: { label: 'x', project_ids: [x.id], request_id: 'unauth' } })).statusCode).toBe(401);
   });
   it('limits each credential independently with HTTP 429 and rate_limited', async () => {

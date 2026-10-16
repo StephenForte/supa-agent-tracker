@@ -176,6 +176,8 @@ retain the returned revision for their next status/check-out. Check-out ends exe
 and sets finish time independently of work status, which may remain blocked or waiting
 for review. A later heartbeat cannot reopen it.
 
+Observed client name/version are truncated to 200 characters each and User-Agent to 512.
+
 Input caps: IDs 128 characters; labels, titles, task IDs, harness/model, agent/tool names,
 external execution IDs and PR repository/title fields 200; narrative fields 8,000;
 PR URLs 2,048 (HTTP/HTTPS); at most 20 PR references (at most one primary) and 100 tool

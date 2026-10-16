@@ -33,7 +33,7 @@ export async function registerMcpRoutes(app: FastifyInstance, deps: RouteDeps & 
   }, 60_000);
   timer.unref();
   app.addHook('onClose', async () => { clearInterval(timer); await Promise.all([...sessions.keys()].map(drop)); });
-  app.get('/.well-known/oauth-protected-resource', async (_request, reply) => {
+  app.get('/.well-known/oauth-protected-resource', { childLoggerFactory: secretSafeLogger }, async (_request, reply) => {
     reply.header('Cache-Control', 'no-store');
     return { resource: `${origin}/mcp`, bearer_methods_supported: ['header'], resource_name: 'Supa Agent Tracker' };
   });
@@ -68,7 +68,7 @@ export async function registerMcpRoutes(app: FastifyInstance, deps: RouteDeps & 
         if (sessions.size >= MAX_SESSIONS) return reply.code(429).send(apiError('rate_limited', 'Session limit exceeded'));
         const info = { name: 'supa-agent-tracker', version: '1.0.0', api_version: API_VERSION, _meta: { api_version: API_VERSION } };
         const server = new McpServer(info);
-        const register = createToolRegistrar(server, { db, context: () => ({ ...context.getStore()!, clientInfo: server.server.getClientVersion() ?? null }) });
+        const register = createToolRegistrar(server, { db, context: () => ({ ...context.getStore()!, clientInfo: observedClientInfo(server.server.getClientVersion()) }) });
         registerRunTools(register);
         const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: randomUUID, enableJsonResponse: true,
           onsessioninitialized: (id) => { sessions.set(id, entry!); } });
@@ -94,4 +94,8 @@ export async function registerMcpRoutes(app: FastifyInstance, deps: RouteDeps & 
       if (request.method === 'DELETE' && typeof sessionId === 'string') await drop(sessionId);
     },
   });
+}
+
+function observedClientInfo(info: { name: string; version: string } | undefined) {
+  return info ? { name: info.name.slice(0, 200), version: info.version.slice(0, 200) } : null;
 }
