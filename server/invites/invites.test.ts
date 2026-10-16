@@ -53,6 +53,14 @@ describe('P1-I invites through HTTP and real Postgres', () => {
     await pool.query("INSERT INTO users(id,email,email_verified) VALUES ('other-user','other@example.test',true),('unverified-admin','ADMIN@example.invalid',false)");
   });
   afterAll(async () => { await app?.close(); await closed?.close(); await pool?.end(); await scratch?.drop(); await rm(spaRoot, { recursive: true, force: true }); vi.restoreAllMocks(); });
+  it('does not reveal the registered admin address through no-invite signup', async () => {
+    const unknown = await signup('unknown-bootstrap-probe@example.test');
+    expect(unknown.statusCode).toBe(403);
+    expect(unknown.json()).toEqual(forbidden);
+    const admin = await signup(' ADMIN@Example.test ');
+    expect(admin.statusCode).toBe(403);
+    expect(admin.json()).toEqual(unknown.json());
+  });
   it('requires authentication and a currently verified admin; account reports the same rule', async () => {
     for (const [method, url, payload] of [['GET', '/api/invites', undefined], ['POST', '/api/invites', { email: 'x@example.test', request_id: 'x' }], ['POST', '/api/invites/missing/revoke', { request_id: 'x' }]] as const) {
       expect((await app.inject({ method, url, payload })).statusCode).toBe(401);

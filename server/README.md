@@ -349,7 +349,7 @@ For the live production build, run `VITE_DATA_SOURCE=http npm run build && npm r
 
 ## Invite registration (P1-I)
 
-Before merging P1-I, set `ADMIN_EMAIL` on `supa-agent-tracker-app` in Render → Environment. It is optional for boot, must be a valid single address when configured, and is normalized to lowercase. Register that address without an invite, verify its email and sign in. Its `/api/account` response then has `isAdmin: true`, enabling Settings → Invites. Other users need a single-use, seven-day invite for their own address. See [Invite API](../docs/api.md#invites-p1-i-d-031).
+Before merging P1-I, set `ADMIN_EMAIL` on `supa-agent-tracker-app` in Render → Environment. It is optional for boot, must be a valid single address when configured, and is normalized to lowercase. Register that address without an invite, verify its email and sign in. Its `/api/account` response then has `isAdmin: true`, enabling Settings → Invites. Other users need a single-use, seven-day invite for their own address. See [Invite API](../docs/api.md#invites-p1-i-d-031). The `ADMIN_EMAIL` bootstrap only works until that account exists.
 
 Migration `0003_invites.sql` adds hash-only invites with RESTRICT inviter/recipient FKs, paired consumption timestamps/user IDs, and mutually exclusive used/revoked state. The same transaction locks a pending invite and creates the Better Auth user/credential; concurrent attempts cannot both consume it. All failed sign-ups roll back consumption and account writes. Create/revoke use the shared idempotency layer; stored responses never contain the link. Replays return a null link.
 

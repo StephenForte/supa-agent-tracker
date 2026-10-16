@@ -13,7 +13,10 @@ export async function invitedSignup(runtime: AuthRuntime, body: Record<string, u
   try {
     return await runtime.signupTransaction(async tx => {
       const email = typeof body?.email === 'string' ? body.email : '';
-      const bootstrap = !!runtime.settings.adminEmail && email === runtime.settings.adminEmail;
+      const [adminTaken] = await tx.select({ id: users.id }).from(users)
+        .where(sql`lower(${users.email}) = ${runtime.settings.adminEmail ?? ''}`).limit(1);
+      // Bootstrap only the first account; later responses must not reveal the admin address.
+      const bootstrap = !!runtime.settings.adminEmail && email === runtime.settings.adminEmail && !adminTaken;
       let invite: typeof invites.$inferSelect | undefined;
       if (!bootstrap) {
         if (typeof body?.invite !== 'string' || !/^inv_[A-Za-z0-9_-]{43}$/.test(body.invite)) throw new RejectedSignup(invalidInvitation());

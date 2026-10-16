@@ -329,7 +329,7 @@ keep URL tokens out of logs; no auth body or provider error is logged.
 
 ## Invites (P1-I, D-031)
 
-`GET /api/account` adds `isAdmin`: true exactly when the signed-in user's verified email equals `ADMIN_EMAIL`, case-insensitively. An unset `ADMIN_EMAIL` leaves the server available but provides no administrator. There is no role column. Only this address can register without an invite; other addresses need a pending invite even when no administrator is configured.
+`GET /api/account` adds `isAdmin`: true exactly when the signed-in user's verified email equals `ADMIN_EMAIL`, case-insensitively. An unset `ADMIN_EMAIL` leaves the server available but provides no administrator. There is no role column. Only this address can register without an invite; other addresses need a pending invite even when no administrator is configured. The `ADMIN_EMAIL` bootstrap only works until an account with that email exists.
 
 All invite routes require a browser session and current administrator status. Missing sessions return 401; non-admins (including unverified admin addresses) return 403 `forbidden`. Responses use `Cache-Control: no-store`; route logs omit request and response contents.
 
