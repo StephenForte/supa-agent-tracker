@@ -1,0 +1,79 @@
+import { betterAuth } from 'better-auth';
+import { drizzleAdapter } from 'better-auth/adapters/drizzle';
+import type { FastifyInstance } from 'fastify';
+import type pg from 'pg';
+import { createDb } from '../db/client.js';
+import { users, sessions, accounts, authVerifications } from '../db/schema.js';
+import { loadAuthConfig, type AppConfig } from '../config.js';
+import { createEmailSender } from '../email/index.js';
+
+export function createAuthRuntime(pool: pg.Pool, config: AppConfig) {
+  // Legacy foundation tests construct AppConfig by hand. The fallback test
+  // secret is permitted only in the actual test process; normal boot always
+  // passes the validated config.auth from loadConfig.
+  const settings = config.auth ?? loadAuthConfig(process.env, process.env.NODE_ENV === 'test' ? 'test' : config.nodeEnv);
+  const origin = new URL(config.publicUrl).origin;
+  const email = createEmailSender(settings, config.nodeEnv);
+  const auth = betterAuth({
+    baseURL: origin,
+    basePath: '/api/auth',
+    secret: settings.secret,
+    trustedOrigins: [origin],
+    logger: { disabled: true },
+    database: drizzleAdapter(createDb(pool), {
+      provider: 'pg',
+      transaction: true,
+      schema: { user: users, session: sessions, account: accounts, verification: authVerifications },
+    }),
+    user: { fields: { name: 'displayName' } },
+    account: { fields: { password: 'passwordHash' } },
+    session: {
+      expiresIn: 7 * 24 * 60 * 60,
+      disableSessionRefresh: true,
+      cookieCache: { enabled: false },
+    },
+    verification: { storeIdentifier: 'hashed' },
+    emailAndPassword: {
+      enabled: true,
+      requireEmailVerification: true,
+      autoSignIn: false,
+      resetPasswordTokenExpiresIn: 3600,
+      revokeSessionsOnPasswordReset: true,
+      async sendResetPassword({ user, token }) {
+        const link = new URL('/reset-password', origin);
+        link.searchParams.set('token', token);
+        await email.sendEmail({ to: user.email, subject: 'Reset your password', text: `Reset your password: ${link.href}` });
+      },
+    },
+    emailVerification: {
+      sendOnSignUp: true,
+      autoSignInAfterVerification: false,
+      expiresIn: 3600,
+      async sendVerificationEmail({ user, token }) {
+        const link = new URL('/verify-email', origin);
+        link.searchParams.set('token', token);
+        await email.sendEmail({ to: user.email, subject: 'Verify your email', text: `Verify your email: ${link.href}` });
+      },
+    },
+    rateLimit: { enabled: true, window: 60, max: 100, storage: 'memory', customRules: { '/sign-in/email': { window: 60, max: 5 } } },
+    advanced: {
+      // Better Auth otherwise skips Origin validation under NODE_ENV=test.
+      // Keep the same callback checks active in HTTP tests and production.
+      disableOriginCheck: false,
+      useSecureCookies: origin.startsWith('https:'),
+      defaultCookieAttributes: { httpOnly: true, sameSite: 'lax', secure: origin.startsWith('https:') },
+      ipAddress: { ipAddressHeaders: ['x-supa-auth-ip'] },
+    },
+  });
+  return { auth, email, config, settings, origin };
+}
+
+export type AuthRuntime = ReturnType<typeof createAuthRuntime>;
+
+declare module 'fastify' {
+  interface FastifyInstance { browserAuth?: AuthRuntime }
+}
+
+export function authRuntime(app: FastifyInstance): AuthRuntime | undefined {
+  return app.browserAuth;
+}

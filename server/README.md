@@ -173,3 +173,87 @@ Cross-project and account reads live in `server/repo/views.ts`: the account row,
 `listProjects` takes `includeArchived`. The default is unchanged: archived projects stay out of the list. `include_archived=true` on `GET /api/projects` sets the option. `GET` by id still returns an archived project to its owner.
 
 Field mapping is in `server/api/map.ts`. Reporting policy is nested on the way in and out. Event actors become `actorId`. Timestamps are UTC ISO-8601. Mutation bodies are validated with zod before `withIdempotency`, and the callback uses the transaction `withIdempotency` supplies. Caps, the events rule and the manual-close rule are in [docs/api.md](../docs/api.md). Closing a run that is not `running` returns `409 conflict` with the current run (`Run has already ended`) and does not call `updateRun`. A running close sets execution state and work status to `failed` or `cancelled`, stores the reason as the run message, and lets the repository append the `manual_close` event and the audit row. A metadata patch never sends execution state and does not advance `last_contact_at`; the repository still appends a `status` event.
+## Steps and notes (P1-D)
+
+Browser routes live in `server/steps/routes.ts` and `server/notes/routes.ts` and are registered with one call, `registerStepsAndNotesRoutes(app, deps)`. They are session-only. See [docs/api.md](../docs/api.md) for the paths, the private-note cap (20,000 characters), and the conflict body.
+
+`server/steps/agent-steps.ts` is the protocol-neutral service P1-D2 will expose as MCP tools. It contains the rules; the tools should not grow their own. Each function takes `(db, access: CredentialAccess, input: unknown)`, validates `input` with the exported zod schema, and returns plain JSON (timestamps are strings). Private notes are not imported here and never appear in a result, error, or conflict body.
+
+| Function | Schema | Input | Result |
+|---|---|---|---|
+| `listNextStepsForAgent` | `listNextStepsInput` | `{ project_id }` | `{ steps, waitingNote }` |
+| `createNextStep` | `createNextStepInput` | `{ project_id, source_run_id, instruction, position?, request_id }` | mutation |
+| `updateNextStep` | `updateNextStepInput` | `{ project_id, step_id, source_run_id, expected_revision, instruction?, position?, request_id }` | mutation |
+| `reorderNextSteps` | `reorderNextStepsInput` | `{ project_id, order: [{ step_id, expected_revision }], request_id }` | mutation |
+| `setWaitingNote` | `setWaitingNoteInput` | `{ project_id, source_run_id, expected_revision, text, request_id }` | mutation |
+
+A mutation result is `{ status: 'saved', value }`, `{ status: 'conflict', current }`, or `{ status: 'idempotency_mismatch' }`. `not_found`, `forbidden`, and `validation_error` throw `AccessError`. `updateNextStep` requires an instruction or a position. It has no `done` field. Instruction text is 1–10,000 characters (`INSTRUCTION_MAX_CHARS`). Waiting-note text is 0–10,000 (`WAITING_NOTE_MAX_CHARS`). An omitted `position` on create appends after the current maximum.
+
+P1-D2 tools: `list_next_steps`, `create_next_step`, `update_next_step`, plus a reorder tool and a waiting-note tool. Pass the zod schemas through as the tool schemas.
+
+**Authorship.** The repository checks only that `source_run_id` belongs to the project. This module additionally requires a `check_in` event on that run whose `actor_credential_id` is the calling credential. Another credential's run, a user-created run, or a run in another project is `forbidden` and writes nothing. The run may already have ended; workers add follow-ups at check-out. After a token rotation the new credential cannot edit steps the old credential checked in (D-023, accepted for Phase 1).
+
+**Reorder (D-023).** Any credential granted the project may reorder. The order must list every current step once at its current revision, or the call is a conflict and nothing changes. Positions become `0..n-1`. Only a step whose position changes increments its revision. Text, source run, and completion are untouched. `reorderNextSteps` in `server/repo/next-steps.ts` is the transactional write.
+
+**Completion.** User completion goes through `setStepCompletion` and is not a column `updateNextStep` can patch. An agent edit after the user checks a step, or reopens it, leaves `done`, `completionChangedBy`, and `completionChangedAt` as the user wrote them.
+
+**Idempotency.** Each mutation hashes a canonical form of its parsed input, including the operation name, and calls `withIdempotency` with the callback's `tx`. The same `request_id` and body returns the stored result and does not insert a second step. A different body returns `idempotency_mismatch` without running the write. A conflict throws out of the callback, so the key is not stored and the rows stay as they were.
+## Auth (P1-B2)
+
+Better Auth **1.7.7** (released 2026-09-30, pinned exactly) supplies password
+hashing, verified-email login, sessions and single-use reset consumption. Migration
+0002 adds its models and a nullable `users.image`; existing domain fields remain
+intact. Its required OAuth account fields are nullable and SQL-constrained to NULL
+because only email/password authentication is exposed. All auth/user FKs RESTRICT.
+
+| Variable | Required | Meaning |
+|---|---|---|
+| `BETTER_AUTH_SECRET` | outside test | At least 32 characters; signs cookies and verification links |
+| `REGISTRATION_ALLOWLIST` | no | Trimmed, case-insensitive comma-separated emails; empty denies all registration |
+| `EMAIL_PROVIDER` | no | `console` (default) or `resend` |
+| `RESEND_API_KEY` | when resend | Resend API credential, never logged |
+| `EMAIL_FROM` | when resend | Operator-controlled verified sender |
+
+Sessions have a fixed **7-day** lifetime without refresh or cookie caching. Cookie
+attributes are HttpOnly, SameSite=Lax, Secure for HTTPS PUBLIC_URL. Each protected
+request queries server-side session state. Session lookup failures return a sanitized
+500 and a fixed diagnostic, so an outage is not mistaken for a logout. Password changes force revocation of all
+old sessions and issue a replacement cookie; resets revoke all existing sessions.
+Reset links expire after **one hour** and their database identifiers are hashed by
+the library. Verification links are signed JWTs with a one-hour expiry.
+
+Sign-in is limited to **5 attempts per normalized email and 5 per socket IP per
+60-second fixed window**, including successful attempts. Both must allow the
+attempt. The email/IP map is capped at 10,000 keys and rejects new attempts while
+full; expired entries are pruned. Better Auth also limits sign-in to 5/IP/60s,
+other sensitive operations to its built-in defaults (3/IP/10s), and other endpoints
+to 100/IP/60s. Storage is process memory, resets on restart and is not shared across
+replicas. Client proxy headers do not determine limiter identity; behind a proxy
+this conservatively limits the proxy IP until trusted-proxy policy is dispatched.
+
+All state-changing `/api` requests reject a mismatching Origin or cross-site fetch
+metadata. Cookie-authenticated writes also require Origin. Better Auth validates
+callback URLs against PUBLIC_URL. Auth handlers accept only the documented routes;
+unknown routes remain JSON 404s. The test identity header works only with the real
+process `NODE_ENV=test` and is ignored in development/production.
+
+Console email prints complete development messages to stdout and captures messages
+in memory in tests. **Production console email suppresses message contents** to
+avoid logging tokens; configure Resend for actual production delivery. Resend uses
+fetch with a 10-second timeout; provider responses/errors never reach logs or error
+bodies. Auth-route logs are silent because Fastify logs query strings before hooks;
+other API request logging retains the existing header redaction. Auth failures use
+safe generic messages, and reset/resend responses do not expose delivery failures.
+
+Storage disclosure: `accounts.password_hash` contains Better Auth's scrypt hash;
+`sessions.token` contains the **plain random session identifier** (the browser
+cookie is signed, but the database token is not hashed). This is an explicit planner
+decision before merge. The existing `mcp_credentials.token_hash` remains a hash.
+Unused account token columns and their expiry fields are constrained to NULL.
+`auth_verifications.identifier` holds hashed reset identifiers; `value` holds the
+user ID, not the reset secret. Verification JWTs are emailed, not stored.
+
+Email links use existing `/verify-email?token=...` and `/reset-password?token=...`
+web routes. Those screens remain the Phase 0 demo until P1-E wires their token to
+`GET /api/auth/verify-email` or `POST /api/auth/reset-password`; the server API works
+independently. No web bundle or deployment configuration is changed here.
