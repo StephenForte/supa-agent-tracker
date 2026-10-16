@@ -6,8 +6,8 @@ import { Button } from '../components/ui/Button';
 import { Dialog } from '../components/ui/Dialog';
 export function Shell() {
   const source = useTrackerData();
-  const account = useSourceQuery(source, useCallback(async () => typeof source.getAccount === 'function' ? source.getAccount() : { demo: true }, [source]));
-  const demo = account.status === 'ready' ? account.data.demo : !source.auth;
+  const account = useSourceQuery(source, useCallback(async () => source.auth ? source.auth.getSession() : typeof source.getAccount === 'function' ? source.getAccount() : { demo: true }, [source]));
+  const demo = account.status === 'ready' ? account.data?.demo ?? false : !source.auth;
   return <DemoAccountContext.Provider value={demo}><ShellFrame /></DemoAccountContext.Provider>;
 }
 function ShellFrame() {

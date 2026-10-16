@@ -11,7 +11,8 @@ export function RunDetails({ run, runs, agents = [], onReveal }: { run: Run; run
   const tracker = useTrackerData();
   const demo = useDemoAccount();
   const account = useSourceQuery(tracker, useCallback(() => tracker.getAccount(), [tracker]));
-  const detail = useSourceQuery(tracker, useCallback(() => !demo ? tracker.getRun(run.id) : Promise.resolve(run), [tracker, run, demo]));
+  const runId = run.id;
+  const detail = useSourceQuery(tracker, useCallback(() => !demo ? tracker.getRun(runId) : Promise.resolve(null), [tracker, runId, demo]));
   const events = demo ? run.events : detail.status === 'ready' ? detail.data?.events ?? [] : run.events;
   const signedIn = account.status === 'ready' ? account.data : null;
   const history = paginate(executionHistory(run, runs), historyPage, 5);

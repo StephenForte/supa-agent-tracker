@@ -5,8 +5,10 @@ export class HttpError extends Error {
 }
 export class SessionExpiredError extends HttpError { constructor() { super(401, 'Your session has expired. Please log in.'); } }
 export function createHttpClient(fetcher: Fetcher = globalThis.fetch.bind(globalThis), onUnauthorized: () => void = () => {}) {
+  let sessionEpoch = 0;
   return {
     async request<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
+      const requestEpoch = sessionEpoch;
       if (!path.startsWith('/api/') || path.startsWith('//')) throw new Error('API requests must be same-origin');
       // Retry only transport failures, with the exact serialized body and request_id.
       const init = { method, credentials: 'same-origin' as const, cache: 'no-store' as const,
@@ -15,8 +17,11 @@ export function createHttpClient(fetcher: Fetcher = globalThis.fetch.bind(global
       try { response = await fetcher(path, init); }
       catch { response = await fetcher(path, init); }
       const value = await response.json() as { error?: { message?: string; details?: { current?: unknown } } };
-      if (response.ok) return value as T;
-      if (response.status === 401) { onUnauthorized(); throw new SessionExpiredError(); }
+      if (response.ok) {
+        if (method === 'POST' && ['/api/auth/sign-in/email', '/api/auth/sign-out', '/api/auth/change-password', '/api/auth/reset-password'].includes(path)) sessionEpoch++;
+        return value as T;
+      }
+      if (response.status === 401) { if (requestEpoch === sessionEpoch) onUnauthorized(); throw new SessionExpiredError(); }
       const message = response.status >= 500 ? 'The server could not complete the request. Please try again.'
         : response.status === 429 ? 'Too many requests. Please try again shortly.'
         : value?.error?.message ?? 'Request could not be processed';

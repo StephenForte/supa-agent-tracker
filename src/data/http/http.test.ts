@@ -28,6 +28,20 @@ describe('HTTP contract adapters', () => {
     await expect(privateNotes.save('p', 'private', 0)).rejects.toBeInstanceOf(SessionExpiredError);
     expect(onUnauthorized).toHaveBeenCalledTimes(2);
   });
+  it('ignores a pre-login 401 for session expiry but still signals a current-session 401', async () => {
+    let release: ((response: Response) => void) | undefined;
+    const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation(async path => {
+      if (path === '/api/account') return new Promise<Response>(resolve => { release = resolve; });
+      return String(path).startsWith('/api/auth/') ? json({ success: true }) : json({ error: {} }, 401);
+    });
+    const onUnauthorized = vi.fn(); const { tracker } = createHttpSources({ fetch, onUnauthorized });
+    const stale = tracker.getAccount();
+    // Attach the rejection assertion before releasing the delayed response.
+    const rejected = expect(stale).rejects.toBeInstanceOf(SessionExpiredError);
+    await tracker.auth!.submit('sign-in/email', { email: 'user@example.test', password: 'test-password' });
+    release!(json({ error: {} }, 401)); await rejected; expect(onUnauthorized).not.toHaveBeenCalled();
+    await expect(tracker.listProjects()).rejects.toBeInstanceOf(SessionExpiredError); expect(onUnauthorized).toHaveBeenCalledTimes(1);
+  });
   it('follows every cursor for all lists, includes archived projects, and never loads run details for a list', async () => {
     const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation(async path => {
       const url = String(path); return json({ items: [{ id: url.includes('cursor=') ? 'second' : 'first' }], nextCursor: url.includes('cursor=') ? null : 'opaque/next' });
