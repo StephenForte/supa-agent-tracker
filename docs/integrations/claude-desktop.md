@@ -1,6 +1,6 @@
 # Claude Desktop (macOS) setup
 
-Verified: Production-verified 2026-10-16 with Claude Desktop on macOS (P1-G2): custom connector, "No sign in" + request header `authorization: Bearer …`; full cycle with no tool errors. Requests arrive from Anthropic's servers (UA `Claude-User`), not your machine.
+Verified: Probe-verified 2026-10-15 (P1-A2); production verification pending (P1-G2)
 
 Prerequisites: a token issued for the target project from [Settings → MCP tokens](/settings/tokens) on your tracker, and the full remote server URL `https://<your tracker host>/mcp`. Copy the token once into private client configuration. Never commit it. Read the [base prompt](base-prompt.md) and [reporting protocol](reporting-protocol.md).
 
