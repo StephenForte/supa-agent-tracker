@@ -229,3 +229,35 @@ BETTER_AUTH_SECRET. `requireUser` reads only the cookie, and no bearer plugin is
 produce a valid cookie (probed: real token + wrong signature → 401). No custom hashed-session adapter in Phase 1. Revisit
 if a bearer/session-token header is ever enabled.
 
+### D-028 — The demo build stays the default; the live web app is opt-in
+Status: Proposed by planner (2026-10-16), for P1-E.
+`VITE_DATA_SOURCE` selects the web data sources at build time: `demo` (the default, also when unset) uses the in-browser mock;
+`http` uses the real server. render.yaml's static site builds with no env vars, so the public Phase 0 demo stays a
+self-contained demo that makes no network calls. P1-G sets `VITE_DATA_SOURCE=http` for the Phase 1 web service build.
+The selection is a compile-time constant, so the demo bundle contains no HTTP-source code (proven by a dist grep for `/api/`).
+
+### D-029 — Tool usage is batched at check-out; adapters only heartbeat
+Status: Proposed by planner (2026-10-16), for P1-F.
+`record_tool_usage` and `check_out.tools` bump the run revision (only heartbeat is exempt, D-024). The reporting protocol
+therefore has agents report observed tool aggregates once, in `check_out`. Client hook adapters send **heartbeats only**,
+so a separate process never makes the agent's next status update conflict. The agent hands the run id to the adapter
+through a workspace file, `.supa/run-id` (one id, deleted at check-out). Adapter-captured tool telemetry (PRD R8) is
+deferred to Phase 2, where it gets a non-revision ingestion path if needed.
+
+### D-030 — Phase 1 deployment shape and the cost gate
+Status: Proposed by planner (2026-10-16), for P1-G. Implements D-020.
+- A new Render web service `supa-agent-tracker-app` (Node, Starter) and a Postgres instance `supa-agent-tracker-db`
+  (Basic-256mb) are added to the existing Blueprint (render.yaml). The Phase 0 static demo `supa-agent-tracker` stays
+  until the operator decides to retire it.
+- Build: `npm ci && VITE_DATA_SOURCE=http npm run build && npm run build:server`. Start: `npm start`, with
+  NODE_ENV=production, so migrations run before listen. DATABASE_URL comes from the database by internal connection
+  string, and the database has no public IP allowlist.
+- Fastify trusts exactly one proxy hop (`TRUST_PROXY_HOPS=1` on Render, default 0 locally). Trusting all hops would let
+  clients spoof `X-Forwarded-For` and evade the per-IP sign-in limit.
+- **Cost gate:** with auto-sync, Blueprint can provision new resources as soon as render.yaml lands on main (the
+  exact sync behaviour for new paid resources is unverified, so the gate assumes it). The P1-G1 PR is **not
+  merged** until the operator explicitly approves the monthly cost, re-confirmed by the planner against Render's live
+  prices at that moment. Merging that PR is the provisioning step.
+- Secrets (RESEND_API_KEY, EMAIL_FROM, REGISTRATION_ALLOWLIST) are `sync: false`, entered by the operator in the Render
+  dashboard and never in chat. BETTER_AUTH_SECRET uses `generateValue: true`.
+
