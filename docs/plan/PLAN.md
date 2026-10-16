@@ -118,7 +118,7 @@ Probe torn down 2026-10-15 (Render service deleted, Cursor/Claude/Grok connector
 | 3 | **P1-C1 MCP endpoint + tokens**: token issue/rotate/revoke REST (behind `requireUser`), hash-only storage, scope enforcement; `/mcp` with bearer auth and a spec-shaped 401; tools list_projects, get_project, check_in, update_status, heartbeat, check_out, record_tool_usage; request_id idempotency, expected_revision conflicts; clientInfo/UA stored as metadata only (D-018) | server/mcp/**, server/tokens/** | B1 (uses the requireUser stub) | Opus | Brief ready (2026-10-16) · docs/plan/briefs/P1-C1.md |
 | 3 | **P1-D Next steps + private notes**: next-step rules as a protocol-neutral service (own-step authorship bound to the check-in credential, dispatcher reorder per D-023, completion preserved, request_id dedupe), REST user steps list/complete/reopen, private notes REST (session only, never MCP) | server/steps/**, server/notes/**, server/repo/next-steps.ts | B1 | Sonnet | Brief ready (2026-10-16) · docs/plan/briefs/P1-D.md |
 | 3b | **P1-D2 Next-step MCP tools**: register list/create/update_next_step, a reorder tool and a waiting-note tool on /mcp by calling server/steps/agent-steps.ts; no new logic | server/mcp/** (additive) | C1, D | Sonnet | Not yet briefed |
-| 3 | **P1-C2 User REST for projects and runs** (gap found 2026-10-16: no task owned it): projects create/list/get/update, agents and runs list/detail (per project and cross-project), run metadata correction, manual close (failed/cancelled + audit), account read; shapes map onto src/data/contracts.ts | server/api/** | B1 | Opus | Not yet briefed |
+| 3 | **P1-C2 User REST for projects and runs** (gap found 2026-10-16: no task owned it): projects create/list/get/update, agents and runs list/detail (per project and cross-project), run metadata correction, manual close (failed/cancelled + audit), account read; shapes map onto src/data/contracts.ts | server/api/** | B1 | Opus | Brief ready (2026-10-16) · docs/plan/briefs/P1-C2.md |
 | 4 | **P1-E Wire the web app**: HTTP `TrackerDataSource`/`PrivateNotesSource`, real auth and token screens, 5–10 s polling, server-side counts/stale derivation parity with `src/domain` | src/data/http/**, src/pages/auth|settings (wiring) | B2, C1, C2, D, D2 | Opus |
 | 5 | **P1-F Integrations**: reporting protocol + base prompt; setup guides for Cursor (`mcp.json` header), Claude Desktop (connector + request header), Grok Bot (settings screen, not chat); optional Cursor hook heartbeat adapter (R7) | docs/integrations/**, adapters/** | C1, D | Sonnet |
 | 6 | **P1-G Deploy + QA**: Render web Starter + Postgres Basic via Blueprint (planner provisions with operator approval, D-020), migrations on deploy, backup/restore doc, account-isolation tests, 25-concurrent-run load check, Resend domain | render.yaml, docs/ops/** | E, F | Opus |
@@ -135,6 +135,11 @@ Known conflict points in wave 3, all predicted:
 Suggested merge order: B2, then D, then C1 (C1 is largest and most likely to finish last). A conflict that a worker can't
 resolve gets a short rebase brief.
 `requireUser` keeps the `x-test-user-id` seam under NODE_ENV=test only, so C1/D route tests survive B2's merge.
+P1-C2 also runs in wave 3. It owns server/api/**, server/repo/views.ts, and additive changes to server/repo/projects.ts
+and agents.ts. It uses `:projectId` path params to match P1-D. It adds one routes.ts line (`registerUserApiRoutes`).
+Review probes to carry into wave-3 reviews:
+- P1-C1 must reject non-http(s) PR reference URLs from agents (C2 rejects them from users). The web renders them as anchors.
+- P1-E renders run lists without events (D-026).
 Wave-3 inputs from the P1-B1 review: `findCredentialByHash` takes `UserAccess`, so P1-C1 must add the trusted
 bearer bootstrap (hash → `CredentialAccess`) in server/repo/credentials.ts; every repo call, reads included, takes
 `FOR UPDATE` on the project row (serializes per project). P1-G's 25-concurrent-run load check must measure this.
