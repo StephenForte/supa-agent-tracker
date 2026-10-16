@@ -20,6 +20,10 @@ describe('0001 schema', () => {
   });
   it('matches every migrated table and column name, type and nullability in both directions', async () => {
     const tables = Object.values(schema).filter((value) => is(value, PgTable));
+    const actualTables = await pool.query<{ table_name: string }>(
+      "SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE' AND table_name <> 'schema_migrations' ORDER BY table_name",
+    );
+    expect(actualTables.rows.map((row) => row.table_name)).toEqual(tables.map(getTableName).sort());
     const actual = await pool.query<{ table_name: string; column_name: string; type: string; nullable: boolean }>(`
       SELECT c.relname AS table_name, a.attname AS column_name,
         format_type(a.atttypid, a.atttypmod) AS type, NOT a.attnotnull AS nullable
