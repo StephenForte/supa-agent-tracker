@@ -47,6 +47,39 @@ export async function setStepCompletion(db: Database, access: UserAccess, projec
     return { status: 'saved', value: value! };
   });
 }
+export interface StepOrder { stepId: string; expectedRevision: number }
+function sameStepOrder(current: readonly NextStep[], order: readonly StepOrder[]) {
+  if (order.length !== current.length) return false;
+  const revisions = new Map(current.map((step) => [step.id, step.revision]));
+  const seen = new Set<string>();
+  for (const item of order) {
+    if (seen.has(item.stepId) || revisions.get(item.stepId) !== item.expectedRevision) return false;
+    seen.add(item.stepId);
+  }
+  return seen.size === current.length;
+}
+/** Positions only. The order must name every current step once at its current revision, or nothing is written.
+ * A step whose position does not change keeps its revision so an unrelated completion is not invalidated.
+ */
+export async function reorderNextSteps(db: Database, access: CredentialAccess, projectId: string, order: readonly StepOrder[]): Promise<WriteResult<NextStep[]>> {
+  if (access.kind !== 'credential') throw new AccessError('forbidden');
+  for (const item of order) checkRevision(item.expectedRevision);
+  return withProject(db, access, projectId, async (tx) => {
+    const current = await tx.select().from(nextSteps).where(eq(nextSteps.projectId, projectId)).orderBy(nextSteps.position, nextSteps.id).for('update');
+    if (!sameStepOrder(current, order)) return { status: 'conflict', current };
+    const now = new Date();
+    const byId = new Map(current.map((step) => [step.id, step]));
+    const saved: NextStep[] = [];
+    for (const [index, item] of order.entries()) {
+      const row = byId.get(item.stepId);
+      if (!row) return { status: 'conflict', current };
+      if (row.position === index) { saved.push(row); continue; }
+      const [value] = await tx.update(nextSteps).set({ position: index, updatedAt: now, revision: row.revision + 1 }).where(eq(nextSteps.id, row.id)).returning();
+      saved.push(value!);
+    }
+    return { status: 'saved', value: saved };
+  });
+}
 /** expectedRevision=0 creates the first note. A competing creation returns the existing row. */
 export async function setWaitingNote(db: Database, access: CredentialAccess, projectId: string, expectedRevision: number, input: { text: string; sourceRunId: string }): Promise<WriteResult<WaitingNote>> {
   if (access.kind !== 'credential') throw new AccessError('forbidden'); checkRevision(expectedRevision);
