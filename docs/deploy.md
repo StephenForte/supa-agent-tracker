@@ -2,7 +2,7 @@
 
 The shell is a **demo with simulated data and no backend**. Render serves the Vite production build as a static site. Nothing in this repository provisions the service, stores credentials, or talks to GitHub, Postgres, or an MCP host.
 
-Creating the Render service is a separate step, done after this configuration is on `main`, with the operator's approval. This document is that procedure. It does not mean a site is already live.
+Creating the Render service is a separate step, done after this configuration is on `main`, with the operator's approval. This document is that procedure. It does not mean a site is already live. Phase 1 (paid web service and Postgres) is specified in [Deploying Phase 1](ops/deploy-phase1.md) and stays unmerged until the operator approves the cost gate.
 
 ## What gets deployed
 
