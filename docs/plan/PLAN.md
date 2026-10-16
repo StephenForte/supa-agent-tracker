@@ -140,6 +140,12 @@ and agents.ts. It uses `:projectId` path params to match P1-D. It adds one route
 Review probes to carry into wave-3 reviews:
 - P1-C1 must reject non-http(s) PR reference URLs from agents (C2 rejects them from users). The web renders them as anchors.
 - P1-E renders run lists without events (D-026).
+- P1-C1 was dispatched before the PR-URL probe was written. Expect to request that change at review if it's missing.
+Scope amendment, 2026-10-16: P1-B2 may edit server/db/schema.test.ts. The apply-once test now derives its file list from
+the migrations directory. The sessions/accounts/verification tables are no longer forbidden; invites stays forbidden. The
+forbidden-column check uses an explicit (table, column) allowlist for better-auth's password-hash and session-token
+columns. The no-CASCADE and drift tests are unchanged. Until B2 merges, a 0003/0004 from C1 or D would also trip the
+hard-coded migration list.
 Wave-3 inputs from the P1-B1 review: `findCredentialByHash` takes `UserAccess`, so P1-C1 must add the trusted
 bearer bootstrap (hash → `CredentialAccess`) in server/repo/credentials.ts; every repo call, reads included, takes
 `FOR UPDATE` on the project row (serializes per project). P1-G's 25-concurrent-run load check must measure this.
