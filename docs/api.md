@@ -76,6 +76,7 @@ Those headers are not authentication. P1-B2 and P1-C1 replace the stub bodies an
 ## Route registration
 
 `server/app/routes.ts` is the only registration point. Wave-3 tasks append one line each.
+The SPA consumes these routes through its HTTP sources when built with `VITE_DATA_SOURCE=http`.
 
 ## Tokens (P1-C1)
 

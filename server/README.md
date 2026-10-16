@@ -323,3 +323,9 @@ Email links use existing `/verify-email?token=...` and `/reset-password?token=..
 web routes. Those screens remain the Phase 0 demo until P1-E wires their token to
 `GET /api/auth/verify-email` or `POST /api/auth/reset-password`; the server API works
 independently. No web bundle or deployment configuration is changed here.
+
+## Web app
+
+The default `npm run build` selects `VITE_DATA_SOURCE=demo` and produces the self-contained static demo without HTTP sources. To run live locally, set the server environment described above (including DATABASE_URL, PUBLIC_URL=http://localhost:5173, BETTER_AUTH_SECRET and REGISTRATION_ALLOWLIST), run `npm run db:migrate`, then `npm run dev:server`. In a second terminal run `VITE_DATA_SOURCE=http npm run dev`. The live Vite proxy forwards same-origin `/api` requests to http://localhost:3000; keep PUBLIC_URL equal to the browser origin for cookie writes.
+
+For the live production build, run `VITE_DATA_SOURCE=http npm run build && npm run build:server`, then `npm start` with PUBLIC_URL matching the serving origin. Unset VITE_DATA_SOURCE (or use `demo`) for the public demo. Mounted queries poll every seven seconds while visible, pause while hidden, refresh on visibility return and after successful local writes. Expanded runs alone request their event timelines. Browser requests use session cookies; issued MCP tokens belong in agents, never in the browser's data client.

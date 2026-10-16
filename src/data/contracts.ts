@@ -1,11 +1,21 @@
-import type { Account, LogicalAgent, McpToken, NextStep, Project, ProjectInput, ProjectNextSteps, Run, RunMetadataPatch, TokenIssueResult, WriteResult } from '../domain/types';
-import type { PrivateNote } from '../domain/privateNotes';
+import type { Account, LogicalAgent, McpToken, NextStep, Project, ProjectInput, ProjectNextSteps, Run, RunMetadataPatch, TokenIssueResult, WriteResult } from '../domain/types.js';
+import type { PrivateNote } from '../domain/privateNotes.js';
 /** Subscription functions are synchronous by React's external-store protocol; all business operations are async.
  * getSnapshot returns a stable numeric invalidation revision, never records. Lists return ALL records,
  * including archived/history; views filter/sort/page using domain functions. Returned records are detached copies.
  */
-export interface ObservableSource { subscribe(listener: () => void): () => void; getSnapshot(): number }
+export interface ObservableSource { subscribe(listener: () => void): () => void; getSnapshot(): number;
+  /** Optional query lifecycle for live polling; demo sources need no observer. */
+  observe?(read: () => Promise<unknown>): () => void;
+}
+/** Optional live browser-account actions. Never uses MCP credentials. */
+export interface BrowserAuth {
+  getSession(): Promise<Account | null>;
+  submit(action: 'sign-up/email' | 'sign-in/email' | 'sign-out' | 'request-password-reset' | 'reset-password' | 'change-password' | 'revoke-other-sessions', body?: Record<string, unknown>): Promise<unknown>;
+  verify(token: string): Promise<void>;
+}
 export interface TrackerDataSource extends ObservableSource {
+  auth?: BrowserAuth;
   getAccount(): Promise<Account>;
   listProjects(): Promise<Project[]>;
   getProject(projectId: string): Promise<Project | null>;

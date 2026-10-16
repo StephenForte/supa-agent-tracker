@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { useDemoAccount } from '../../app/useDemoAccount';
 import { Button } from '../../components/ui/Button';
 import { useSourceQuery, useTrackerData } from '../../data/hooks';
 import { formatNullable, formatTimestamp, formatToolTelemetry } from '../../domain/format';
@@ -8,7 +9,11 @@ import type { LogicalAgent, Run } from '../../domain/types';
 export function RunDetails({ run, runs, agents = [], onReveal }: { run: Run; runs: readonly Run[]; agents?: readonly LogicalAgent[]; onReveal: (id: string) => void }) {
   const [historyPage, setHistoryPage] = useState(0);
   const tracker = useTrackerData();
+  const demo = useDemoAccount();
   const account = useSourceQuery(tracker, useCallback(() => tracker.getAccount(), [tracker]));
+  const runId = run.id;
+  const detail = useSourceQuery(tracker, useCallback(() => !demo ? tracker.getRun(runId) : Promise.resolve(null), [tracker, runId, demo]));
+  const events = demo ? run.events : detail.status === 'ready' ? detail.data?.events ?? [] : run.events;
   const signedIn = account.status === 'ready' ? account.data : null;
   const history = paginate(executionHistory(run, runs), historyPage, 5);
   const runLink = (id: string) => {
@@ -24,7 +29,7 @@ export function RunDetails({ run, runs, agents = [], onReveal }: { run: Run; run
       <div><dt>Parent run</dt><dd>{run.parentRunId ? runLink(run.parentRunId) : '—'}</dd></div>
       <div><dt>Child runs</dt><dd className="flex flex-wrap gap-3">{run.childRunIds.length ? run.childRunIds.map(id => <span key={id}>{runLink(id)}</span>) : '—'}</dd></div>
     </dl><h3 id={`pull-requests-heading-${run.id}`} className="mt-4 font-semibold">Pull requests</h3>{run.prReferences.length ? <ul id={`pull-requests-${run.id}`} tabIndex={-1} aria-labelledby={`pull-requests-heading-${run.id}`}>{run.prReferences.map(pr => <li key={pr.url}><a href={pr.url} target="_blank" rel="noopener noreferrer">#{pr.number} {pr.title}</a>{pr.primary && ' · Primary'}</li>)}</ul> : <p>—</p>}</section>
-    <section><h3 className="font-semibold">Status timeline</h3>{run.events.length ? <ol className="grid max-h-96 gap-3 overflow-y-auto">{run.events.map(event => <li className="border-l-2 border-slate-300 pl-3" key={event.id}>
+    <section><h3 className="font-semibold">Status timeline</h3>{detail.status === 'error' ? <p role="alert">{detail.error.message}</p> : detail.status === 'loading' && !events.length ? <p>Loading timeline…</p> : events.length ? <ol className="grid max-h-96 gap-3 overflow-y-auto">{events.map(event => <li className="border-l-2 border-slate-300 pl-3" key={event.id}>
       <strong>{eventKindLabels[event.kind]}</strong><p>{event.message}</p><p>{executionLabels[event.executionState]} · {workLabels[event.workStatus]}</p>
       <p>Received: {formatTimestamp(event.receivedAt)}{event.occurredAt && <><br />Occurred: {formatTimestamp(event.occurredAt)}</>}<br />Actor: {eventActorLabel(event.actorId, agents, signedIn)}</p>
     </li>)}</ol> : <p>No events reported</p>}</section>

@@ -4,7 +4,7 @@ export type ExecutionState = 'running' | 'finished' | 'failed' | 'cancelled';
 export type WorkStatus = 'in_progress' | 'blocked' | 'waiting_for_review' | 'completed' | 'failed' | 'cancelled';
 export type ProjectType = 'coding' | 'automation';
 export type Lifecycle = 'active' | 'paused' | 'completed' | 'archived';
-export interface Account { id: string; name: string; email: string; emailVerified: boolean; demo: true }
+export interface Account { id: string; name: string; email: string; emailVerified: boolean; demo: boolean }
 export interface ReportingPolicy { staleThresholdMinutes: number; heartbeatExpected: boolean; instructions: string }
 export interface ProjectInput {
   name: string; description: string; type: ProjectType; lifecycle: Lifecycle;
@@ -47,4 +47,4 @@ export interface McpToken {
   lastUsedAt: Timestamp | null; revokedAt: Timestamp | null;
 }
 export type WriteResult<T> = { status: 'saved'; value: T } | { status: 'conflict'; current: T } | { status: 'not_found' } | { status: 'invalid'; message: string };
-export type TokenIssueResult = { status: 'created'; token: McpToken; plaintext: string } | { status: 'not_found' } | { status: 'invalid'; message: string };
+export type TokenIssueResult = { status: 'conflict'; current: McpToken } | { status: 'created'; token: McpToken; plaintext: string } | { status: 'not_found' } | { status: 'invalid'; message: string };

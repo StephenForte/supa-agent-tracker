@@ -7,6 +7,8 @@ import { useSourceQuery, useTrackerData } from '../../data/hooks';
 import { formatTimestamp } from '../../domain/format';
 import { formatLastUsed, tokenStatus } from '../../domain/tokens/display';
 import type { Project } from '../../domain/types';
+import { useDemoAccount } from '../../app/useDemoAccount';
+import { LiveTokensPanel } from './LiveTokensPanel';
 import { TokenReveal } from './TokenReveal';
 
 function scopeNames(projectIds: readonly string[], projects: readonly Project[]): string {
@@ -14,6 +16,10 @@ function scopeNames(projectIds: readonly string[], projects: readonly Project[])
 }
 
 export function TokensPanel() {
+  const demo = useDemoAccount();
+  return demo ? <DemoTokensPanel /> : <LiveTokensPanel />;
+}
+function DemoTokensPanel() {
   const tracker = useTrackerData();
   const [attempt, setAttempt] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
@@ -35,33 +41,37 @@ export function TokensPanel() {
   function closeCreate() { setCreateOpen(false); setFormError(null); }
 
   async function createToken() {
-    const result = await tracker.createToken({ label, projectIds });
-    if (result.status === 'created') {
-      setCreateOpen(false);
-      setLabel('');
-      setProjectIds([]);
-      setFormError(null);
-      showPlaintext(result.plaintext);
-      return;
-    }
-    setFormError(result.status === 'invalid' ? result.message : 'The demo could not create a token.');
+    try {
+      const result = await tracker.createToken({ label, projectIds });
+      if (result.status === 'created') {
+        setCreateOpen(false);
+        setLabel('');
+        setProjectIds([]);
+        setFormError(null);
+        showPlaintext(result.plaintext);
+        return;
+      }
+      setFormError(result.status === 'invalid' ? result.message : 'The demo could not create a token.');
+    } catch { setFormError('Unable to update this token. Please try again.'); }
   }
 
   async function confirmPending() {
-    if (!pending) return;
-    const current = pending;
-    setPending(null);
-    if (current.kind === 'revoke') {
-      const result = await tracker.revokeToken(current.tokenId);
-      if (result.status !== 'saved') setActionError(result.status === 'invalid' ? result.message : 'The demo could not revoke that token.');
-      return;
-    }
-    const result = await tracker.rotateToken(current.tokenId);
-    if (result.status === 'created') {
-      showPlaintext(result.plaintext);
-      return;
-    }
-    setActionError(result.status === 'invalid' ? result.message : 'The demo could not rotate that token.');
+    try {
+      if (!pending) return;
+      const current = pending;
+      setPending(null);
+      if (current.kind === 'revoke') {
+        const result = await tracker.revokeToken(current.tokenId);
+        if (result.status !== 'saved') setActionError(result.status === 'invalid' ? result.message : 'The demo could not revoke that token.');
+        return;
+      }
+      const result = await tracker.rotateToken(current.tokenId);
+      if (result.status === 'created') {
+        showPlaintext(result.plaintext);
+        return;
+      }
+      setActionError(result.status === 'invalid' ? result.message : 'The demo could not rotate that token.');
+    } catch { setActionError('Unable to update this token. Please try again.'); }
   }
 
   if (query.status === 'loading') return <p>Loading tokens…</p>;
