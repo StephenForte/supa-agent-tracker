@@ -172,6 +172,15 @@ personal bearer tokens independently of browser sessions. No migration is needed
 See [Tokens and MCP](../docs/api.md#tokens-p1-c1) for exact fields, caps, errors,
 copy-once replay semantics, session expiry and rate limits.
 
+P1-D2 registers `list_next_steps`, `create_next_step`, `update_next_step`,
+`reorder_next_steps`, and `set_waiting_note` through `registerStepTools(register)`
+in `server/mcp/step-tools.ts`. They delegate directly to `server/steps/agent-steps.ts`
+with its exported input schemas and the request's credential context. The service
+owns authorship, revisions, completion preservation and idempotency; all five tools
+use `mutate = false` to avoid wrapping the service's idempotency transaction twice.
+The adapter unwraps saved values and maps conflicts/mismatches to the shared safe
+errors. No private-note access is added.
+
 The MCP SDK is exactly pinned to 1.31.0 (September 28, 2026), the newest stable
 release at least two weeks old on October 15. The [current v1 SDK documentation](https://ts.sdk.modelcontextprotocol.io/server)
 confirms Streamable HTTP JSON response mode, stateful transports and `registerTool`.

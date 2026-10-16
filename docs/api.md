@@ -158,12 +158,45 @@ same safe `validation_error` shape and do not echo arguments.
 | `check_out` | `run_id`, `expected_revision`, `execution_state` (`finished`, `failed`, `cancelled`), `work_status`, `request_id`; optional `completion_summary`, `pr_references`, `no_pr_reason`, `tools` | `run_id`, new `revision`, `finished_at`, `work_status`; coding requires a supplied summary and either a PR or explicit no-PR reason |
 | `record_tool_usage` | `run_id`, `tools`, `request_id` | `run_id`, new `revision`; upsert cumulative aggregates by name/source, preserving absent rows |
 
+### Next-step tools (P1-D2)
+
+| Tool | Fields | Result |
+|---|---|---|
+| `list_next_steps` | `project_id` | `{ steps, waitingNote }`, including completed steps |
+| `create_next_step` | `project_id`, `source_run_id`, `instruction`, `request_id`; optional `position` | Saved `NextStep`; omitted position appends after the current maximum |
+| `update_next_step` | `project_id`, `step_id`, `source_run_id`, `expected_revision`, `request_id`; at least one of `instruction`, `position` | Saved `NextStep`; preserves user completion and its actor/time |
+| `reorder_next_steps` | `project_id`, `order: [{ step_id, expected_revision }]`, `request_id` | Saved `NextStep[]` in order with positions `0..n-1` |
+| `set_waiting_note` | `project_id`, `source_run_id`, `expected_revision`, `text`, `request_id` | Saved `WaitingNote`; use revision 0 to create |
+
+Inputs reuse the exported schemas in `server/steps/agent-steps.ts`: IDs and request
+IDs match `[A-Za-z0-9._:-]{1,128}`, revisions are nonnegative integers, positions
+are integers from 0 through 1,000,000, instruction length is 1–10,000 characters,
+waiting text length is 0–10,000, and reorder accepts at most 1,000 entries. Unknown
+fields are rejected. Results are the service values without a status envelope or
+added fields; resource fields are camelCase and timestamps are ISO-8601 strings.
+
+D-023 binds authorship to the credential that checked in the source run. Only that
+credential may create/edit its steps or set a waiting note with that run; another
+token of the same user receives `forbidden`. After rotation, the new token cannot
+edit the old token's steps. Any credential granted the project may reorder, but
+must supply every current step exactly once at its current revision. Reorder leaves
+text, source run and completion untouched. A stale or incomplete order returns
+`conflict` with `error.details.current` and changes nothing; stale step/waiting-note
+edits also return the current service value there. Ungranted projects return
+`not_found`; authorship failures return `forbidden`; invalid inputs return
+`validation_error`. Private notes appear in no step-tool result or error.
+
+Retries with the same `request_id` and body return the original result. Reusing
+that ID with a different body returns `idempotency_mismatch`. Step mutations use
+only the service's idempotency layer, with the registrar's mutation wrapper disabled.
+
 Reporting policy fields are `reporting_instructions`, `stale_threshold_minutes`,
 `heartbeat_expected`. Harness/model are never inferred. Observed clientInfo and
 User-Agent are metadata only. All identity and parent-run inputs are checked against
 the stored grants; no client-supplied owner field is accepted. Private notes have no
 MCP tool or projection and are excluded from errors, conflicts, logs and exports.
 The next-step mutation tools are deferred to P1-D2.
+P1-D2 update: those tools are now registered as documented above.
 
 Every mutation uses actor-scoped `request_id` (1–128 characters `[A-Za-z0-9._:-]`)
 and atomic repository idempotency. Canonical hashes include the tool/REST action and

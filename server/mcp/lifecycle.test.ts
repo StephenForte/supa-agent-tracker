@@ -75,7 +75,7 @@ describe('MCP and tokens over real Postgres and the SDK HTTP client', () => {
     await Promise.all(clients.map((c) => c.close())); await app?.close(); await pool?.end(); await scratch?.drop();
   });
   it('exposes seven tools, server version, api_version and protected resource metadata', async () => {
-    expect((await client.listTools()).tools.map((t) => t.name)).toEqual(['list_projects', 'get_project', 'check_in', 'update_status', 'heartbeat', 'check_out', 'record_tool_usage']);
+    expect((await client.listTools()).tools.map((t) => t.name)).toEqual(['list_projects', 'get_project', 'check_in', 'update_status', 'heartbeat', 'check_out', 'record_tool_usage', 'list_next_steps', 'create_next_step', 'update_next_step', 'reorder_next_steps', 'set_waiting_note']);
     expect(client.getServerVersion()).toMatchObject({ name: 'supa-agent-tracker', version: '1.0.0' });
     const raw = await fetch(`${base}/mcp`, { method: 'POST', headers: { Authorization: `Bearer ${plaintext}`, 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'raw-test', version: '1' } } }) });
     expect(((await raw.json()) as { result: { serverInfo: { api_version: string } } }).result.serverInfo.api_version).toBe('1');
