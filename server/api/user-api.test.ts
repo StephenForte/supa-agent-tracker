@@ -455,6 +455,11 @@ describe('user REST API', () => {
     expect(limit.statusCode).toBe(400);
     const cursor = await call('GET', '/api/projects?cursor=broken', userA);
     expect(cursor.statusCode).toBe(400);
+    const emptyPage = await call('GET', '/api/projects?cursor=&limit=', userA);
+    expect(emptyPage.statusCode).toBe(200);
+    expect(emptyPage.json()).toMatchObject({ nextCursor: null });
+    const emptyRuns = await call('GET', `/api/runs?project_id=${alphaId}&cursor=&limit=`, userA);
+    expect(emptyRuns.statusCode).toBe(200);
     const emptyPatch = await call('PATCH', `/api/projects/${alphaId}`, userA, { expected_revision: 1, request_id: nextRequestId() });
     expect(emptyPatch.statusCode).toBe(400);
   });

@@ -82,7 +82,7 @@ P1-C2. All of these routes use `requireUser`. Another user's project, agent or r
 
 `GET /api/account` returns `{ id, name, email, emailVerified }`. `name` is `users.display_name`. There is no `demo` flag.
 
-Collections return `{ items, nextCursor }` using the pagination rules above. Cursors are opaque and apply only to the same filters.
+Collections return `{ items, nextCursor }` using the pagination rules above. An empty `cursor` or `limit` is treated as omitted. Cursors are opaque and apply only to the same filters.
 
 | Method and path | Body | Success |
 |---|---|---|

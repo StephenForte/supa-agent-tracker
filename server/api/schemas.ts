@@ -103,9 +103,10 @@ export const closeRunSchema = z.strictObject({
   request_id: requestIdSchema,
 });
 
+// Empty cursor and limit are omitted. parsePageQuery treats them as the first page and the default limit.
 const pageShape = {
-  cursor: z.string().min(1).max(512).optional(),
-  limit: z.string().regex(/^[0-9]+$/).optional(),
+  cursor: z.string().max(512).optional(),
+  limit: z.string().optional(),
 };
 
 export const projectListQuerySchema = z.strictObject({
