@@ -221,3 +221,11 @@ Status: Proposed by planner (2026-10-16). Narrows the Phase 0 contract comment "
 events**. `GET /api/runs/:runId` returns the full event timeline. Reason: heartbeats append events indefinitely (history is
 never purged), and P1-E polls every 5–10 s, so embedding events in lists grows payloads without bound. P1-E fetches detail
 when a run row is expanded.
+
+### D-027 — Browser session tokens stored as better-auth issues them
+Status: Accepted by planner (2026-10-16) on P1-B2 review (PR #36).
+`sessions.token` holds better-auth's random session id. The browser cookie carries `token.signature`, HMAC'd with
+BETTER_AUTH_SECRET. `requireUser` reads only the cookie, and no bearer plugin is enabled, so a database-only leak can't
+produce a valid cookie (probed: real token + wrong signature → 401). No custom hashed-session adapter in Phase 1. Revisit
+if a bearer/session-token header is ever enabled.
+
