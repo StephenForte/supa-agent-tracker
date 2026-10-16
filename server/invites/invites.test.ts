@@ -126,6 +126,16 @@ describe('P1-I invites through HTTP and real Postgres', () => {
     for (const [id, status] of [[valid.invite.id, 'used'], [expired.invite.id, 'expired'], [revoked.invite.id, 'revoked'], [wrong.invite.id, 'pending']]) expect(list.find(row => row.id === id)?.status).toBe(status);
     expect((await post(`/api/invites/${valid.invite.id}/revoke`, { request_id: 'revoke-used' }, adminCookie)).statusCode).toBe(409);
   });
+  it('consumes a valid invite on a generic existing mixed-case identity response', async () => {
+    await pool.query("INSERT INTO users(id,email) VALUES ('legacy-invite-user','LEGACY-INVITE@example.test')");
+    const invite = await create('legacy-invite@example.test');
+    const first = await signup('legacy-invite@example.test', token(invite.link));
+    expect(first.statusCode).toBe(200); expect(first.json()).toEqual({ status: true });
+    expect((await pool.query('SELECT used_by FROM invites WHERE id=$1', [invite.invite.id])).rows[0].used_by).toBe('legacy-invite-user');
+    const replay = await signup('legacy-invite@example.test', token(invite.link));
+    expect(replay.statusCode).toBe(403); expect(replay.json()).toEqual(forbidden);
+    expect((await pool.query("SELECT id FROM users WHERE lower(email)='legacy-invite@example.test'")).rowCount).toBe(1);
+  });
   it('serializes simultaneous signups on one invite: exactly one account and used invite', async () => {
     const invite = await create('racing@example.test');
     const responses = await Promise.all([signup('racing@example.test', token(invite.link)), signup('racing@example.test', token(invite.link))]);

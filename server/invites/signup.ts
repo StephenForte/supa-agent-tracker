@@ -23,7 +23,14 @@ export async function invitedSignup(runtime: AuthRuntime, body: Record<string, u
       }
       // The raw invite never reaches library hooks or additional user fields.
       if (body) delete body.invite;
-      const response = await runtime.auth.handler(request());
+      let response = await runtime.auth.handler(request());
+      if (response.status === 422) {
+        // A pre-auth mixed-case identity can hit the case-insensitive unique
+        // index after the library's exact lookup. Its savepoint has rolled back;
+        // preserve the generic response AND consume this successful invitation.
+        const [existing] = await tx.select({ id: users.id }).from(users).where(sql`lower(${users.email}) = ${email}`).limit(1);
+        if (existing) response = new Response(JSON.stringify({ status: true }), { status: 200 });
+      }
       if (!response.ok) throw new RejectedSignup(response);
       if (invite) {
         const [user] = await tx.select({ id: users.id }).from(users).where(sql`lower(${users.email}) = ${email}`).limit(1);
