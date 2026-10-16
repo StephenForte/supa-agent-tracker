@@ -1,0 +1,85 @@
+import type { FastifyServerOptions } from 'fastify';
+
+/**
+ * Fastify 5's built-in request serializer omits headers. These paths still censor
+ * the named secrets if a later change logs a raw header object. The serializers
+ * below copy headers through an allowlist, so any other header value is replaced
+ * before it reaches the log.
+ */
+export const logRedactPaths = [
+  'req.headers.authorization',
+  'req.headers.cookie',
+  'req.headers["set-cookie"]',
+  'res.headers.authorization',
+  'res.headers.cookie',
+  'res.headers["set-cookie"]',
+  'headers.authorization',
+  'headers.cookie',
+  'headers["set-cookie"]',
+  '*.authorization',
+  '*.cookie',
+  '*.["set-cookie"]',
+] as const;
+
+export const logRedactCensor = '[Redacted]';
+
+/** Values for these header names may appear in logs. Every other value is censored. */
+const safeHeaderNames = new Set([
+  'accept',
+  'content-type',
+  'content-length',
+  'user-agent',
+  'x-request-id',
+  'mcp-protocol-version',
+  'host',
+]);
+
+export function redactHeaders(headers: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
+  if (headers === undefined) return undefined;
+  const copy: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(headers)) {
+    copy[key] = safeHeaderNames.has(key.toLowerCase()) ? value : logRedactCensor;
+  }
+  return copy;
+}
+
+interface RequestLogShape {
+  method?: string;
+  url?: string;
+  host?: string;
+  ip?: string;
+  headers?: Record<string, unknown>;
+}
+
+interface ReplyLogShape {
+  statusCode?: number;
+  getHeaders?: () => Record<string, unknown>;
+}
+
+export function createLoggerOptions(stream?: { write(msg: string): void }): NonNullable<FastifyServerOptions['logger']> {
+  return {
+    level: 'info',
+    redact: {
+      paths: [...logRedactPaths],
+      censor: logRedactCensor,
+    },
+    serializers: {
+      req(request: RequestLogShape) {
+        return {
+          method: request.method,
+          url: request.url,
+          host: request.host,
+          remoteAddress: request.ip,
+          headers: redactHeaders(request.headers),
+        };
+      },
+      res(reply: ReplyLogShape) {
+        return {
+          statusCode: reply.statusCode,
+          headers: redactHeaders(reply.getHeaders?.()),
+        };
+      },
+    },
+    ...(stream ? { stream } : {}),
+  };
+}
