@@ -211,7 +211,7 @@ bump the credential revision. Otherwise liveness traffic turns the agent's next 
 edits into 409 conflicts.
 
 ### D-025 — Registration allowlist lives in an env var
-Status: Proposed by planner (2026-10-16). Implements D-022.
+Status: **Superseded by D-031 (2026-10-16)**: the operator rejected env-managed invites as poor design. Implements D-022.
 `REGISTRATION_ALLOWLIST` (comma-separated, case-insensitive). The operator edits it in Render env. There is no admin UI or
 table in Phase 1. Empty means nobody can register.
 
@@ -249,7 +249,8 @@ Status: Proposed by planner (2026-10-16), for P1-G. Implements D-020.
 - A new Render web service `supa-agent-tracker-app` (Node, Starter) and a Postgres instance `supa-agent-tracker-db`
   (Basic-256mb) are added to the existing Blueprint (render.yaml). The Phase 0 static demo `supa-agent-tracker` stays
   until the operator decides to retire it.
-- Build: `npm ci && VITE_DATA_SOURCE=http npm run build && npm run build:server`. Start: `npm start`, with
+- Build: `npm ci --include=dev && VITE_DATA_SOURCE=http npm run build && npm run build:server`. (Corrected 2026-10-16: the
+  original `npm ci` skips devDependencies because Render exposes NODE_ENV=production at build time; the build failed with exit 127 when reproduced.) Start: `npm start`, with
   NODE_ENV=production, so migrations run before listen. DATABASE_URL comes from the database by internal connection
   string, and the database has no public IP allowlist.
 - Fastify trusts exactly one proxy hop (`TRUST_PROXY_HOPS=1` on Render, default 0 locally). Trusting all hops would let
@@ -260,4 +261,15 @@ Status: Proposed by planner (2026-10-16), for P1-G. Implements D-020.
   prices at that moment. Merging that PR is the provisioning step.
 - Secrets (RESEND_API_KEY, EMAIL_FROM, REGISTRATION_ALLOWLIST) are `sync: false`, entered by the operator in the Render
   dashboard and never in chat. BETTER_AUTH_SECRET uses `generateValue: true`.
+
+### D-031 — Invite links replace the registration allowlist
+Status: **Confirmed by operator (2026-10-16)**. Supersedes D-025; still implements D-022 (invite-only).
+- An admin creates a single-use invite for one email address in the web app (`/settings/invites`). The server stores
+  only a SHA-256 hash of an `inv_` token, emails the link through the existing sender, and shows it once. Default expiry
+  is 7 days; invites can be revoked.
+- Registration requires a pending invite for the same email, consumed atomically with account creation. Every failure
+  returns one generic response.
+- Admin = a verified user whose email equals `ADMIN_EMAIL` (one optional env var, rarely changed). That address may
+  register without an invite (bootstrap). There's no role column; multiple admins are Phase 2.
+- `REGISTRATION_ALLOWLIST` is removed. The operator sets `ADMIN_EMAIL` in the Render dashboard **before** the change merges.
 
