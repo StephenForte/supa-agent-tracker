@@ -169,6 +169,7 @@ describe('MCP and tokens over real Postgres and the SDK HTTP client', () => {
     const out = { run_id: start.run_id, expected_revision: 2, execution_state: 'finished', work_status: 'waiting_for_review', completion_summary: 'Named PR ready', request_id: 'pr-out' };
     const finish = await call('check_out', out); expect(finish.revision).toBe(3);
     expect(await call('check_out', out)).toEqual(finish);
+    expect((await call('check_out', { ...out, request_id: 'stale-checkout' })).error).toMatchObject({ code: 'conflict', details: { current: { id: start.run_id, revision: 3 } } });
     const run = await getRun(db, owner, x.id, start.run_id); expect(run.prReferences[0]).toMatchObject({ number: 42, title: 'Named PR' });
   });
   it('keeps copy-once issuance and rotation atomic, last-used revision stable and revocation immediate', async () => {

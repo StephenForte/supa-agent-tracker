@@ -89,6 +89,7 @@ export function registerRunTools(register: ToolRegistrar): void {
     work_status: workStatus, completion_summary: text.optional(), pr_references: prs.optional(), no_pr_reason: text.optional(), tools: tools.optional() }, true,
     async (input, db, ctx) => {
       const run = await findRun(db, ctx.access, input.run_id);
+      if (run.revision !== input.expected_revision) throw new ProtocolError('conflict', run);
       if (run.executionState !== 'running') throw new ProtocolError('validation_error');
       if (run.workloadType === 'coding' && (!input.completion_summary?.trim()
         || !(input.pr_references?.length || run.prReferences.length || input.no_pr_reason || run.noPrReason))) throw new ProtocolError('validation_error');
