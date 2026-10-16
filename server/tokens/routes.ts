@@ -30,11 +30,12 @@ export async function registerTokenRoutes(app: FastifyInstance, db: AppDatabase)
         const tokenId = action === 'issue' ? null : id.parse((request.params as { id: string }).id);
         const access = { kind: 'user' as const, userId: request.user!.userId };
         let plaintext: string | null = null;
-        const result = await withIdempotency(db, access, input.request_id, requestHash({ action, tokenId, input }), async (tx) => {
+        const result = await withIdempotency(db, access, input.request_id, requestHash({ action, tokenId, input: request.body }), async (tx) => {
           let label: string; let projectIds: readonly string[];
           if ('label' in input) { label = input.label; projectIds = input.project_ids; }
           else {
             const previous = await getCredential(tx, access, tokenId!);
+            if (previous.revision !== input.expected_revision) throw new ProtocolError('conflict', tokenView(previous));
             if (action === 'rotate' && previous.revokedAt) throw new ProtocolError('validation_error');
             const saved = await updateCredential(tx, access, tokenId!, input.expected_revision, { revoke: true });
             if (saved.status === 'conflict') throw new ProtocolError('conflict', tokenView(saved.current));

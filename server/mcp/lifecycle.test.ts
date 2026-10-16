@@ -94,6 +94,7 @@ describe('MCP and tokens over real Postgres and the SDK HTTP client', () => {
 
     expect((await pool.query('select count(*)::int n from runs where project_id=$1', [x.id])).rows[0].n).toBe(1);
     expect((await call('check_in', { ...checkIn('flow-in'), title: 'Different' })).error.code).toBe('idempotency_mismatch');
+    expect((await call('check_in', { ...checkIn('flow-in'), title: 'Implement MCP ' })).error.code).toBe('idempotency_mismatch');
     expect((await call('update_status', { run_id: start.run_id, expected_revision: 1, work_status: 'waiting_for_review', request_id: 'flow-update' })).revision).toBe(2);
     const beat = await call('heartbeat', { run_id: start.run_id, request_id: 'flow-beat' }); expect(beat.revision).toBe(2);
     expect(await call('heartbeat', { run_id: start.run_id, request_id: 'flow-beat' })).toEqual(beat);
@@ -174,6 +175,8 @@ describe('MCP and tokens over real Postgres and the SDK HTTP client', () => {
   });
   it('keeps copy-once issuance and rotation atomic, last-used revision stable and revocation immediate', async () => {
     expect((await issue('first-token')).plaintext).toBeNull();
+    const changed = await app.inject({ method: 'POST', url: '/api/tokens', headers: { 'x-test-user-id': owner.userId }, payload: { label: 'Agent ', project_ids: [x.id], request_id: 'first-token' } });
+    expect(changed.statusCode).toBe(409); expect(changed.json().error.code).toBe('idempotency_mismatch');
     const listing = await app.inject({ url: '/api/tokens', headers: { 'x-test-user-id': owner.userId } });
     expect(listing.json()[0]).toMatchObject({ id: tokenId, revision: 1 }); expect(listing.body).not.toContain('tokenHash');
     const credential = await getCredential(db, owner, tokenId); expect(credential.revision).toBe(1); expect(credential.lastUsedAt).not.toBeNull();
@@ -182,6 +185,8 @@ describe('MCP and tokens over real Postgres and the SDK HTTP client', () => {
     const rotatedResponse = await edit('rotate', tokenId, 1, 'rotate'); expect(rotatedResponse.statusCode).toBe(200);
     const rotated = rotatedResponse.json(); secrets.push(rotated.plaintext);
     expect((await edit('rotate', tokenId, 1, 'rotate')).json().plaintext).toBeNull();
+    expect((await edit('rotate', tokenId, 1, 'stale-revoked-rotate')).statusCode).toBe(409);
+    expect((await edit('rotate', tokenId, 2, 'revoked-rotate')).statusCode).toBe(400);
     const old = await app.inject({ url: '/mcp', headers: { authorization: `Bearer ${plaintext}` } }); expect(old.statusCode).toBe(401);
     const replacement = await connect(rotated.plaintext); expect((await call('list_projects', {}, replacement)).items).toHaveLength(1);
     expect((await edit('revoke', rotated.token.id, 1, 'revoke')).statusCode).toBe(200);
