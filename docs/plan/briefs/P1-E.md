@@ -121,7 +121,7 @@ If the work appears to need anything outside this, stop and report rather than w
     npm ci && npm run typecheck && npm run lint && npm test && npm run build && npm run build:server
 Expected: web 22 files / 221 (baseline) + yours; server 18 files / 114 (baseline) + your e2e. Report both. Unexplained movement in the baselines is a finding.
 Demo bundle proof: `env -i PATH="$PATH" HOME="$HOME" npm run build && grep -rl "/api/" dist || echo "no /api in demo bundle"` must print the echo line. Then `npx vite preview` and load /projects: the demo banner is present, the seeded projects render, and the browser devtools network tab shows no /api requests. If you have no browser, `curl` the preview and say so.
-Live smoke: create `supa_test_p1e_dev`, run `npm run db:migrate` against it, then `VITE_DATA_SOURCE=http npm run build && npm run build:server`. Start `npm start` with PUBLIC_URL=http://localhost:3999 PORT=3999 REGISTRATION_ALLOWLIST set to an address you choose EMAIL_PROVIDER=console and a 32+ character BETTER_AUTH_SECRET generated in the shell (never printed). In a browser if you have one, otherwise via the e2e test:
+Live smoke: create `supa_test_p1e_dev`, run `npm run db:migrate` against it, then `VITE_DATA_SOURCE=http npm run build && npm run build:server`. Start `npm start` with PUBLIC_URL=http://localhost:3999, PORT=3999, EMAIL_PROVIDER=console, REGISTRATION_ALLOWLIST set to a test address you pick, and a 32+ character BETTER_AUTH_SECRET generated in the shell (never printed). In a browser if you have one, otherwise via the e2e test:
 - register;
 - open the verification link from the console;
 - log in;
