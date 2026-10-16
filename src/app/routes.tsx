@@ -18,6 +18,7 @@ export const routes: RouteObject[] = [{ element: <Shell />, children: [
   { path: '/agents', element: <SessionGuard><AgentsPage /></SessionGuard> },
   { path: '/settings', element: <SessionGuard><SettingsPage title="Account settings" /></SessionGuard> },
   { path: '/settings/tokens', element: <SessionGuard><SettingsPage title="MCP tokens" /></SessionGuard> },
+  { path: '/settings/invites', element: <SessionGuard><SettingsPage title="Invites" /></SessionGuard> },
   { path: '/settings/integrations', element: <SessionGuard><SettingsPage title="Integration setup" /></SessionGuard> },
   { path: '/login', element: <AuthPage title="Log in" /> },
   { path: '/register', element: <AuthPage title="Register" /> },

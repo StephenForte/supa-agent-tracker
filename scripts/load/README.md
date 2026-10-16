@@ -4,7 +4,7 @@
 
 ## Issue two tokens
 
-You need two accounts, each with one project and one MCP token granted only that project. Sign each account up while its email is on `REGISTRATION_ALLOWLIST`, verify the email, and sign in. Browser writes need `Origin` equal to `PUBLIC_URL`.
+You need two accounts, each with one project and one MCP token granted only that project. Register the first account using the `ADMIN_EMAIL` bootstrap, verify it and sign in; create one invite link for the second account, register through that link, verify it and sign in. Browser writes need `Origin` equal to `PUBLIC_URL`.
 
 Create a project (`POST /api/projects`) with `type: "automation"`, a `request_id`, and a reporting policy. The response `id` is `LOAD_PROJECT_A` or `LOAD_PROJECT_B`.
 

@@ -7,6 +7,14 @@ export function LiveAuthScreen() {
   const location = useLocation(); const navigate = useNavigate();
   const path = location.pathname;
   const token = new URLSearchParams(location.search).get('token');
+  const [invite] = useState(() => path === '/register' ? new URLSearchParams(location.search).get('invite') : null);
+  useEffect(() => {
+    if (path !== '/register') return;
+    const query = new URLSearchParams(location.search);
+    if (!query.has('invite')) return;
+    query.delete('invite');
+    navigate({ pathname: path, search: query.toString(), hash: location.hash }, { replace: true, state: location.state });
+  }, [path, location.search, location.hash, location.state, navigate]);
   const [message, setMessage] = useState(''); const [pending, setPending] = useState(false);
   const verification = useRef<Promise<void> | null>(null);
   useEffect(() => {
@@ -23,7 +31,7 @@ export function LiveAuthScreen() {
     if ((path === '/register' || path === '/reset-password') && value('password') !== value('confirm')) { setMessage('Passwords do not match.'); return; }
     setPending(true); setMessage('');
     try {
-      if (path === '/register') { await auth.submit('sign-up/email', { name: value('name'), email: value('email'), password: value('password') }); setMessage('Check your email for a verification link.'); }
+      if (path === '/register') { await auth.submit('sign-up/email', { name: value('name'), email: value('email'), password: value('password'), ...(invite ? { invite } : {}) }); setMessage('Check your email for a verification link.'); }
       if (path === '/login') {
         await auth.submit('sign-in/email', { email: value('email'), password: value('password') });
         const target: unknown = location.state?.returnTo;
@@ -35,7 +43,7 @@ export function LiveAuthScreen() {
       form.reset();
     } catch (error) {
       const status = typeof error === 'object' && error !== null && 'status' in error ? error.status : undefined;
-      setMessage(status === 403 && path === '/register' ? 'Registration is by invitation only' : status === 429 ? 'Too many requests. Please try again shortly.' : path === '/login' ? 'Unable to log in. Check your email and password.' : 'Unable to complete this request. Please try again.');
+      setMessage(status === 403 && path === '/register' ? 'This invitation is invalid or has expired' : status === 429 ? 'Too many requests. Please try again shortly.' : path === '/login' ? 'Unable to log in. Check your email and password.' : 'Unable to complete this request. Please try again.');
     }
     finally { setPending(false); }
   }

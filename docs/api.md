@@ -293,7 +293,7 @@ not tracker mutations: they do not require `request_id`/`expected_revision` in b
 
 | Method | Path suffix | Body / behavior |
 |---|---|---|
-| POST | `/sign-up/email` | `{name,email,password}`; allowlist only; 403 `forbidden`, "Registration is by invitation only" otherwise. Valid new/existing invited emails both return `{status:true}` |
+| POST | `/sign-up/email` | `{name,email,password,invite?}`; pending invite for that email or `ADMIN_EMAIL` bootstrap required. Invalid/missing/used/expired/revoked/mismatched invite returns 403 `forbidden`, "This invitation is invalid or has expired". Valid new/existing invited emails both return `{status:true}` |
 | GET | `/verify-email` | `?token=...`; verifies the signed emailed token |
 | POST | `/send-verification-email` | `{email,callbackURL?}`; generic `{status:true}` for unknown/known emails |
 | POST | `/sign-in/email` | `{email,password}`; requires verified email and sets a signed session cookie |
@@ -325,3 +325,24 @@ Verification/reset emails link to existing web routes `/verify-email` and
 `/reset-password`; P1-E must wire those screens to the API. Production console email
 suppresses secrets and does not deliver messages. Auth request logging is silent to
 keep URL tokens out of logs; no auth body or provider error is logged.
+
+
+## Invites (P1-I, D-031)
+
+`GET /api/account` adds `isAdmin`: true exactly when the signed-in user's verified email equals `ADMIN_EMAIL`, case-insensitively. An unset `ADMIN_EMAIL` leaves the server available but provides no administrator. There is no role column. Only this address can register without an invite; other addresses need a pending invite even when no administrator is configured. The `ADMIN_EMAIL` bootstrap only works until an account with that email exists.
+
+All invite routes require a browser session and current administrator status. Missing sessions return 401; non-admins (including unverified admin addresses) return 403 `forbidden`. Responses use `Cache-Control: no-store`; route logs omit request and response contents.
+
+| Route | Body | Response |
+|---|---|---|
+| `GET /api/invites` | none | Array of invites issued by this admin, with `pending`, `used`, `expired` or `revoked` status |
+| `POST /api/invites` | `email`, `request_id` | `{invite, link, emailSent}`; link shown once and sent through the existing email sender |
+| `POST /api/invites/:id/revoke` | `request_id` | `{invite}`; revocation immediately prevents registration; used invites return 409 |
+
+Invite metadata contains `id`, normalized `email`, `createdAt`, `expiresAt`, `usedAt`, `revokedAt`, and `status`. It never includes the token or hash. Links use `PUBLIC_URL/register?invite=inv_…`. Tokens are 32 cryptographically random bytes encoded base64url after `inv_`; only their SHA-256 hex hash is stored. Default expiry is seven days. New invites require a valid email of at most 254 characters. Unknown fields are rejected. Revoke has no revision parameter; a row lock serializes it against registration.
+
+Only safe metadata and `link: null` enter `idempotency_keys.response`. A create replay returns `link: null, emailSent: false` without sending again; a lost first response requires creating a new invite. Different inputs with the same request ID return 409 `idempotency_mismatch`. Delivery failure leaves the invite valid and returns its copy-once link with `emailSent: false`.
+
+Registration locks the matching pending invite and runs Better Auth's user/credential writes in the same database transaction through an async-local adapter binding. Library transactions become nested savepoints. Only successful creation (or the existing-address generic result) commits consumption; errors roll back all writes. Competing uses of one invite serialize and yield one success and one generic 403. Every unusable invite yields the same error body. Existing-address registration with a fresh valid invite retains the generic `{status:true}` response.
+
+The live register screen captures `invite` in component memory, replaces the URL to remove that parameter immediately, and sends it only in the sign-up body. The admin-only `/settings/invites` tab shows links only in a dismissible reveal, with no browser storage. Demo mode hides the tab and excludes invite HTTP code from its build.

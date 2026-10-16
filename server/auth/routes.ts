@@ -3,6 +3,7 @@ import { fromNodeHeaders } from 'better-auth/node';
 import type { RouteDeps } from '../app/routes.js';
 import type { AppConfig } from '../config.js';
 import { apiError, errorCodes } from '../app/errors.js';
+import { invitedSignup } from '../invites/signup.js';
 import { createAuthRuntime } from './runtime.js';
 
 const methods = new Map([
@@ -60,11 +61,6 @@ export async function registerAuthRoutes(app: FastifyInstance, deps: RouteDeps):
       if (typeof body?.email === 'string' && body.email.length > 254) {
         return reply.code(400).send(apiError(errorCodes.validation_error, 'Authentication request could not be processed'));
       }
-      if (path === '/sign-up/email') {
-        if (typeof body?.email !== 'string' || !runtime.settings.registrationAllowlist.includes(body.email)) {
-          return reply.code(403).send(apiError(errorCodes.forbidden, 'Registration is by invitation only'));
-        }
-      }
       if (path === '/sign-in/email') {
         const email = typeof body?.email === 'string' ? body.email : '';
         if (!allowed([`ip:${request.ip}`, `email:${email}`])) {
@@ -79,10 +75,14 @@ export async function registerAuthRoutes(app: FastifyInstance, deps: RouteDeps):
       // Resending verification is a public, enumeration-resistant operation.
       if (path === '/send-verification-email') headers.delete('cookie');
       try {
-        const response = await runtime.auth.handler(new Request(url, {
+        const makeRequest = () => new Request(url, {
           method: request.method, headers,
           ...(body ? { body: JSON.stringify(body) } : {}),
-        }));
+        });
+        const response = path === '/sign-up/email' ? await invitedSignup(runtime, body, makeRequest) : await runtime.auth.handler(makeRequest());
+        if (path === '/sign-up/email' && response.status === 403) {
+          return reply.code(403).send(apiError(errorCodes.forbidden, 'This invitation is invalid or has expired'));
+        }
         const cookies = response.headers.getSetCookie();
         if (cookies.length) reply.header('set-cookie', cookies);
         const location = response.headers.get('location');

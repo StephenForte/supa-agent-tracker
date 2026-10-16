@@ -1,4 +1,7 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
+import type { Transaction } from '../repo/access.js';
 import { betterAuth } from 'better-auth';
+import { APIError } from 'better-auth/api';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import type { FastifyInstance } from 'fastify';
 import type pg from 'pg';
@@ -14,13 +17,31 @@ export function createAuthRuntime(pool: pg.Pool, config: AppConfig) {
   const settings = config.auth ?? loadAuthConfig(process.env, process.env.NODE_ENV === 'test' ? 'test' : config.nodeEnv);
   const origin = new URL(config.publicUrl).origin;
   const email = createEmailSender(settings, config.nodeEnv);
+  const db = createDb(pool);
+  const signupScope = new AsyncLocalStorage<Transaction>();
+  const scopedDb = new Proxy(db, {
+    get(target, property) {
+      const current = signupScope.getStore() ?? target;
+      const value = Reflect.get(current, property);
+      return typeof value === 'function' ? value.bind(current) : value;
+    },
+  });
+  const signupTransaction = <T>(operation: (tx: Transaction) => Promise<T>) =>
+    db.transaction(tx => signupScope.run(tx, () => operation(tx)));
   const auth = betterAuth({
     baseURL: origin,
     basePath: '/api/auth',
     secret: settings.secret,
     trustedOrigins: [origin],
     logger: { disabled: true },
-    database: drizzleAdapter(createDb(pool), {
+    onAPIError: { onError(error) {
+      // Better Call otherwise prints raw non-API errors, including SQL params.
+      // Only signup's transaction uses this boundary; preserve normal API errors.
+      if (signupScope.getStore() && !(error instanceof APIError)) {
+        throw new APIError('INTERNAL_SERVER_ERROR', { message: 'Internal server error' });
+      }
+    } },
+    database: drizzleAdapter(scopedDb, {
       provider: 'pg',
       transaction: true,
       schema: { user: users, session: sessions, account: accounts, verification: authVerifications },
@@ -65,7 +86,7 @@ export function createAuthRuntime(pool: pg.Pool, config: AppConfig) {
       ipAddress: { ipAddressHeaders: ['x-supa-auth-ip'] },
     },
   });
-  return { auth, email, config, settings, origin };
+  return { auth, email, config, settings, origin, signupTransaction };
 }
 
 export type AuthRuntime = ReturnType<typeof createAuthRuntime>;

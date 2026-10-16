@@ -11,7 +11,7 @@ const base = {
 describe('loadConfig', () => {
   it('reads the four server environment variables', () => {
     expect(loadConfig({ ...base, PORT: '4317', NODE_ENV: 'test' })).toEqual({
-      auth: { secret: base.BETTER_AUTH_SECRET, registrationAllowlist: [], emailProvider: 'console' },
+      auth: { secret: base.BETTER_AUTH_SECRET, emailProvider: 'console' },
       databaseUrl: base.DATABASE_URL,
       publicUrl: base.PUBLIC_URL,
       port: 4317,

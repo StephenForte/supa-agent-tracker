@@ -35,13 +35,19 @@ Merge this Blueprint only after an explicit approval to spend that money. With B
 
 Region `oregon` is the operator's choice (Portland; the operator is in Menlo Park). It is one of the current Render regions (`oregon`, `ohio`, `virginia`, `frankfurt`, `singapore`). The web service and the database are both there. They have to stay in the same region or the internal database URL will not work.
 
+## P1-I registration cutover — before merging
+
+**Set `ADMIN_EMAIL` in the Render dashboard (`supa-agent-tracker-app` → Environment) before merging P1-I.** Use the operator's email address. Register this address without an invite, verify the email, then sign in to Settings → Invites to invite other users. The old registration env gate is removed from the application; remove that retired setting in the dashboard after cutover. Blueprint `sync: false` does not populate a newly added secret on an existing service. No worker changes the dashboard.
+
+With `ADMIN_EMAIL` unset the app still boots, but no administrator can create invites or bootstrap a new account. Existing sessions continue to work. New non-admin registrations need a valid matching invite. Migration `0003_invites.sql` is additive and runs on production boot; it preserves existing users, projects and runs.
+
 ## Secrets
 
 Enter these in the Render Dashboard when the Blueprint asks, or on the service's Environment page. Do not put them in git, in this document, or in chat.
 
 | Variable | What to enter |
 |---|---|
-| `REGISTRATION_ALLOWLIST` | Comma-separated emails allowed to register. Empty means nobody can register |
+| `ADMIN_EMAIL` | One admin email address; this address may bootstrap registration without an invite. Set before merging P1-I |
 | `RESEND_API_KEY` | Resend API key |
 | `EMAIL_FROM` | Sender address on a domain you have verified in Resend |
 
@@ -65,14 +71,14 @@ A shell on your Mac cannot open a connection until you add your address and remo
 
 ## A healthy first deploy
 
-The service builds with `npm ci --include=dev && VITE_DATA_SOURCE=http npm run build && npm run build:server` and starts with `npm start`. `--include=dev` is required: Render exposes the service's env vars (including `NODE_ENV=production`) during the build, and `npm ci` would otherwise skip the devDependencies (`typescript`, `vite` plugins) the build needs. `NODE_ENV=production` applies pending SQL migrations before listen. The files today are `0001_initial.sql` and `0002_auth.sql`.
+The service builds with `npm ci --include=dev && VITE_DATA_SOURCE=http npm run build && npm run build:server` and starts with `npm start`. `--include=dev` is required: Render exposes the service's env vars (including `NODE_ENV=production`) during the build, and `npm ci` would otherwise skip the devDependencies (`typescript`, `vite` plugins) the build needs. `NODE_ENV=production` applies pending SQL migrations before listen. The files are `0001_initial.sql`, `0002_auth.sql` and `0003_invites.sql`.
 
 The process does not print those filenames. A local production boot against an empty scratch database confirmed that: the log showed the process listening, `GET /ready` returned `200` and `{"status":"ready"}`, and `schema_migrations` listed both files. Nothing in that log named the SQL files. A healthy deploy is:
 
 - the deploy stays up (the start command is listening on `0.0.0.0:$PORT`);
 - `GET /ready` returns 200 and `{ "status": "ready" }`.
 
-`/ready` returns 503 while the database is unreachable or a migration file is not in `schema_migrations`. After you have a temporary database connection, `SELECT id FROM schema_migrations ORDER BY id` should list both filenames.
+`/ready` returns 503 while the database is unreachable or a migration file is not in `schema_migrations`. After you have a temporary database connection, `SELECT id FROM schema_migrations ORDER BY id` should list all three filenames.
 
 ## Roll back a bad deploy
 

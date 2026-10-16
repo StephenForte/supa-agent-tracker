@@ -3,6 +3,8 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type pg from 'pg';
 import type { ZodError, ZodType } from 'zod';
 
+import { authRuntime } from '../auth/runtime.js';
+import { isAdmin } from '../invites/admin.js';
 import { requireUser } from '../app/auth-context.js';
 import { PaginationError } from '../app/pagination.js';
 import { apiError, conflictBody, errorCodes } from '../app/errors.js';
@@ -42,7 +44,8 @@ export async function registerUserApiRoutes(app: FastifyInstance, deps: { pool: 
   const guard = { preHandler: requireUser };
 
   app.get('/api/account', guard, (request, reply) => handle(reply, async () => {
-    return reply.send(toAccount(await readAccount(db, accessOf(request))));
+    const account = toAccount(await readAccount(db, accessOf(request)));
+    return reply.send({ ...account, isAdmin: isAdmin(account, authRuntime(app)!.settings) });
   }));
 
   app.get('/api/projects', guard, (request, reply) => handle(reply, async () => {

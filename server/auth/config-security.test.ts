@@ -22,8 +22,11 @@ describe('auth environment validation', () => {
     expect(loadConfig(env).auth?.emailProvider).toBe('console');
     expect(loadConfig({ ...env, EMAIL_PROVIDER: 'resend', RESEND_API_KEY: 'key-secret', EMAIL_FROM: 'sender@example.test' }).auth?.emailProvider).toBe('resend');
   });
-  it('parses a trimmed case-insensitive allowlist with empty meaning nobody', () => {
-    expect(loadConfig({ ...base, NODE_ENV: 'test', REGISTRATION_ALLOWLIST: ' ONE@example.test ,one@example.test, TWO@example.test, ' }).auth?.registrationAllowlist).toEqual(['one@example.test', 'two@example.test']);
-    expect(loadConfig({ ...base, NODE_ENV: 'test' }).auth?.registrationAllowlist).toEqual([]);
+  it('parses one optional trimmed case-insensitive admin email, rejecting invalid configured values', () => {
+    expect(loadConfig({ ...base, NODE_ENV: 'test', ADMIN_EMAIL: ' ONE@example.test ' }).auth?.adminEmail).toBe('one@example.test');
+    expect(loadConfig({ ...base, NODE_ENV: 'test' }).auth?.adminEmail).toBeUndefined();
+    for (const ADMIN_EMAIL of ['', ' ', 'bad', 'one@example.test,two@example.test']) {
+      expect(() => loadConfig({ ...base, NODE_ENV: 'test', ADMIN_EMAIL })).toThrow('ADMIN_EMAIL');
+    }
   });
 });

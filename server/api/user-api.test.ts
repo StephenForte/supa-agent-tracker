@@ -149,9 +149,9 @@ describe('user REST API', () => {
   it('returns the signed-in account and an empty project list for a user with no projects', async () => {
     const account = await call('GET', '/api/account', userA);
     expect(account.statusCode).toBe(200);
-    expect(account.json()).toEqual({ id: userA, name: 'Ada', email: 'a@example.com', emailVerified: true });
+    expect(account.json()).toEqual({ id: userA, name: 'Ada', email: 'a@example.com', emailVerified: true, isAdmin: false });
     const other = await call('GET', '/api/account', userB);
-    expect(other.json()).toEqual({ id: userB, name: 'Bea', email: 'b@example.com', emailVerified: false });
+    expect(other.json()).toEqual({ id: userB, name: 'Bea', email: 'b@example.com', emailVerified: false, isAdmin: false });
     const empty = await call('GET', '/api/projects', userC);
     expect(empty.statusCode).toBe(200);
     expect(empty.json()).toEqual({ items: [], nextCursor: null });
