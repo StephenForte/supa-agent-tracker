@@ -40,7 +40,9 @@ services:
       - key: PUBLIC_URL
         value: https://supa-agent-tracker-app.onrender.com
       - key: TRUST_PROXY_HOPS
-        value: "1"
+        # Measured 2026-10-16: Render puts two proxy hops in front of the app. With 1, request.ip rotated per request
+        # and the per-IP sign-in limit never engaged; with 2 it engages and spoofed X-Forwarded-For does not bypass it.
+        value: "2"
       - key: BETTER_AUTH_SECRET
         generateValue: true
       - key: EMAIL_PROVIDER
