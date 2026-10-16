@@ -1,5 +1,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { createHash } from 'node:crypto';
+import { existsSync, utimesSync } from 'node:fs';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -119,6 +121,52 @@ describe('heartbeat adapter against the real MCP server', () => {
     const second = await run('next-run'); await writeFile(first.file, second.run_id);
     expect((await spawn(first.file)).stderr).toBe('supa heartbeat: sent\n');
     expect((await snapshot(second.run_id)).events).toBe(1);
+  });
+
+  it('reclaims a lock older than 30 seconds and sends another heartbeat', async () => {
+    const checked = await run('aged-lock');
+    expect((await spawn(checked.file)).stderr).toBe('supa heartbeat: sent\n');
+    const before = await snapshot(checked.run_id);
+    const stamp = `${checked.file}.${createHash('sha256').update(checked.run_id).digest('hex')}.heartbeat`;
+    await writeFile(stamp, String(Date.now() - 61000));
+    await writeFile(`${stamp}.lock`, '');
+    const old = new Date(Date.now() - 31000);
+    utimesSync(`${stamp}.lock`, old, old);
+    expect(await spawn(checked.file)).toMatchObject({ stdout: '', stderr: 'supa heartbeat: sent\n' });
+    expect(await snapshot(checked.run_id)).toEqual({ ...before, events: before.events + 1 });
+    expect(existsSync(`${stamp}.lock`)).toBe(false);
+  });
+
+  it('releases its lock and exits zero when SIGTERM interrupts a request', async () => {
+    const checked = await run('interrupted');
+    const lockPath = `${checked.file}.${createHash('sha256').update(checked.run_id).digest('hex')}.heartbeat.lock`;
+    const result = exec(process.execPath, [adapter], { cwd: temp, timeout: 12000, env: {
+      ...process.env, SUPA_MCP_URL: 'https://10.255.255.1/mcp', SUPA_MCP_TOKEN: token, SUPA_RUN_ID_FILE: checked.file,
+    } });
+    // Attach rejection handling before signalling so the old adapter fails as an assertion.
+    const output = result.then(value => ({ ...value, code: 0, signal: null }),
+      (error: { code: number | null; signal: string | null; stdout: string; stderr: string }) => error);
+    try {
+      await expect.poll(() => existsSync(lockPath), { timeout: 3000 }).toBe(true);
+      expect(result.child.kill('SIGTERM')).toBe(true);
+      expect(await output).toMatchObject({ code: 0, signal: null, stdout: '', stderr: 'supa heartbeat: interrupted\n' });
+      expect(existsSync(lockPath)).toBe(false);
+      expect((await snapshot(checked.run_id)).events).toBe(0);
+    } finally {
+      if (result.child.exitCode === null && result.child.signalCode === null) result.child.kill('SIGKILL');
+      await output;
+    }
+  });
+
+  it('keeps a lock younger than 30 seconds throttled without a new event', async () => {
+    const checked = await run('fresh-lock'); const before = requests;
+    const stamp = `${checked.file}.${createHash('sha256').update(checked.run_id).digest('hex')}.heartbeat`;
+    await writeFile(stamp, String(Date.now() - 61000));
+    await writeFile(`${stamp}.lock`, '');
+    expect(await spawn(checked.file)).toMatchObject({ stdout: '', stderr: 'supa heartbeat: throttled\n' });
+    expect(requests).toBe(before);
+    expect((await snapshot(checked.run_id)).events).toBe(0);
+    expect(existsSync(`${stamp}.lock`)).toBe(true);
   });
 
   it('caps a stalled server at ten seconds with a successful process exit', async () => {

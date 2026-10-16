@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFileSync, writeFileSync, openSync, closeSync, unlinkSync } from 'node:fs';
+import { readFileSync, writeFileSync, openSync, closeSync, unlinkSync, statSync } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 
@@ -15,6 +15,7 @@ function finish(status) {
   releaseLock();
   process.exit(0);
 }
+for (const signal of ['SIGTERM', 'SIGINT', 'SIGHUP']) process.on(signal, () => finish('interrupted'));
 const deadline = setTimeout(() => finish('timed out'), 10000);
 const signal = AbortSignal.timeout(9000);
 let session;
@@ -36,8 +37,10 @@ try {
   endpoint = url.href;
   const stamp = `${file}.${createHash('sha256').update(runId).digest('hex')}.heartbeat`;
   const lockPath = `${stamp}.lock`;
-  // Never steal a lock by age: replacing a live lock has a TOCTOU race.
-  // The deadline and normal completion both release our own lock.
+  // Reclaim crash/SIGKILL leftovers well past the ten-second process deadline.
+  // Duplicate heartbeats are harmless; fresh locks still serialize concurrent hooks.
+  try { if (Date.now() - statSync(lockPath).mtimeMs > 30000) unlinkSync(lockPath); }
+  catch { /* A missing lock is normal; exclusive creation below still fails closed. */ }
   try { closeSync(openSync(lockPath, 'wx', 0o600)); lock = lockPath; }
   catch { finish('throttled'); }
   let previous = 0;
