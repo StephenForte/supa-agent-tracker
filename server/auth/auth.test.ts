@@ -56,7 +56,7 @@ describe('browser authentication through HTTP and Postgres', () => {
     await runMigrations(pool, migrationsDir);
     const config = loadConfig({ DATABASE_URL: scratch.connectionString, PUBLIC_URL: origin, NODE_ENV: 'production', BETTER_AUTH_SECRET: secret,
       EMAIL_PROVIDER: 'resend', RESEND_API_KEY: resendKey, EMAIL_FROM: 'sender@example.test',
-      REGISTRATION_ALLOWLIST: ' Invited@Example.test , reset@example.test, change@example.test, expire@example.test, logs@example.test ',
+      REGISTRATION_ALLOWLIST: ' Invited@Example.test , reset@example.test, change@example.test, expire@example.test, logs@example.test, race@example.test, legacy@example.test ',
     });
     app = await buildApp({ config, pool, migrationsDir, spaRoot, logger: createLoggerOptions({ write: (msg) => logs.push(msg) }) });
     vi.stubGlobal('fetch', async (_url: string, init: RequestInit) => { inbox.push(JSON.parse(String(init.body)) as Email); return new Response('{}', { status: 200 }); });
@@ -84,7 +84,10 @@ describe('browser authentication through HTTP and Postgres', () => {
     expect(sessions.statusCode).toBe(200);
     expect(sessions.json()).toHaveLength(1);
     const lifetime = sessions.json()[0];
-    expect(new Date(lifetime.expiresAt).getTime() - new Date(lifetime.createdAt).getTime()).toBe(7 * 24 * 3600_000);
+    // The library takes these two wall-clock readings separately.
+    const duration = new Date(lifetime.expiresAt).getTime() - new Date(lifetime.createdAt).getTime();
+    expect(duration).toBeGreaterThanOrEqual(7 * 24 * 3600_000 - 1000);
+    expect(duration).toBeLessThanOrEqual(7 * 24 * 3600_000);
     const logout = await post('/sign-out', {}, cookie);
     expect(logout.statusCode).toBe(200);
     expect((await get('/api/protected', cookie)).statusCode).toBe(401);
@@ -200,6 +203,24 @@ describe('browser authentication through HTTP and Postgres', () => {
   it('bounds limiter keys before storing sign-in attempts', async () => {
     const tooLong = await post('/sign-in/email', { email: `${'a'.repeat(300)}@example.test`, password });
     expect(tooLong.statusCode).toBe(400);
+  });
+  it('keeps concurrent duplicate registrations generic', async () => {
+    const responses = await Promise.all([
+      post('/sign-up/email', { name: 'Racing User', email: 'race@example.test', password }),
+      post('/sign-up/email', { name: 'Racing User', email: 'race@example.test', password }),
+    ]);
+    for (const response of responses) {
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ status: true });
+    }
+    expect((await pool.query('SELECT id FROM users WHERE email=$1', ['race@example.test'])).rowCount).toBe(1);
+  });
+  it('does not expose an existing mixed-case domain identity on registration', async () => {
+    await pool.query("INSERT INTO users(id,email) VALUES ('legacy-user','LEGACY@example.test')");
+    const response = await post('/sign-up/email', { name: 'Legacy', email: 'legacy@example.test', password });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ status: true });
+    expect((await pool.query("SELECT id FROM users WHERE lower(email)='legacy@example.test'")).rows).toEqual([{ id: 'legacy-user' }]);
   });
   it('never logs submitted secrets or email/session tokens during the production auth lifecycle', async () => {
     await signup('logs@example.test'); await verify('logs@example.test');

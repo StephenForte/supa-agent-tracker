@@ -90,6 +90,13 @@ export async function registerAuthRoutes(app: FastifyInstance, deps: RouteDeps):
         // Reset/resend do not reveal existence or email-provider failure.
         if (['/request-password-reset', '/send-verification-email'].includes(path) && (response.ok || response.status >= 500)) return generic;
         if (response.ok && path === '/sign-up/email') return generic;
+        if (path === '/sign-up/email' && response.status === 422 && typeof body?.email === 'string') {
+          // A concurrent insert or a pre-auth mixed-case identity can hit the
+          // case-insensitive unique index after the library's exact lookup.
+          // Preserve generic registration without concealing unrelated errors.
+          const existing = await deps.pool.query('SELECT 1 FROM users WHERE lower(email) = $1 LIMIT 1', [body.email]);
+          if (existing.rowCount) return generic;
+        }
         if (response.status >= 400) {
           const status = response.status;
           const code = status === 429 ? errorCodes.rate_limited : status === 401 ? errorCodes.unauthenticated : status === 403 ? errorCodes.forbidden : status === 404 ? errorCodes.not_found : status >= 500 ? errorCodes.internal_error : errorCodes.validation_error;
