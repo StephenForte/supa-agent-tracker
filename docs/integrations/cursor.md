@@ -1,6 +1,6 @@
 # Cursor setup
 
-Verified: Probe-verified 2026-10-15 (P1-A2); production verification pending (P1-G2)
+Verified: Production-verified 2026-10-16 with Cursor 3.25.6 on macOS (P1-G2): full cycle get_project → check_in → heartbeat → update_status → create_next_step → check_out, no tool errors. Heartbeat hooks not yet production-tested.
 
 Prerequisites: a token issued for the target project from [Settings → MCP tokens](/settings/tokens) on your tracker, and the full remote server URL `https://<your tracker host>/mcp`. Copy the token once into private client configuration. Never commit it. Read the [base prompt](base-prompt.md) and [reporting protocol](reporting-protocol.md).
 
