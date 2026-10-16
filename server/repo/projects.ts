@@ -46,8 +46,9 @@ function decodeCursor(raw: string): ProjectCursor {
 }
 /** Active = at least one non-stale running execution, then latest run update (or project update).
  * Keyset cursor uses name then unique ID tie-breakers; timestamps retain Postgres microseconds.
+ * Archived projects stay hidden unless includeArchived is true.
  */
-export async function listProjects(db: Database, access: Access, query: { cursor?: unknown; limit?: unknown } = {}): Promise<Page<Project>> {
+export async function listProjects(db: Database, access: Access, query: { cursor?: unknown; limit?: unknown; includeArchived?: boolean } = {}): Promise<Page<Project>> {
   const { cursor, limit } = parsePageQuery(query);
   const after = cursor ? decodeCursor(cursor) : null;
   return withActor(db, access, async (tx) => {
@@ -69,8 +70,9 @@ export async function listProjects(db: Database, access: Access, query: { cursor
     const boundary = after ? sql`(${live} < ${after.live} OR (${live} = ${after.live} AND
       (${activity} < ${after.activity} OR (${activity} = ${after.activity} AND
       (lower(${projects.name}) COLLATE "C", ${projects.id}) > (${afterName}, ${after.id})))))` : undefined;
+    const lifecycle = query.includeArchived === true ? undefined : sql`${projects.lifecycle} <> 'archived'`;
     const rows = await tx.select({ project: projects, live, activity }).from(projects).where(and(
-      eq(projects.ownerId, access.userId), sql`${projects.lifecycle} <> 'archived'`, scope, boundary,
+      eq(projects.ownerId, access.userId), lifecycle, scope, boundary,
     )).orderBy(sql`${live} DESC`, sql`${activity} DESC`, sql`lower(${projects.name}) COLLATE "C" ASC`, sql`${projects.id} ASC`).limit(limit + 1);
     const page = pageItems(rows, limit, (row) => Buffer.from(JSON.stringify({ live: row.live, activity: row.activity, id: row.project.id })).toString('base64url'));
     return { items: page.items.map((r) => r.project), nextCursor: page.nextCursor };

@@ -163,3 +163,13 @@ by case-insensitive name and ID ascending as deterministic tie-breakers.
 Cursors preserve database timestamp precision; limits use `docs/api.md` defaults
 and validation. Runs have bounded ID-keyset list pages. A missing tool row returns
 `tools: null`; a reported zero-count row remains a real aggregate, never absence.
+
+## User API (P1-C2)
+
+`server/api/user-routes.ts` registers the signed-in user's account, project, agent and run routes. `registerRoutes` calls `registerUserApiRoutes` once. The handlers are `requireUser` only: `UserAccess { kind: 'user', userId: request.user.userId }`. Tokens, next steps, private notes and real sessions are other tasks.
+
+Cross-project and account reads live in `server/repo/views.ts`: the account row, agents across the user's projects, run pages across the user's projects, and run-by-id. Each takes `UserAccess` and filters with `projects.owner_id` inside the query. `GET /api/runs/:runId` resolves the project there, then calls `getRun`. It does not accept a client project id. Agent pages are ordered by name then id. Run pages use the same id-descending keyset as `listRuns`. List rows load pull requests, tools and child ids for that page and do not load events.
+
+`listProjects` takes `includeArchived`. The default is unchanged: archived projects stay out of the list. `include_archived=true` on `GET /api/projects` sets the option. `GET` by id still returns an archived project to its owner.
+
+Field mapping is in `server/api/map.ts`. Reporting policy is nested on the way in and out. Event actors become `actorId`. Timestamps are UTC ISO-8601. Mutation bodies are validated with zod before `withIdempotency`, and the callback uses the transaction `withIdempotency` supplies. Caps, the events rule and the manual-close rule are in [docs/api.md](../docs/api.md). Closing a run that is not `running` returns `409 conflict` with the current run (`Run has already ended`) and does not call `updateRun`. A running close sets execution state and work status to `failed` or `cancelled`, stores the reason as the run message, and lets the repository append the `manual_close` event and the audit row. A metadata patch never sends execution state and does not advance `last_contact_at`; the repository still appends a `status` event.

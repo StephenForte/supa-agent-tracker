@@ -75,3 +75,39 @@ Those headers are not authentication. P1-B2 and P1-C1 replace the stub bodies an
 ## Route registration
 
 `server/app/routes.ts` is the only registration point. Wave-3 tasks append one line each.
+
+## Projects, agents and runs
+
+P1-C2. All of these routes use `requireUser`. Another user's project, agent or run is `404 not_found` with no `details` and no write. A successful body uses the field names and nesting in `src/domain/types.ts` (`Project`, `LogicalAgent`, `Run`, `RunEvent`, `PrReference`, `ToolAggregate`) so a later HTTP client can map them without renaming. `WriteResult` is not a response envelope: `2xx` is the resource, and `409 conflict` puts that resource at `error.details.current`. `GET` of a missing id is `404`, which a client can treat as the contract's `null`.
+
+`GET /api/account` returns `{ id, name, email, emailVerified }`. `name` is `users.display_name`. There is no `demo` flag.
+
+Collections return `{ items, nextCursor }` using the pagination rules above. Cursors are opaque and apply only to the same filters.
+
+| Method and path | Body | Success |
+|---|---|---|
+| `GET /api/projects?include_archived=&cursor=&limit=` | | `{ items: Project[], nextCursor }` |
+| `POST /api/projects` | `ProjectInput` plus `request_id` | `201` Project |
+| `GET /api/projects/:projectId` | | Project, including an archived project the caller owns |
+| `PATCH /api/projects/:projectId` | partial `ProjectInput` plus `expected_revision` and `request_id` | Project |
+| `GET /api/agents?project_id=&cursor=&limit=` | | `{ items: LogicalAgent[], nextCursor }` |
+| `GET /api/runs?project_id=&cursor=&limit=` | | `{ items, nextCursor }` — each item is a `Run` **without** `events` |
+| `GET /api/runs/:runId` | | `Run`, `events` included, oldest first |
+| `PATCH /api/runs/:runId` | `RunMetadataPatch` plus `expected_revision` and `request_id` | `Run` with `events` |
+| `POST /api/runs/:runId/close` | `{ outcome: "failed" \| "cancelled", reason, expected_revision, request_id }` | `Run` with `events` |
+
+`include_archived` is `true` or `false`. Omitted and `false` hide `lifecycle: "archived"`. `true` includes them in the same order as `listProjects`. Any other value is `validation_error`. Archiving does not remove the project; `GET` by id still returns it.
+
+`project_id` omitted means every agent or run on the caller's projects. A `project_id` the caller does not own is `404`, not an empty page. `GET /api/runs/:runId` has no project parameter. The server resolves the run to its project with `projects.owner_id` in the query, then loads it through the project repository. A client-supplied project id is ignored because the path does not accept one.
+
+List items include `prReferences`, `tools` (`null` when the run has no tool row), `childRunIds` and `parentRunId`. They do not include `events` (D-026). Detail and mutation responses include `events` ordered by `receivedAt` then `id`, oldest first. `actorId` is the user id or the credential id stored on the event. Timestamps are UTC ISO-8601.
+
+The flat columns `stale_threshold_minutes`, `heartbeat_expected` and `reporting_instructions` map to `reportingPolicy.{ staleThresholdMinutes, heartbeatExpected, instructions }` in both directions. Run responses omit `observedClientInfo`, `observedUserAgent` and `externalExecutionId`.
+
+Every mutation takes `request_id` and runs through `withIdempotency` on the supplied transaction. The hash is SHA-256 of the parsed body with object keys sorted, so key order does not matter and a different body is `idempotency_mismatch`. A replay returns the original status and body, including a stored `409`. Retries after a conflict need a new `request_id`. Existing-resource mutations take `expected_revision`. A mismatch is `409 conflict` with message `Revision conflict` and `error.details.current` set to the stored resource. The resource is unchanged.
+
+`PATCH /api/runs/:runId` corrects metadata only (`title`, `taskId`, `harness`, `model`, `completionSummary`, `blocker`, `noPrReason`, `prReferences`). It cannot set execution state or work status. It does not advance `lastContactAt`. The repository still appends one `status` event for the correction. Pull-request references are upserted by repository name and number; omitted references stay. At most one primary reference remains.
+
+`POST /api/runs/:runId/close` closes a **running** execution. `outcome` `failed` or `cancelled` becomes both `executionState` and `workStatus`. `reason` becomes the run `message` and the `manual_close` event message. The repository sets `finishedAt`, selects `manual_close`, and appends one audit event. Next steps are not changed and `lastContactAt` is not advanced. Closing an ended run — including a run that already has that outcome, and a `finished` run — is `409 conflict` with message `Run has already ended` and `error.details.current` set to the current run. Nothing else is written except the idempotency record for that `request_id`.
+
+Validation rejects the body before any write. Caps: short text (name, title, repository name, task id, harness, model, tag, pull-request title) is 1–300 characters after trim; description, reporting instructions, completion summary, blocker and no-PR reason are at most 8,000 characters; `reason` is 1–4,000 after trim; at most 32 tags, each 1–64 characters; at most 20 pull-request references; `staleThresholdMinutes` is an integer from 1 to 525,600. `repositoryUrl`, `prdUrl` and pull-request `url` must be absolute `http:` or `https:` after trim. `javascript:`, `data:` and any other scheme are `400 validation_error`. `error.details.fields` lists the rejected paths. A patch with no resource fields is `validation_error`. Unknown fields are rejected.
