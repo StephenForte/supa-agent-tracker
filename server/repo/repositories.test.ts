@@ -174,6 +174,18 @@ describe('access-controlled repositories on real Postgres', () => {
     })).rejects.toThrow('abort');
     expect(await snapshot()).toEqual(before);
   });
+  it('refuses cached responses when stored grants or caller scope have narrowed', async () => {
+    const issued = await credentials.createCredential(db, a, { label: 'X and Y', tokenHash: 'scope-cache-hash', displaySuffix: 'cache', projectIds: [x.id, y.id] });
+    const access: CredentialAccess = { ...token, credentialId: issued.id, projectIds: [x.id, y.id] };
+    await keys.withIdempotency(db, access, 'read-y', 'hash-y', (tx) => projects.getProject(tx, access, y.id));
+    const narrowed = { ...access, projectIds: [x.id] };
+    await denied(() => keys.getIdempotencyKey(db, narrowed, 'read-y'));
+    await denied(() => keys.withIdempotency(db, narrowed, 'read-y', 'hash-y', async () => 'must not execute'));
+    await credentials.updateCredential(db, a, issued.id, 1, { projectIds: [x.id] });
+    await denied(() => keys.getIdempotencyKey(db, access, 'read-y'));
+    await denied(() => keys.withIdempotency(db, access, 'read-y', 'hash-y', async () => 'must not execute'));
+    expect(await keys.withIdempotency(db, access, 'fresh-x', 'hash-x', async () => 'safe')).toEqual({ status: 'stored', response: 'safe' });
+  });
   it('keeps execution and review status separate and refuses to reopen ended runs', async () => {
     const result = await runs.updateRun(db, token, x.id, run.id, 3, { executionState: 'finished', workStatus: 'waiting_for_review', completionSummary: 'Done' });
     expect(result.status).toBe('saved');

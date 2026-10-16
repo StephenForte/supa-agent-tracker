@@ -104,7 +104,7 @@ P1-B2's 0002 (confirmed by the operator). No password/token plaintext is stored.
 | audit_events | Append-only project or account activity |
 | mcp_credentials | Supplied hash, display suffix, revocation and revision |
 | mcp_credential_projects | Grants with composite owner/project constraints |
-| idempotency_keys | Actor-scoped request hash and saved JSON response |
+| idempotency_keys | Actor-scoped request hash, saved JSON response and effective scope snapshot |
 
 `server/db/schema.ts` mirrors the migration. `schema.test.ts` compares every table
 and column, type and nullability in both directions using Postgres catalogs and
@@ -147,7 +147,10 @@ load guarantee. Repositories accept a Drizzle transaction for composition.
 `withIdempotency(db, access, requestId, requestHash, async (tx) => ...)` serializes
 one actor/request pair and commits callback writes and its saved response together.
 **Use the supplied `tx`** for every repository call inside that callback. Replays
-return the stored response; different hashes return `idempotency_mismatch` without
+return the stored response only while the credential retains every project in the
+response's saved effective scope (a conservative check because the JSON is opaque).
+Removed grants and narrowed caller scope reject stale responses, even if the token
+is still active. Different hashes return `idempotency_mismatch` without
 running the callback. Pass hashes of a canonical request body from the protocol
 layer. No TTL or deletion is implemented.
 

@@ -226,12 +226,14 @@ CREATE TABLE idempotency_keys (
   "request_id" text NOT NULL,
   "user_id" text NOT NULL,
   "credential_id" text,
+  "credential_project_ids" text[],
   "request_hash" text NOT NULL,
   "response" jsonb NOT NULL,
   "created_at" timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (scope, request_id),
   FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE RESTRICT,
   FOREIGN KEY (credential_id, user_id) REFERENCES mcp_credentials (id, user_id) ON DELETE RESTRICT,
+  CONSTRAINT idempotency_scope_snapshot CHECK ((credential_id IS NULL) = (credential_project_ids IS NULL)),
   CONSTRAINT idempotency_scope_matches_actor CHECK ((credential_id IS NULL AND scope = 'user:' || user_id) OR (credential_id IS NOT NULL AND scope = 'credential:' || credential_id))
 );
 
