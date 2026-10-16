@@ -1,5 +1,7 @@
 import type { preHandlerAsyncHookHandler } from 'fastify';
 
+import { fromNodeHeaders } from 'better-auth/node';
+import { authRuntime } from '../auth/runtime.js';
 import { apiError, errorCodes } from './errors.js';
 
 /**
@@ -31,14 +33,29 @@ declare module 'fastify' {
 const ID_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
 
 export const requireUser: preHandlerAsyncHookHandler = async (request, reply) => {
-  if (!stubAuthEnabled()) {
-    return reply.code(401).send(apiError(errorCodes.unauthenticated, 'Authentication is not implemented'));
-  }
   const userId = request.headers['x-test-user-id'];
-  if (typeof userId !== 'string' || !ID_PATTERN.test(userId)) {
-    return reply.code(401).send(apiError(errorCodes.unauthenticated, 'Sign in required'));
+  if (process.env.NODE_ENV === 'test' && typeof userId === 'string' && ID_PATTERN.test(userId)) {
+    request.user = { userId };
+    return;
   }
-  request.user = { userId };
+  const runtime = authRuntime(request.server);
+  if (runtime) {
+    try {
+      // Cookie is the sole browser credential. Do not accept bearer headers.
+      const headers = fromNodeHeaders({ cookie: request.headers.cookie });
+      const session = await runtime.auth.api.getSession({ headers });
+      if (session) {
+        request.user = { userId: session.user.id };
+        return;
+      }
+    } catch {
+      // A lookup outage is not a revoked session. Log only a fixed diagnostic;
+      // library/database errors may contain credentials or connection details.
+      request.log.error('Browser session lookup failed');
+      return reply.code(500).send(apiError(errorCodes.internal_error, 'Internal server error'));
+    }
+  }
+  return reply.code(401).send(apiError(errorCodes.unauthenticated, 'Sign in required'));
 };
 
 export const requireMcpCredential: preHandlerAsyncHookHandler = async (request, reply) => {

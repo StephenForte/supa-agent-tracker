@@ -21,6 +21,7 @@ Failures use one JSON shape and a stable `code`:
 | `conflict` | 409 | `expected_revision` does not match. `error.details.current` is the current resource |
 | `idempotency_mismatch` | 409 | The same `request_id` was reused with a different body |
 | `payload_too_large` | 413 | JSON body exceeds 1 MiB (1,048,576 bytes) |
+| `rate_limited` | 429 | Authentication request limit exceeded |
 | `internal_error` | 500 | Unexpected failure. The message is always `Internal server error` |
 | `database_unreachable` | 503 | Readiness check could not query Postgres |
 | `migrations_pending` | 503 | Readiness check found SQL files that are not applied |
@@ -96,3 +97,44 @@ Browser session routes. Every one uses `requireUser`. A request that sends `Auth
 Another user's project, or an unknown step, is `404 not_found`. The handler writes nothing.
 
 Agent reorder is not an HTTP route. D-023, implemented by `reorderNextSteps` in `server/steps/agent-steps.ts`: any credential granted the project may reorder. The request must name every current step of that project exactly once with its current revision. Anything else — a missing step, a duplicate, an unknown id, or one stale revision — is a conflict and no row changes. On success, positions become `0..n-1` in the given order. A step whose position changes increments its revision. A step that stays at the same index keeps its revision, so checking it off is not invalidated by a reorder that did not move it. Instruction text, source run, `done`, and the completion actor and time are left as stored.
+## Authentication
+
+Browser auth is mounted under `/api/auth`. Requests and responses use JSON; errors
+use the error envelope above. Unknown/unsupported auth paths return JSON 404. All
+auth responses use `Cache-Control: no-store`. These endpoints are library flows,
+not tracker mutations: they do not require `request_id`/`expected_revision` in bodies.
+
+| Method | Path suffix | Body / behavior |
+|---|---|---|
+| POST | `/sign-up/email` | `{name,email,password}`; allowlist only; 403 `forbidden`, "Registration is by invitation only" otherwise. Valid new/existing invited emails both return `{status:true}` |
+| GET | `/verify-email` | `?token=...`; verifies the signed emailed token |
+| POST | `/send-verification-email` | `{email,callbackURL?}`; generic `{status:true}` for unknown/known emails |
+| POST | `/sign-in/email` | `{email,password}`; requires verified email and sets a signed session cookie |
+| POST | `/sign-out` | `{}`; revokes current session and clears cookie |
+| GET | `/get-session` | Current library session/user, or null |
+| GET | `/list-sessions` | Current user's active sessions |
+| POST | `/revoke-session` | `{token}`; revokes only a session owned by current user |
+| POST | `/revoke-sessions` | `{}`; revokes all current user's sessions |
+| POST | `/revoke-other-sessions` | `{}`; revokes other sessions |
+| POST | `/change-password` | `{currentPassword,newPassword}`; always revokes old sessions and returns a new cookie, regardless of client `revokeOtherSessions` |
+| POST | `/request-password-reset` | `{email,redirectTo?}`; generic `{status:true}` whether account exists or delivery fails |
+| POST | `/reset-password` | `{token,newPassword}`; single use, one-hour expiry, revokes existing sessions |
+
+Session lifetime is fixed at seven days. Cookies are HttpOnly, SameSite=Lax and
+Secure for HTTPS PUBLIC_URL. `requireUser` resolves the session from cookies on
+every request and sets `{userId}`; missing/expired/revoked sessions return 401
+`unauthenticated`. Library/database lookup failures return 500 `internal_error`
+with a fixed safe log diagnostic, preserving the session for retry. The `x-test-user-id` seam is restricted to process NODE_ENV=test;
+it is not a production credential. MCP authentication remains separate.
+
+State-changing `/api` requests reject foreign Origins and cross-site fetch metadata;
+writes with cookies also require a matching Origin. Send `Origin: <PUBLIC_URL origin>`
+with browser-authenticated writes. Callback URLs must be trusted by Better Auth.
+Sign-in allows five attempts per email and socket IP in 60 seconds, counting success
+and failure, and returns 429 `rate_limited` thereafter. See server/README.md for
+memory-storage and proxy limitations, email configuration and storage disclosure.
+
+Verification/reset emails link to existing web routes `/verify-email` and
+`/reset-password`; P1-E must wire those screens to the API. Production console email
+suppresses secrets and does not deliver messages. Auth request logging is silent to
+keep URL tokens out of logs; no auth body or provider error is logged.

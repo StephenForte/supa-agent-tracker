@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type pg from 'pg';
 
+import { registerAuthRoutes } from '../auth/routes.js';
 import { apiError, errorCodes } from './errors.js';
 import { migrationsAreCurrent } from '../db/migrate.js';
 import { registerStepsAndNotesRoutes } from '../steps/routes.js';
@@ -18,7 +19,7 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
   await registerSpa(app, deps.spaRoot);
 
   // Wave-3 tasks append exactly one registration line each:
-  //   P1-B2 await registerAuthRoutes(app);
+  await registerAuthRoutes(app, deps);
   //   P1-C1 await registerMcpRoutes(app);
   await registerStepsAndNotesRoutes(app, deps);
 }
