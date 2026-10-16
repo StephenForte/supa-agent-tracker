@@ -137,6 +137,7 @@ describe('access-controlled repositories on real Postgres', () => {
   });
   it('preserves user completion and source ownership during agent instruction updates', async () => {
     const complete = await steps.setStepCompletion(db, a, x.id, step.id, 1, true);
+    expect((await audits.listAuditEvents(db, a, x.id)).some((row) => row.action === 'next_step_completed')).toBe(true);
     expect(complete.status).toBe('saved');
     const updated = await steps.updateNextStep(db, token, x.id, step.id, run.id, 2, { instruction: 'Updated instruction' });
     expect(updated.status).toBe('saved');
@@ -293,12 +294,12 @@ describe('access-controlled repositories on real Postgres', () => {
     await denied(() => steps.setStepCompletion(db, token as unknown as UserAccess, x.id, step.id, 3, false));
   });
   it('records completion and manual close audits atomically, with account audits unavailable to MCP', async () => {
-    expect((await audits.listAuditEvents(db, a, x.id)).some((row) => row.action === 'next_step_completed')).toBe(true);
     const fresh = await runs.createRun(db, a, x.id, runInput());
-    const closed = await runs.updateRun(db, a, x.id, fresh.id, 1, { executionState: 'cancelled', workStatus: 'cancelled' }, { event: { kind: 'manual_close' } });
+    const closed = await runs.updateRun(db, a, x.id, fresh.id, 1, { executionState: 'cancelled', workStatus: 'cancelled' });
     expect(closed.status).toBe('saved');
     expect((await audits.listAuditEvents(db, a, x.id)).some((row) => row.action === 'manual_close' && row.target === fresh.id)).toBe(true);
     const stillRunning = await runs.createRun(db, a, x.id, runInput());
+    await denied(() => runs.updateRun(db, a, x.id, stillRunning.id, 1, { executionState: 'finished' }));
     await denied(() => runs.updateRun(db, token, x.id, stillRunning.id, 1, { executionState: 'failed' }, { event: { kind: 'manual_close' } }));
     await audits.appendAuditEvent(db, a, null, { action: 'credential_issued', target: credential.id });
     expect(await audits.listAuditEvents(db, b, null)).toEqual([]);

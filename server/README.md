@@ -139,6 +139,8 @@ for first creation, then the stored revision. Next-step instruction writes check
 an immutable source-run precondition and never patch completion; P1-D must bind
 that source to the authenticated worker and implement dispatcher reconciliation.
 User completion and user-only manual close append audits in the same transaction.
+User execution-state changes automatically select manual_close and accept only
+failed/cancelled recovery outcomes; an omitted event label cannot omit the audit.
 Credential revocation is irreversible here.
 
 Lock order is user → credential → project → grant → aggregate. Credential and

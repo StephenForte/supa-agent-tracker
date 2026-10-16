@@ -57,6 +57,9 @@ export async function updateRun(db: Database, access: Access, projectId: string,
     if (current.revision !== expectedRevision) return { status: 'conflict', current };
     if (current.executionState !== 'running' && ((patch.executionState && patch.executionState !== current.executionState) || report.event?.kind === 'heartbeat')) throw new AccessError('validation_error');
     const state = patch.executionState ?? current.executionState;
+    const eventInput: EventInput = { ...report.event, kind: access.kind === 'user' && state !== current.executionState
+      ? 'manual_close' : report.event?.kind ?? (state !== current.executionState ? 'check_out' : 'status') };
+    if (eventInput.kind === 'manual_close' && (access.kind !== 'user' || current.executionState !== 'running' || !['failed', 'cancelled'].includes(state))) throw new AccessError('forbidden');
     const now = new Date();
     const [value] = await tx.update(runs).set({ title: patch.title, taskId: patch.taskId, executionState: patch.executionState,
       workStatus: patch.workStatus, harness: patch.harness, model: patch.model, message: patch.message,
@@ -73,11 +76,10 @@ export async function updateRun(db: Database, access: Access, projectId: string,
       const values = { runId, name: tool.name, source: tool.source, callCount: tool.callCount, successCount: tool.successCount ?? null, failureCount: tool.failureCount ?? null, lastUsedAt: tool.lastUsedAt ?? null, coverage: tool.coverage };
       await tx.insert(toolUsageAggregates).values(values).onConflictDoUpdate({ target: [toolUsageAggregates.runId, toolUsageAggregates.name, toolUsageAggregates.source], set: values });
     }
-    if (report.event?.kind === 'manual_close') {
-      if (access.kind !== 'user' || current.executionState !== 'running' || !['failed', 'cancelled'].includes(state)) throw new AccessError('forbidden');
+    if (eventInput.kind === 'manual_close') {
       await tx.insert(auditEvents).values({ userId: access.userId, projectId, ...actorColumns(access), action: 'manual_close', target: runId, details: { executionState: state, revision: value!.revision } });
     }
-    await event(tx, access, value!, report.event ?? { kind: state !== current.executionState ? 'check_out' : 'status' });
+    await event(tx, access, value!, eventInput);
     return { status: 'saved', value: value! };
   });
 }
