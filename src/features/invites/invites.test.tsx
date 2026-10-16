@@ -10,13 +10,13 @@ import { DataProvider } from '../../data/hooks';
 const link = 'https://tracker.example.test/register?invite=inv_one_time_secret';
 const invite = { id: 'invite-1', email: 'new@example.test', status: 'pending', createdAt: '2026-10-16T00:00:00Z', expiresAt: '2026-10-23T00:00:00Z', usedAt: null, revokedAt: null };
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); localStorage.clear(); sessionStorage.clear(); });
-async function setup({ admin = true, demo = false, path = '/settings/invites' } = {}) {
+async function setup({ admin = true, demo = false, path = '/settings/invites', accountResponse }: { admin?: boolean; demo?: boolean; path?: string; accountResponse?: Promise<Response> } = {}) {
   const account = { id: 'user', name: 'User', email: 'admin@example.test', emailVerified: true, isAdmin: admin, demo: false };
   let invites: typeof invite[] = [];
   const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation(async (input, init) => {
     const path = String(input); let value: unknown = {};
     if (path === '/api/auth/get-session') value = { user: account };
-    if (path === '/api/account') value = account;
+    if (path === '/api/account') { if (accountResponse) return accountResponse; value = account; }
     if (path === '/api/invites') {
       if (init?.method === 'POST') { invites = [invite]; value = { invite, link, emailSent: false }; }
       else value = invites;
@@ -73,4 +73,23 @@ it('strips only invite from the register URL before submit, retains it only in m
   expect(fetch.mock.calls.some(([path, init]) => path === '/api/auth/sign-up/email' && JSON.parse(String(init?.body)).invite === 'inv_ephemeral')).toBe(true);
   expect(document.documentElement.innerHTML).not.toContain('inv_ephemeral');
   expect(JSON.stringify({ ...localStorage, ...sessionStorage })).not.toContain('inv_ephemeral');
+});
+
+it('shows loading instead of denial while the administrator account lookup is pending', async () => {
+  let resolve!: (response: Response) => void;
+  const accountResponse = new Promise<Response>(done => { resolve = done; });
+  await setup({ accountResponse });
+  expect(await screen.findByText('Checking invite access…')).toBeVisible();
+  expect(screen.queryByText('Invites are available to the verified administrator.')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Create invite' })).not.toBeInTheDocument();
+  await act(async () => { resolve(new Response(JSON.stringify({ id: 'admin', name: 'Admin', email: 'admin@example.test', emailVerified: true, isAdmin: true }))); });
+  expect(await screen.findByRole('link', { name: 'Invites' })).toBeVisible();
+  expect(await screen.findByRole('button', { name: 'Create invite' })).toBeVisible();
+  expect(screen.queryByText('Invites are available to the verified administrator.')).not.toBeInTheDocument();
+});
+it('reports an account lookup failure as an error instead of denying admin access', async () => {
+  await setup({ accountResponse: Promise.resolve(new Response(JSON.stringify({ error: { message: 'lookup failed' } }), { status: 500 })) });
+  expect(await screen.findByText('The server could not complete the request. Please try again.')).toBeVisible();
+  expect(screen.queryByText('Invites are available to the verified administrator.')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Try again' })).toBeVisible();
 });
