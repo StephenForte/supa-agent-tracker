@@ -4,7 +4,7 @@ export type ExecutionState = 'running' | 'finished' | 'failed' | 'cancelled';
 export type WorkStatus = 'in_progress' | 'blocked' | 'waiting_for_review' | 'completed' | 'failed' | 'cancelled';
 export type ProjectType = 'coding' | 'automation';
 export type Lifecycle = 'active' | 'paused' | 'completed' | 'archived';
-export interface Account { id: string; name: string; email: string; emailVerified: boolean; demo: boolean }
+export interface Account { id: string; name: string; email: string; emailVerified: boolean; demo: boolean; isAdmin?: boolean }
 export interface ReportingPolicy { staleThresholdMinutes: number; heartbeatExpected: boolean; instructions: string }
 export interface ProjectInput {
   name: string; description: string; type: ProjectType; lifecycle: Lifecycle;

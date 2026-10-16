@@ -295,3 +295,21 @@ export const authVerifications = pgTable('auth_verifications', {
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull(),
 }, (t) => [index('auth_verifications_identifier').on(t.identifier)]);
+
+// P1-I: invite secrets are stored only as SHA-256 hashes.
+export const invites = pgTable('invites', {
+  id: text('id').primaryKey().default(sql`gen_random_uuid()::text`),
+  email: text('email').notNull(),
+  tokenHash: text('token_hash').notNull().unique(),
+  invitedBy: text('invited_by').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'date' }).notNull().default(sql`now() + interval '7 days'`),
+  usedAt: timestamp('used_at', { withTimezone: true, mode: 'date' }),
+  usedBy: text('used_by').references(() => users.id, { onDelete: 'restrict' }),
+  revokedAt: timestamp('revoked_at', { withTimezone: true, mode: 'date' }),
+}, (t) => [
+  index('invites_email').on(t.email),
+  check('invites_email_lower', sql`email = lower(email)`),
+  check('invites_used_together', sql`(used_at IS NULL) = (used_by IS NULL)`),
+  check('invites_used_or_revoked', sql`used_at IS NULL OR revoked_at IS NULL`),
+]);

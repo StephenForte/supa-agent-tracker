@@ -68,7 +68,7 @@ function formatConfigError(error: z.ZodError): string {
 
 export interface AuthConfig {
   secret: string;
-  registrationAllowlist: string[];
+  adminEmail?: string;
   emailProvider: 'console' | 'resend';
   resendApiKey?: string;
   emailFrom?: string;
@@ -84,10 +84,12 @@ export function loadAuthConfig(env: NodeJS.ProcessEnv, nodeEnv: NodeEnv): AuthCo
     if (!env.RESEND_API_KEY?.trim()) errors.push('- RESEND_API_KEY: is required');
     if (!env.EMAIL_FROM?.trim()) errors.push('- EMAIL_FROM: is required');
   }
+  const adminEmail = env.ADMIN_EMAIL?.trim().toLowerCase();
+  if (env.ADMIN_EMAIL !== undefined && !z.email().safeParse(adminEmail).success) errors.push('- ADMIN_EMAIL: must be an email address');
   if (errors.length) throw new ConfigError(`Invalid server configuration:\n${errors.join('\n')}`);
   return {
     secret,
-    registrationAllowlist: [...new Set((env.REGISTRATION_ALLOWLIST ?? '').split(',').map((email) => email.trim().toLowerCase()).filter(Boolean))],
+    ...(adminEmail ? { adminEmail } : {}),
     emailProvider: provider as 'console' | 'resend',
     ...(env.RESEND_API_KEY ? { resendApiKey: env.RESEND_API_KEY } : {}),
     ...(env.EMAIL_FROM ? { emailFrom: env.EMAIL_FROM } : {}),

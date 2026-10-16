@@ -47,7 +47,7 @@ services:
         generateValue: true
       - key: EMAIL_PROVIDER
         value: resend
-      - key: REGISTRATION_ALLOWLIST
+      - key: ADMIN_EMAIL
         sync: false
       - key: RESEND_API_KEY
         sync: false

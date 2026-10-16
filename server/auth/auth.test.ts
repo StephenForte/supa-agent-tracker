@@ -1,3 +1,4 @@
+import { randomBytes, createHash } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import type pg from 'pg';
@@ -27,10 +28,17 @@ describe('browser authentication through HTTP and Postgres', () => {
   const secret = 'production-secret-unique-at-least-32-characters';
   const resendKey = 'production-resend-key-unique-marker';
   let address = 0;
-  const post = (path: string, body: Record<string, unknown>, cookie?: string, ip = `192.0.10.${++address}`) => app.inject({
-    method: 'POST', url: `/api/auth${path}`, payload: body,
-    headers: { origin, ...(cookie ? { cookie } : {}) }, remoteAddress: ip,
-  });
+  const invitedEmails = new Set(['invited', 'reset', 'change', 'expire', 'logs', 'race', 'legacy', 'outage'].map(name => `${name}@example.test`));
+  const post = async (path: string, body: Record<string, unknown>, cookie?: string, ip = `192.0.10.${++address}`) => {
+    const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+    if (path === '/sign-up/email' && invitedEmails.has(email)) {
+      const invite = `inv_${randomBytes(32).toString('base64url')}`;
+      await pool.query('INSERT INTO invites(email,token_hash,invited_by) VALUES ($1,$2,$3)', [email, createHash('sha256').update(invite).digest('hex'), 'test-inviter']);
+      body = { ...body, invite };
+    }
+    return app.inject({ method: 'POST', url: `/api/auth${path}`, payload: body,
+      headers: { origin, ...(cookie ? { cookie } : {}) }, remoteAddress: ip });
+  };
   const get = (path: string, cookie?: string) => app.inject({ method: 'GET', url: path, headers: cookie ? { cookie } : {} });
   async function signup(email: string) {
     const result = await post('/sign-up/email', { name: 'Invited User', email, password });
@@ -54,9 +62,10 @@ describe('browser authentication through HTTP and Postgres', () => {
   beforeAll(async () => {
     scratch = await createScratchDatabase(); pool = createPool(scratch.connectionString);
     await runMigrations(pool, migrationsDir);
+    await pool.query("INSERT INTO users(id,email,email_verified) VALUES ('test-inviter','admin@example.test',true)");
     const config = loadConfig({ DATABASE_URL: scratch.connectionString, PUBLIC_URL: origin, NODE_ENV: 'production', BETTER_AUTH_SECRET: secret,
       EMAIL_PROVIDER: 'resend', RESEND_API_KEY: resendKey, EMAIL_FROM: 'sender@example.test',
-      REGISTRATION_ALLOWLIST: ' Invited@Example.test , reset@example.test, change@example.test, expire@example.test, logs@example.test, race@example.test, legacy@example.test, outage@example.test ',
+      ADMIN_EMAIL: 'admin@example.test',
     });
     app = await buildApp({ config, pool, migrationsDir, spaRoot, logger: createLoggerOptions({ write: (msg) => logs.push(msg) }) });
     vi.stubGlobal('fetch', async (_url: string, init: RequestInit) => { inbox.push(JSON.parse(String(init.body)) as Email); return new Response('{}', { status: 200 }); });
@@ -65,14 +74,14 @@ describe('browser authentication through HTTP and Postgres', () => {
   });
   afterAll(async () => { await app?.close(); await pool?.end(); await scratch?.drop(); vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
 
-  it('denies non-invited sign-up without inserting a user; empty allowlist denies everyone', async () => {
+  it('denies sign-up without an invite without inserting a user; admin bootstrap is unset by default', async () => {
     const response = await post('/sign-up/email', { name: 'No', email: 'outsider@example.test', password });
     expect(response.statusCode).toBe(403);
-    expect(response.json()).toEqual({ error: { code: 'forbidden', message: 'Registration is by invitation only' } });
+    expect(response.json()).toEqual({ error: { code: 'forbidden', message: 'This invitation is invalid or has expired' } });
     expect((await pool.query('SELECT id FROM users WHERE email=$1', ['outsider@example.test'])).rowCount).toBe(0);
-    expect(loadAuthConfig({}, 'test').registrationAllowlist).toEqual([]);
+    expect(loadAuthConfig({}, 'test').adminEmail).toBeUndefined();
   });
-  it('normalizes the allowlist and address, refuses unverified login, then verifies and signs in', async () => {
+  it('normalizes the invited address, refuses unverified login, then verifies and signs in', async () => {
     await signup(' INVITED@Example.test ');
     expect((await pool.query('SELECT email_verified, display_name FROM users WHERE email=$1', ['invited@example.test'])).rows).toEqual([{ email_verified: false, display_name: 'Invited User' }]);
     const unverified = await post('/sign-in/email', { email: 'invited@example.test', password });
@@ -103,7 +112,7 @@ describe('browser authentication through HTTP and Postgres', () => {
       await expect(pool.query(`UPDATE accounts SET ${column}=$1`, ['forbidden-plain-value'])).rejects.toThrow();
     }
   });
-  it('returns the identical sign-up response for existing allowlisted addresses', async () => {
+  it('returns the identical sign-up response for existing addresses carrying fresh valid invites', async () => {
     const response = await post('/sign-up/email', { name: 'Invited User', email: 'invited@example.test', password });
     expect(response.statusCode).toBe(200); expect(response.json()).toEqual({ status: true });
     expect((await pool.query('SELECT id FROM users WHERE email=$1', ['invited@example.test'])).rowCount).toBe(1);

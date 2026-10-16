@@ -95,9 +95,9 @@ it('shows invitation-only registration errors without simulated copy', async () 
   await screen.findByRole('button', { name: 'Create account' });
   await user.type(screen.getByLabelText('Name'), 'New user'); await user.type(screen.getByLabelText('Email'), 'new@example.test');
   await user.type(screen.getByLabelText('Password', { exact: true }), 'password-for-live-test'); await user.type(screen.getByLabelText('Confirm password'), 'password-for-live-test');
-  fetch.mockResolvedValueOnce(new Response(JSON.stringify({ error: { message: 'Registration is by invitation only' } }), { status: 403 }));
+  fetch.mockResolvedValueOnce(new Response(JSON.stringify({ error: { message: 'This invitation is invalid or has expired' } }), { status: 403 }));
   await user.click(screen.getByRole('button', { name: 'Create account' }));
-  expect(await screen.findByText('Registration is by invitation only')).toBeVisible();
+  expect(await screen.findByText('This invitation is invalid or has expired')).toBeVisible();
   expect(screen.queryByText(/Registration does not create/)).not.toBeInTheDocument();
 });
 it('verifies the emailed token and removes it from the route after success', async () => {

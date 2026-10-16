@@ -11,7 +11,10 @@ export function createEmailSender(config: AuthConfig, nodeEnv: AppConfig['nodeEn
     async sendEmail(email) {
       if (config.emailProvider === 'console') {
         if (nodeEnv === 'test') captured.push({ ...email });
-        else if (nodeEnv === 'development') console.log(JSON.stringify({ email }));
+        else if (nodeEnv === 'development') {
+          if (email.subject === "You're invited to Supa Agent Tracker") console.log('Invite email suppressed; use the link shown once in the app');
+          else console.log(JSON.stringify({ email }));
+        }
         else console.log('Console email suppressed in production; configure Resend to deliver authentication emails');
         return;
       }

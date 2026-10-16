@@ -18,7 +18,7 @@ let baseUrl: string;
 beforeAll(async () => {
   scratch = await createScratchDatabase(); pool = createPool(scratch.connectionString); await runMigrations(pool, migrationsDir);
   const config = loadConfig({ DATABASE_URL: scratch.connectionString, PUBLIC_URL: publicUrl, NODE_ENV: 'test',
-    BETTER_AUTH_SECRET: 'p1e-test-secret-at-least-thirty-two-characters', EMAIL_PROVIDER: 'console', REGISTRATION_ALLOWLIST: email });
+    BETTER_AUTH_SECRET: 'p1e-test-secret-at-least-thirty-two-characters', EMAIL_PROVIDER: 'console', ADMIN_EMAIL: email });
   app = await buildApp({ config, pool, migrationsDir, spaRoot, logger: false });
   baseUrl = await app.listen({ port: 0, host: '127.0.0.1' });
 });

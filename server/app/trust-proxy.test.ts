@@ -43,7 +43,7 @@ describe('trusted proxy hops', () => {
       PUBLIC_URL: origin,
       NODE_ENV: 'production' as const,
       BETTER_AUTH_SECRET: secret,
-      REGISTRATION_ALLOWLIST: 'nobody@example.test',
+      ADMIN_EMAIL: 'nobody@example.test',
     };
     direct = await buildApp({
       config: loadConfig({ ...shared, TRUST_PROXY_HOPS: '0' }),

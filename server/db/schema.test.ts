@@ -44,9 +44,12 @@ describe('0001 schema', () => {
       expect(row.data_type === 'ARRAY' ? `${row.udt_name.slice(1)}[]` : row.data_type).toBe(column.type);
     }
   });
-  it('allows only reviewed auth secret columns, forbids invites and has no cascading FKs', async () => {
-    const forbiddenTables = await pool.query("SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name = 'invites'");
-    expect(forbiddenTables.rows).toEqual([]);
+  it('allows only reviewed auth secret columns and invite hashes, with RESTRICT invite FKs and no cascading FKs', async () => {
+    const inviteColumns = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name='invites' ORDER BY column_name");
+    expect(inviteColumns.rows.map(row => row.column_name)).toEqual(['created_at', 'email', 'expires_at', 'id', 'invited_by', 'revoked_at', 'token_hash', 'used_at', 'used_by']);
+    const inviteFks = await pool.query("SELECT confrelid::regclass::text AS target, confdeltype FROM pg_constraint WHERE conrelid='invites'::regclass AND contype='f'");
+    expect(inviteFks.rows).toHaveLength(2);
+    expect(inviteFks.rows.every(row => row.target === 'users' && row.confdeltype === 'r')).toBe(true);
     const sensitive = await pool.query<{ table_name: string; column_name: string }>(`SELECT table_name,column_name FROM information_schema.columns WHERE table_schema='public' AND column_name ~* '(token|password|secret)'`);
     const allowed = new Set([
       'accounts.access_token', // Required adapter field, CHECK IS NULL: OAuth disabled.
@@ -56,6 +59,7 @@ describe('0001 schema', () => {
       'accounts.refresh_token_expires_at', // Required nullable timestamp, CHECK IS NULL.
       'accounts.password_hash', // Better Auth scrypt password hash.
       'sessions.token', // Plain random session identifier; cookie is signed. Planner decision disclosed.
+      'invites.token_hash', // P1-I SHA-256 only; no plaintext token or link column.
       'mcp_credentials.token_hash', // Existing P1-B1 supplied MCP credential hash.
     ]);
     expect(sensitive.rows.filter((row) => !allowed.has(`${row.table_name}.${row.column_name}`))).toEqual([]);
