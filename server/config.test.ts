@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { ConfigError, loadConfig } from './config.js';
 
 const base = {
+  BETTER_AUTH_SECRET: 'config-test-secret-at-least-32-characters',
   DATABASE_URL: 'postgresql://localhost:5432/postgres',
   PUBLIC_URL: 'http://localhost:3000',
 };
@@ -10,6 +11,7 @@ const base = {
 describe('loadConfig', () => {
   it('reads the four server environment variables', () => {
     expect(loadConfig({ ...base, PORT: '4317', NODE_ENV: 'test' })).toEqual({
+      auth: { secret: base.BETTER_AUTH_SECRET, registrationAllowlist: [], emailProvider: 'console' },
       databaseUrl: base.DATABASE_URL,
       publicUrl: base.PUBLIC_URL,
       port: 4317,

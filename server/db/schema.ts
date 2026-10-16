@@ -7,6 +7,7 @@ export const users = pgTable('users', {
   emailVerified: boolean('email_verified').notNull().default(false),
   displayName: text('display_name').notNull().default(''),
   timezone: text('timezone').notNull().default('UTC'),
+  image: text('image'),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
 }, (t) => [
@@ -256,3 +257,41 @@ export const idempotencyKeys = pgTable('idempotency_keys', {
   check('idempotency_scope_snapshot', sql`(credential_id IS NULL) = (credential_project_ids IS NULL)`),
   check('idempotency_scope_matches_actor', sql`(credential_id IS NULL AND scope = 'user:' || user_id) OR (credential_id IS NOT NULL AND scope = 'credential:' || credential_id)`),
 ]);
+
+
+// P1-B2: Better Auth models. FKs intentionally RESTRICT domain identity deletion.
+export const sessions = pgTable('sessions', {
+  id: text('id').primaryKey(),
+  token: text('token').notNull().unique(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'date' }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull(),
+  ipAddress: text('ip_address'),
+  userAgent: text('user_agent'),
+}, (t) => [index('sessions_user').on(t.userId)]);
+
+export const accounts = pgTable('accounts', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
+  accountId: text('account_id').notNull(),
+  providerId: text('provider_id').notNull(),
+  passwordHash: text('password_hash'),
+  accessToken: text('access_token'),
+  refreshToken: text('refresh_token'),
+  idToken: text('id_token'),
+  accessTokenExpiresAt: timestamp('access_token_expires_at', { withTimezone: true, mode: 'date' }),
+  refreshTokenExpiresAt: timestamp('refresh_token_expires_at', { withTimezone: true, mode: 'date' }),
+  scope: text('scope'),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull(),
+}, (t) => [unique().on(t.providerId, t.accountId), index('accounts_user').on(t.userId), check('accounts_credential_only', sql`provider_id = 'credential'`)]);
+
+export const authVerifications = pgTable('auth_verifications', {
+  id: text('id').primaryKey(),
+  identifier: text('identifier').notNull(),
+  value: text('value').notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'date' }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull(),
+}, (t) => [index('auth_verifications_identifier').on(t.identifier)]);
