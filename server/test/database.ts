@@ -1,9 +1,10 @@
-import { appendFileSync, mkdirSync } from 'node:fs';
+import { appendFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import pg from 'pg';
 
-const ledgerDir = '/Users/stephenforte/src/p1-b0-scratch';
-const ledgerPath = `${ledgerDir}/databases.txt`;
+const ledgerPath = path.join(tmpdir(), 'supa-p1-b0-databases.txt');
 
 function requiredDatabaseUrl(): string {
   const url = process.env.DATABASE_URL;
@@ -29,7 +30,6 @@ export async function createScratchDatabase(): Promise<ScratchDatabase> {
   if (!/^supa_test_[a-f0-9]{16}$/.test(name)) {
     throw new Error(`Refusing to create unexpected database name ${name}`);
   }
-  mkdirSync(ledgerDir, { recursive: true });
   appendFileSync(ledgerPath, `created ${name}\n`);
   const admin = new pg.Pool({ connectionString: adminDatabaseUrl, max: 1 });
   try {

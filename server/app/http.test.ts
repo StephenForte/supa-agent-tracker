@@ -1,4 +1,5 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
@@ -8,8 +9,7 @@ import type { AppConfig } from '../config.js';
 import { buildApp } from './build-app.js';
 import { JSON_BODY_LIMIT_BYTES, errorCodes } from './errors.js';
 
-const scratchRoot = '/Users/stephenforte/src/p1-b0-scratch';
-mkdirSync(scratchRoot, { recursive: true });
+const scratchRoot = mkdtempSync(path.join(tmpdir(), 'supa-http-'));
 
 function testConfig(): AppConfig {
   return {
@@ -38,7 +38,6 @@ describe('HTTP foundation', () => {
   });
 
   it('serves health without the database, echoes request ids, and falls back to the SPA', async () => {
-    mkdirSync(scratchRoot, { recursive: true });
     mkdirSync(path.join(spaRoot, 'assets'), { recursive: true });
     writeFileSync(path.join(spaRoot, 'index.html'), '<!doctype html><title>spa-fixture</title>');
     writeFileSync(path.join(spaRoot, 'assets', 'app.js'), 'console.log("asset")');

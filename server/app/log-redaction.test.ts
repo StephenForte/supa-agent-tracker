@@ -1,4 +1,5 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
@@ -8,7 +9,7 @@ import type { AppConfig } from '../config.js';
 import { buildApp } from './build-app.js';
 import { createLoggerOptions, logRedactCensor } from './logging.js';
 
-const scratchRoot = '/Users/stephenforte/src/p1-b0-scratch';
+const scratchRoot = mkdtempSync(path.join(tmpdir(), 'supa-log-'));
 
 function testConfig(): AppConfig {
   return {
@@ -32,12 +33,11 @@ describe('log redaction', () => {
 
   afterAll(async () => {
     await app?.close();
+    rmSync(scratchRoot, { recursive: true, force: true });
   });
 
   it('never writes an Authorization header or cookie to the log', async () => {
-    mkdirSync(scratchRoot, { recursive: true });
-    const spaRoot = path.join(scratchRoot, 'log-spa');
-    mkdirSync(spaRoot, { recursive: true });
+    const spaRoot = scratchRoot;
     writeFileSync(path.join(spaRoot, 'index.html'), '<!doctype html><title>spa-fixture</title>');
     app = await buildApp({
       config: testConfig(),

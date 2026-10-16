@@ -1,4 +1,5 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type pg from 'pg';
@@ -11,7 +12,7 @@ import { errorCodes } from './errors.js';
 import { createPool } from '../db/pool.js';
 import { runMigrations } from '../db/migrate.js';
 
-mkdirSync('/Users/stephenforte/src/p1-b0-scratch', { recursive: true });
+const scratchRoot = mkdtempSync(path.join(tmpdir(), 'supa-ready-'));
 
 function testConfig(databaseUrl: string): AppConfig {
   return {
@@ -24,9 +25,9 @@ function testConfig(databaseUrl: string): AppConfig {
 }
 
 describe('readiness against a scratch database', () => {
-  let scratch: ScratchDatabase;
-  let pool: pg.Pool;
-  const spaRoot = mkdtempSync(path.join('/Users/stephenforte/src/p1-b0-scratch', 'ready-spa-'));
+  let scratch!: ScratchDatabase;
+  let pool!: pg.Pool;
+  const spaRoot = mkdtempSync(path.join(scratchRoot, 'ready-spa-'));
 
   beforeAll(async () => {
     writeFileSync(path.join(spaRoot, 'index.html'), '<!doctype html><title>spa-fixture</title>');
@@ -35,13 +36,13 @@ describe('readiness against a scratch database', () => {
   });
 
   afterAll(async () => {
-    await pool.end();
-    await scratch.drop();
-    rmSync(spaRoot, { recursive: true, force: true });
+    await pool?.end();
+    await scratch?.drop();
+    rmSync(scratchRoot, { recursive: true, force: true });
   });
 
   it('returns 503 while a migration file is pending', async () => {
-    const dir = mkdtempSync(path.join('/Users/stephenforte/src/p1-b0-scratch', 'pending-'));
+    const dir = mkdtempSync(path.join(scratchRoot, 'pending-'));
     writeFileSync(path.join(dir, '0098_pending.sql'), 'CREATE TABLE pending_probe (id int);');
     const app = await buildApp({
       config: testConfig(scratch.connectionString),
