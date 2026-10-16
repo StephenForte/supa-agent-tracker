@@ -16,6 +16,7 @@ export interface RunGridProps {
   filters?: RunGridFilters; defaultFilters?: RunGridFilters; onFiltersChange?: (filters: RunGridFilters) => void;
   expandedRunIds?: readonly string[]; defaultExpandedRunIds?: readonly string[]; onExpandedRunIdsChange?: (ids: string[]) => void;
 }
+import { useDemoAccount } from '../../app/useDemoAccount';
 import { Fragment, useEffect, useId, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { useNow } from '../../domain/clock';
@@ -36,6 +37,7 @@ function MultiFilter({ label, options, value, onChange }: { label: string; optio
   return <label className="grid gap-1 text-sm">{label}<select multiple className="max-w-full rounded border border-slate-300 bg-white p-2" value={value} onChange={event => onChange(Array.from(event.target.selectedOptions, option => option.value))}>{options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>;
 }
 export function RunGrid(props: RunGridProps) {
+  const demo = useDemoAccount();
   const { runs, projects = [], agents = [], showProjectColumn = false } = props;
   const now = useNow();
   const context = { projects, agents, now };
@@ -113,7 +115,7 @@ export function RunGrid(props: RunGridProps) {
           <td className="p-3"><button className="text-left font-semibold underline" aria-expanded={open} aria-controls={`details-${run.id}`} onClick={() => toggle(run.id)}>{open ? '−' : '+'} {agentName(run, agents)}<span className="sr-only"> {run.id}</span></button><div className="mt-1 text-xs text-slate-600">{run.taskId ?? '—'} · {run.id}</div>{isConcurrent(run, runs) && <Badge>Concurrent</Badge>}</td>
           <td className="max-w-64 p-3 break-words">{run.title}</td>
           {showProjectColumn && <td className="max-w-48 p-3 break-words"><Link to={`/projects/${run.projectId}`}>{projectName(run, projects)}</Link></td>}
-          <td className="p-3"><Badge tone={run.executionState}>{executionLabels[run.executionState]}</Badge>{run.executionState === 'running' && <button className="mt-3 block text-left text-xs underline" onClick={() => setClosing(run)}>Demo: close {run.id}</button>}</td>
+          <td className="p-3"><Badge tone={run.executionState}>{executionLabels[run.executionState]}</Badge>{run.executionState === 'running' && <button className="mt-3 block text-left text-xs underline" onClick={() => setClosing(run)}>{demo ? 'Demo: close' : 'Close'} {run.id}</button>}</td>
           <td className="p-3"><Badge tone={run.workStatus}>{workLabels[run.workStatus]}</Badge></td><td className="p-3">{stale(run, context) ? <Badge tone="stale">Stale</Badge> : '—'}</td>
           <td className="max-w-60 p-3 break-words">{pr ? <><a href={pr.url} target="_blank" rel="noopener noreferrer">#{pr.number} {pr.title}</a>{more > 0 && <button className="mt-2 block underline" onClick={() => reveal(run.id, true)}>+{more} more</button>}</> : '—'}</td>
           <td className="p-3">{formatTimestamp(run.startedAt)}</td><td className="whitespace-nowrap p-3">{formatElapsed(elapsed(run, now))}</td><td className="p-3">{formatTimestamp(run.finishedAt)}</td><td className="p-3">{formatIdentity(run.harness)}</td><td className="p-3">{formatIdentity(run.model)}</td>

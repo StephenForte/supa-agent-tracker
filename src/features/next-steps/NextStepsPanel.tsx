@@ -110,6 +110,7 @@ function NextStepsBody({ projectId, onRetry }: { projectId: string; onRetry: () 
   }
 
   async function simulate(step: NextStep, kind: 'current' | 'stale') {
+    if (!account.demo) return;
     setDemoHold({ id: step.id, revision: step.revision });
     setDemoMessage(null);
     setDemoInstruction(null);
@@ -153,7 +154,7 @@ function NextStepsBody({ projectId, onRetry }: { projectId: string; onRetry: () 
       <h3 className="mt-4 text-base">Completed</h3>
       <ul className="m-0 list-none p-0">{completed.map(step => <StepRow key={step.id} step={step} projectId={projectId} runs={runs} agents={agents} account={account} pending={busy} onToggle={stepToToggle => void toggle(stepToToggle)} />)}</ul>
     </>}
-    <fieldset className="mt-6 min-w-0 rounded-md border border-[#d9b86b] bg-[#fff0cb] p-4">
+    {account.demo && <fieldset className="mt-6 min-w-0 rounded-md border border-[#d9b86b] bg-[#fff0cb] p-4">
       <legend className="px-1 font-semibold">Demo only — Simulate agent update</legend>
       <p>Instruction text is not editable. These controls pretend the source run rewrote a step. They are not part of normal use.</p>
       {selected ? <>
@@ -167,7 +168,7 @@ function NextStepsBody({ projectId, onRetry }: { projectId: string; onRetry: () 
         </div>
       </> : <p>No steps to update.</p>}
       {demoMessage && <div role="status"><p>{demoMessage}</p>{demoInstruction !== null && <InstructionText instruction={demoInstruction} />}</div>}
-    </fieldset>
+    </fieldset>}
   </section>;
 }
 

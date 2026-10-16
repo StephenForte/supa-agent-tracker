@@ -1,3 +1,4 @@
+import { useDemoAccount } from '../../app/useDemoAccount';
 import { NavLink, useLocation } from 'react-router';
 import { IntegrationsPanel } from '../../features/integrations/IntegrationsPanel';
 import { TokensPanel } from '../../features/tokens/TokensPanel';
@@ -5,8 +6,9 @@ import { AccountSettings } from './AccountSettings';
 
 export function SettingsPage({ title }: { title: string }) {
   const { pathname } = useLocation();
+  const demo = useDemoAccount();
   return <>
-    <p className="eyebrow">Simulated account</p>
+    <p className="eyebrow">{demo ? 'Simulated account' : 'Account'}</p>
     <h1>{title}</h1>
     <nav aria-label="Settings sections" className="link-list">
       <NavLink to="/settings" end>Account settings</NavLink>

@@ -1,3 +1,4 @@
+import { useDemoAccount } from '../../app/useDemoAccount';
 import { useCallback, useId, useState } from 'react';
 import { Button } from '../../components/ui/Button';
 import { ErrorState } from '../../components/ui/ErrorState';
@@ -26,6 +27,7 @@ function PrivateNoteBody({ projectId, onRetry }: { projectId: string; onRetry: (
 function PrivateNoteEditor({ projectId, note, source }: { projectId: string; note: PrivateNote; source: ReturnType<typeof usePrivateNotes> }) {
   const fieldId = useId();
   const privacyId = useId();
+  const demo = useDemoAccount();
   const headingId = useId();
   const [lastQuery, setLastQuery] = useState(note);
   const [serverNote, setServerNote] = useState(note);
@@ -70,7 +72,7 @@ function PrivateNoteEditor({ projectId, note, source }: { projectId: string; not
 
   return <section className="slot min-w-0" aria-labelledby={headingId} data-project-id={projectId}>
     <h2 id={headingId}>My private notes</h2>
-    <p id={privacyId}>Only you can see this. Agents never receive it. In this demo it is browser-only, with server enforcement arriving in Phase 1.</p>
+    <p id={privacyId}>Only you can see this. Agents never receive it.{demo && ' In this demo it is browser-only, with server enforcement arriving in Phase 1.'}</p>
     <label htmlFor={fieldId} className="font-semibold">Private note</label>
     <textarea id={fieldId} className="mt-2 min-h-32 w-full max-w-full rounded-md border border-[#9aabb2] p-3 text-base" value={value} aria-describedby={privacyId} disabled={saving} onChange={event => { setDraft(event.target.value); setError(null); }} />
     <p role="status">{status}</p>

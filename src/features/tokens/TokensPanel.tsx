@@ -7,6 +7,8 @@ import { useSourceQuery, useTrackerData } from '../../data/hooks';
 import { formatTimestamp } from '../../domain/format';
 import { formatLastUsed, tokenStatus } from '../../domain/tokens/display';
 import type { Project } from '../../domain/types';
+import { useDemoAccount } from '../../app/useDemoAccount';
+import { LiveTokensPanel } from './LiveTokensPanel';
 import { TokenReveal } from './TokenReveal';
 
 function scopeNames(projectIds: readonly string[], projects: readonly Project[]): string {
@@ -14,6 +16,10 @@ function scopeNames(projectIds: readonly string[], projects: readonly Project[])
 }
 
 export function TokensPanel() {
+  const demo = useDemoAccount();
+  return demo ? <DemoTokensPanel /> : <LiveTokensPanel />;
+}
+function DemoTokensPanel() {
   const tracker = useTrackerData();
   const [attempt, setAttempt] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);

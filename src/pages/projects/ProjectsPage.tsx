@@ -1,3 +1,4 @@
+import { useDemoAccount } from '../../app/useDemoAccount';
 import { useCallback, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { Button } from '../../components/ui/Button';
@@ -11,6 +12,7 @@ import { ProjectCard } from '../../features/projects/ProjectCard';
 import { ProjectFilters } from '../../features/projects/ProjectFilters';
 
 export function ProjectsPage() {
+  const isDemo = useDemoAccount();
   const source = useTrackerData();
   const now = useNow();
   const [params] = useSearchParams();
@@ -22,7 +24,7 @@ export function ProjectsPage() {
     const [projects, runs, agents] = await Promise.all([source.listProjects(), source.listRuns(), source.listAgents()]);
     return { projects, runs, agents };
   }, [source, attempt]));
-  const demo = params.get('demo');
+  const demo = isDemo ? params.get('demo') : null;
   let body;
   if (demo === 'loading' || (demo !== 'error' && demo !== 'empty' && result.status === 'loading')) body = <p role="status">Loading projects…</p>;
   else if (demo === 'error' || (demo !== 'empty' && result.status === 'error')) body = <ErrorState message={demo === 'error' ? 'Demo: projects could not be loaded.' : result.status === 'error' ? result.error.message : 'Unable to load projects.'} onRetry={demo === 'error' ? undefined : () => setAttempt(value => value + 1)} />;

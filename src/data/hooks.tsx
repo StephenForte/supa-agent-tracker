@@ -14,8 +14,9 @@ export function useSourceQuery<T>(source: ObservableSource, read: () => Promise<
   const [result, setResult] = useState<{ source: ObservableSource; read: typeof read; revision: number; state: QueryState<T> } | null>(null);
   useEffect(() => {
     let active = true;
+    const stopObserving = source.observe?.(read);
     void read().then(data => { if (active) setResult({ source, read, revision, state: { status: 'ready', data, refreshing: false } }); }, error => { if (active) setResult({ source, read, revision, state: { status: 'error', error: error instanceof Error ? error : new Error(String(error)) } }); });
-    return () => { active = false; };
+    return () => { active = false; stopObserving?.(); };
   }, [source, read, revision]);
   if (result?.source !== source || result.read !== read) return { status: 'loading' };
   if (result.state.status === 'ready') return { ...result.state, refreshing: result.revision !== revision };
