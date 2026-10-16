@@ -77,6 +77,26 @@ Those headers are not authentication. P1-B2 and P1-C1 replace the stub bodies an
 
 `server/app/routes.ts` is the only registration point. Wave-3 tasks append one line each.
 
+## Next steps and private notes
+
+Browser session routes. Every one uses `requireUser`. A request that sends `Authorization: Bearer ...` and no session is `401 unauthenticated`, including a bearer value that names a real credential. These routes do not accept an MCP credential. Resource JSON uses the camelCase fields of `NextStep`, `WaitingNote`, `ProjectNextSteps`, and `PrivateNote` in `src/domain/types.ts` and `src/domain/privateNotes.ts`. Timestamps are ISO-8601 strings. Mutation bodies use `request_id` and `expected_revision`, and every mutation runs inside `withIdempotency` on the supplied transaction.
+
+| Method | Path | Body | Success |
+|---|---|---|---|
+| `GET` | `/api/projects/:projectId/next-steps` | | `200` `{ steps, waitingNote }` |
+| `POST` | `/api/projects/:projectId/next-steps/:stepId/completion` | `{ done, expected_revision, request_id }` | `200` the step |
+| `GET` | `/api/projects/:projectId/private-note` | | `200` the note |
+| `PUT` | `/api/projects/:projectId/private-note` | `{ text, expected_revision, request_id }` | `200` the note |
+
+`GET` next steps returns every step, including completed ones, ordered by position then id. `waitingNote` is `null` when the project has none.
+
+`done` is a boolean. The completion write records `completionChangedBy` (the signed-in user) and `completionChangedAt`, and appends an audit event (`next_step_completed` or `next_step_reopened`) in the same transaction. It succeeds after the source run has failed or ended. Repeating the same `request_id` and body returns the original step and does not append a second audit. A different body with that `request_id` is `409 idempotency_mismatch`. A stale `expected_revision` is `409 conflict` and `error.details.current` is the stored step.
+
+`PUT` with `expected_revision: 0` creates the note. Later writes send the stored revision. An absent note reads as `{ projectId, text: "", revision: 0, updatedAt: null }`. `text` may be empty and is capped at **20,000** characters (JavaScript string length, UTF-16 code units). A longer text is `400 validation_error` and is not stored. The same cap is `PRIVATE_NOTE_MAX_CHARS` in `server/notes/routes.ts`.
+
+Another user's project, or an unknown step, is `404 not_found`. The handler writes nothing.
+
+Agent reorder is not an HTTP route. D-023, implemented by `reorderNextSteps` in `server/steps/agent-steps.ts`: any credential granted the project may reorder. The request must name every current step of that project exactly once with its current revision. Anything else — a missing step, a duplicate, an unknown id, or one stale revision — is a conflict and no row changes. On success, positions become `0..n-1` in the given order. A step whose position changes increments its revision. A step that stays at the same index keeps its revision, so checking it off is not invalidated by a reorder that did not move it. Instruction text, source run, `done`, and the completion actor and time are left as stored.
 ## Authentication
 
 Browser auth is mounted under `/api/auth`. Requests and responses use JSON; errors
