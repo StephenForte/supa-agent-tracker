@@ -8,7 +8,21 @@ Gate command (before every hand-back):
 npm ci && npm run typecheck && npm run lint && npm test && npm run build
 ```
 
-Use Node 24 (`.node-version`) and npm. In this Dropbox checkout mark `node_modules/` and `dist/` with both `com.dropbox.ignored=1` and `com.apple.fileprovider.ignore#P=1` before installation. Keep these flags after any directory recreation.
+Use Node 24 (`.node-version`) and npm.
+
+## Workspace and process hygiene (all tasks)
+
+- **Never work in the operator's Dropbox checkout** (`~/Library/CloudStorage/Dropbox-Personal/Dev/SupaAgentDashboard`). Clone to the path your brief names (normally `/Users/stephenforte/src/supa-agent-tracker-<task>`) and work only there.
+- **Leave no process behind, but only stop your own.** Before your final message, stop everything **you** started: dev or preview servers, watchers, test runners, MCP inspectors, tunnels, and any extra agent or CLI session you launched. Then list what is still running from **your own clone path**:
+
+  ```sh
+  CLONE=/Users/stephenforte/src/supa-agent-tracker-<task>   # your brief's path
+  for p in $(pgrep -f 'node|cursor-agent|vite|tsx'); do d=$(lsof -a -p $p -d cwd -Fn 2>/dev/null | sed -n 's/^n//p'); case "$d" in "$CLONE"*) echo "$p $d";; esac; done
+  ```
+
+  Stop each PID it lists, except the session you're running in right now. **Never stop a process whose working directory is the Dropbox folder or another task's clone.** Those are the operator's apps or other workers. Report what you stopped on the CLONE line, plus anything still running from your clone that you couldn't stop.
+- **Delete your clone and scratch directories last**, after the PR is pushed and CI is green. Then end your session (exit the CLI or close the agent), so no agent keeps running from a deleted directory.
+- **Drop every database you created.** Never touch any other database on the operator's Postgres.
 
 Never edit `docs/plan/**` or `docs/prd/**`.
 Never add dependencies (D-010) after T0-01 without planner approval.
