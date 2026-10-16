@@ -1,9 +1,9 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import type pg from 'pg';
+import * as schema from './schema.js';
 
-/** Drizzle handle for later tasks. P1-B1 adds the schema; this task wires the client only. */
 export function createDb(pool: pg.Pool) {
-  return drizzle({ client: pool });
+  return drizzle({ client: pool, schema });
 }
 
 export type AppDatabase = ReturnType<typeof createDb>;

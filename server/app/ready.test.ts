@@ -63,7 +63,7 @@ describe('readiness against a scratch database', () => {
     }
   });
 
-  it('returns 200 after the empty migration set is current', async () => {
+  it('returns 200 after the application migration set is current', async () => {
     await runMigrations(pool, migrationsDir);
     const app = await buildApp({
       config: testConfig(scratch.connectionString),

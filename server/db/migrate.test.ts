@@ -4,7 +4,6 @@ import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type pg from 'pg';
 
-import { migrationsDir } from '../paths.js';
 import { createScratchDatabase, type ScratchDatabase } from '../test/database.js';
 import { createDb } from './client.js';
 import { migrationsAreCurrent, runMigrations } from './migrate.js';
@@ -13,6 +12,7 @@ import { createPool } from './pool.js';
 describe('migration runner', () => {
   let scratch!: ScratchDatabase;
   let pool!: pg.Pool;
+  const emptyDir = mkdtempSync(path.join(tmpdir(), 'supa-empty-migrations-'));
 
   beforeAll(async () => {
     scratch = await createScratchDatabase();
@@ -22,12 +22,13 @@ describe('migration runner', () => {
   afterAll(async () => {
     await pool?.end();
     await scratch?.drop();
+    rmSync(emptyDir, { recursive: true, force: true });
   });
 
   it('treats the empty migrations directory as current', async () => {
-    const result = await runMigrations(pool, migrationsDir);
+    const result = await runMigrations(pool, emptyDir);
     expect(result.applied).toEqual([]);
-    expect(await migrationsAreCurrent(pool, migrationsDir)).toEqual({ current: true, pending: [] });
+    expect(await migrationsAreCurrent(pool, emptyDir)).toEqual({ current: true, pending: [] });
     const tables = await pool.query<{ table_name: string }>(
       "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name",
     );
