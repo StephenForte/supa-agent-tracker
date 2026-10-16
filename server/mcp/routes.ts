@@ -11,6 +11,7 @@ import { createDb } from '../db/client.js';
 import { secretSafeLogger, bindCredentialDatabase } from '../tokens/auth.js';
 import { registerTokenRoutes } from '../tokens/routes.js';
 import { API_VERSION, registerRunTools } from './tools.js';
+import { registerStepTools } from './step-tools.js';
 import { createToolRegistrar, type ToolContext } from './registry.js';
 
 export const CREDENTIAL_REQUESTS_PER_MINUTE = 120;
@@ -75,6 +76,7 @@ export async function registerMcpRoutes(app: FastifyInstance, deps: RouteDeps & 
         const server = new McpServer(info);
         const register = createToolRegistrar(server, { db, context: () => ({ ...context.getStore()!, clientInfo: observedClientInfo(server.server.getClientVersion()) }) });
         registerRunTools(register);
+        registerStepTools(register);
         const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: randomUUID, enableJsonResponse: true,
           onsessioninitialized: (id) => { initializing.delete(entry!); sessions.set(id, entry!); } });
         entry = { server, transport, credentialId: credential.credentialId, touched: Date.now() };
