@@ -16,6 +16,13 @@ async function summary(tx: Transaction, credential: Credential): Promise<Credent
   const grants = await tx.select({ id: mcpCredentialProjects.projectId }).from(mcpCredentialProjects).where(and(eq(mcpCredentialProjects.credentialId, credential.id), eq(mcpCredentialProjects.userId, credential.userId))).orderBy(mcpCredentialProjects.projectId);
   return { ...safe, projectIds: grants.map((g) => g.id) };
 }
+async function accessibleSummary(tx: Transaction, access: Access, credential: Credential): Promise<CredentialSummary> {
+  const value = await summary(tx, credential);
+  return access.kind === 'credential'
+    ? { ...value, projectIds: value.projectIds.filter((id) => access.projectIds.includes(id)) }
+    : value;
+}
+
 export async function createCredential(db: Database, access: UserAccess, input: CredentialInput): Promise<CredentialSummary> {
   requireUser(access);
   return withActor(db, access, async (tx) => {
@@ -70,8 +77,8 @@ export async function touchCredential(db: Database, access: Access, credentialId
     const [current] = await tx.select().from(mcpCredentials).where(and(eq(mcpCredentials.id, credentialId), eq(mcpCredentials.userId, access.userId))).for('update');
     if (!current) throw new AccessError('not_found');
     if (current.revokedAt) throw new AccessError('forbidden');
-    if (current.revision !== expectedRevision) return { status: 'conflict', current: await summary(tx, current) };
+    if (current.revision !== expectedRevision) return { status: 'conflict', current: await accessibleSummary(tx, access, current) };
     const [value] = await tx.update(mcpCredentials).set({ lastUsedAt: new Date(), revision: expectedRevision + 1 }).where(eq(mcpCredentials.id, credentialId)).returning();
-    return { status: 'saved', value: await summary(tx, value!) };
+    return { status: 'saved', value: await accessibleSummary(tx, access, value!) };
   });
 }

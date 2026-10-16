@@ -129,7 +129,7 @@ conflicts. `findCredentialByHash` is an **owner-scoped** lookup; P1-C1 owns the
 trusted initial hash-to-identity authentication bootstrap before an access context
 exists, and all subsequent access goes through these repositories. Hash generation,
 plaintext issuance and HTTP/MCP validation are outside this layer. Credential
-summaries omit the hash.
+summaries omit the hash; credential last-use summaries also intersect the caller's project scope.
 
 Existing-resource writes take an expected revision; successful writes increment
 it once. Run revisions cover PR/tool attachments too, and run events commit with

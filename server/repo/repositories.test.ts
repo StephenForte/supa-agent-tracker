@@ -174,6 +174,17 @@ describe('access-controlled repositories on real Postgres', () => {
     })).rejects.toThrow('abort');
     expect(await snapshot()).toEqual(before);
   });
+  it('limits last-use success/conflict summaries to the credential caller scope', async () => {
+    const issued = await credentials.createCredential(db, a, { label: 'Narrow view', tokenHash: 'narrow-summary-hash', displaySuffix: 'view', projectIds: [x.id, y.id] });
+    const access: CredentialAccess = { ...token, credentialId: issued.id, projectIds: [x.id] };
+    const result = await credentials.touchCredential(db, access, issued.id, 1);
+    expect(result.status).toBe('saved');
+    if (result.status === 'saved') expect(result.value.projectIds).toEqual([x.id]);
+    const conflict = await credentials.touchCredential(db, access, issued.id, 1);
+    expect(conflict.status).toBe('conflict');
+    if (conflict.status === 'conflict') expect(conflict.current.projectIds).toEqual([x.id]);
+    expect((await credentials.getCredential(db, a, issued.id)).projectIds.sort()).toEqual([x.id, y.id].sort());
+  });
   it('refuses cached responses when stored grants or caller scope have narrowed', async () => {
     const issued = await credentials.createCredential(db, a, { label: 'X and Y', tokenHash: 'scope-cache-hash', displaySuffix: 'cache', projectIds: [x.id, y.id] });
     const access: CredentialAccess = { ...token, credentialId: issued.id, projectIds: [x.id, y.id] };
