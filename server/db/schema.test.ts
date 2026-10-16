@@ -1,3 +1,4 @@
+import { readdir } from 'node:fs/promises';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { is, getTableName } from 'drizzle-orm';
 import { PgTable, getTableConfig } from 'drizzle-orm/pg-core';
@@ -13,8 +14,9 @@ describe('0001 schema', () => {
   beforeAll(async () => { scratch = await createScratchDatabase(); pool = createPool(scratch.connectionString); });
   afterAll(async () => { await pool?.end(); await scratch?.drop(); });
   it('applies on an empty database exactly once', async () => {
-    expect(await migrationsAreCurrent(pool, migrationsDir)).toEqual({ current: false, pending: ['0001_initial.sql'] });
-    expect(await runMigrations(pool, migrationsDir)).toEqual({ applied: ['0001_initial.sql'] });
+    const files = (await readdir(migrationsDir)).filter((file) => file.endsWith('.sql')).sort();
+    expect(await migrationsAreCurrent(pool, migrationsDir)).toEqual({ current: false, pending: files });
+    expect(await runMigrations(pool, migrationsDir)).toEqual({ applied: files });
     expect(await runMigrations(pool, migrationsDir)).toEqual({ applied: [] });
     expect(await migrationsAreCurrent(pool, migrationsDir)).toEqual({ current: true, pending: [] });
   });
@@ -42,9 +44,21 @@ describe('0001 schema', () => {
       expect(row.data_type === 'ARRAY' ? `${row.udt_name.slice(1)}[]` : row.data_type).toBe(column.type);
     }
   });
-  it('has no auth-library or plaintext-secret tables/columns and no cascading FKs', async () => {
-    const forbidden = await pool.query(`SELECT table_name,column_name FROM information_schema.columns WHERE table_schema='public' AND (column_name IN ('token','password','plaintext_token') OR table_name IN ('sessions','accounts','invites','verification_tokens'))`);
-    expect(forbidden.rows).toEqual([]);
+  it('allows only reviewed auth secret columns, forbids invites and has no cascading FKs', async () => {
+    const forbiddenTables = await pool.query("SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name = 'invites'");
+    expect(forbiddenTables.rows).toEqual([]);
+    const sensitive = await pool.query<{ table_name: string; column_name: string }>(`SELECT table_name,column_name FROM information_schema.columns WHERE table_schema='public' AND column_name ~* '(token|password|secret)'`);
+    const allowed = new Set([
+      'accounts.access_token', // Required adapter field, CHECK IS NULL: OAuth disabled.
+      'accounts.refresh_token', // Required adapter field, CHECK IS NULL.
+      'accounts.id_token', // Required adapter field, CHECK IS NULL.
+      'accounts.access_token_expires_at', // Required nullable timestamp, CHECK IS NULL.
+      'accounts.refresh_token_expires_at', // Required nullable timestamp, CHECK IS NULL.
+      'accounts.password_hash', // Better Auth scrypt password hash.
+      'sessions.token', // Plain random session identifier; cookie is signed. Planner decision disclosed.
+      'mcp_credentials.token_hash', // Existing P1-B1 supplied MCP credential hash.
+    ]);
+    expect(sensitive.rows.filter((row) => !allowed.has(`${row.table_name}.${row.column_name}`))).toEqual([]);
     expect((await pool.query(`SELECT conname FROM pg_constraint WHERE contype='f' AND confdeltype='c' AND connamespace='public'::regnamespace`)).rows).toEqual([]);
   });
 });

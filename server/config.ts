@@ -18,6 +18,7 @@ export interface AppConfig {
   publicUrl: string;
   /** Derived from NODE_ENV. Production boots apply migrations; there is no separate env var. */
   migrateOnBoot: boolean;
+  auth?: AuthConfig;
 }
 
 export class ConfigError extends Error {
@@ -43,6 +44,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     nodeEnv: parsed.data.NODE_ENV,
     publicUrl: parsed.data.PUBLIC_URL,
     migrateOnBoot: parsed.data.NODE_ENV === 'production',
+    auth: loadAuthConfig(env, parsed.data.NODE_ENV),
   };
 }
 
@@ -52,4 +54,32 @@ function formatConfigError(error: z.ZodError): string {
     return `- ${field}: ${issue.message}`;
   });
   return `Invalid server configuration:\n${lines.join('\n')}`;
+}
+
+export interface AuthConfig {
+  secret: string;
+  registrationAllowlist: string[];
+  emailProvider: 'console' | 'resend';
+  resendApiKey?: string;
+  emailFrom?: string;
+}
+
+export function loadAuthConfig(env: NodeJS.ProcessEnv, nodeEnv: NodeEnv): AuthConfig {
+  const errors: string[] = [];
+  const secret = env.BETTER_AUTH_SECRET ?? (nodeEnv === 'test' ? 'test-only-auth-secret-at-least-32-characters' : '');
+  if (secret.length < 32) errors.push('- BETTER_AUTH_SECRET: must contain at least 32 characters');
+  const provider = env.EMAIL_PROVIDER ?? 'console';
+  if (provider !== 'console' && provider !== 'resend') errors.push('- EMAIL_PROVIDER: must be console or resend');
+  if (provider === 'resend') {
+    if (!env.RESEND_API_KEY?.trim()) errors.push('- RESEND_API_KEY: is required');
+    if (!env.EMAIL_FROM?.trim()) errors.push('- EMAIL_FROM: is required');
+  }
+  if (errors.length) throw new ConfigError(`Invalid server configuration:\n${errors.join('\n')}`);
+  return {
+    secret,
+    registrationAllowlist: [...new Set((env.REGISTRATION_ALLOWLIST ?? '').split(',').map((email) => email.trim().toLowerCase()).filter(Boolean))],
+    emailProvider: provider as 'console' | 'resend',
+    ...(env.RESEND_API_KEY ? { resendApiKey: env.RESEND_API_KEY } : {}),
+    ...(env.EMAIL_FROM ? { emailFrom: env.EMAIL_FROM } : {}),
+  };
 }

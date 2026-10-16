@@ -21,6 +21,7 @@ Failures use one JSON shape and a stable `code`:
 | `conflict` | 409 | `expected_revision` does not match. `error.details.current` is the current resource |
 | `idempotency_mismatch` | 409 | The same `request_id` was reused with a different body |
 | `payload_too_large` | 413 | JSON body exceeds 1 MiB (1,048,576 bytes) |
+| `rate_limited` | 429 | Authentication request limit exceeded |
 | `internal_error` | 500 | Unexpected failure. The message is always `Internal server error` |
 | `database_unreachable` | 503 | Readiness check could not query Postgres |
 | `migrations_pending` | 503 | Readiness check found SQL files that are not applied |
@@ -194,3 +195,99 @@ It returns HTTP 429 `rate_limited` and `Retry-After: 60`; limits reset on restar
 It is a workload bound for the current single Render instance, not a distributed
 limit. Session limits are separate. Request logs for token/MCP routes omit URLs,
 headers and bodies so URL query credentials cannot leak through logging.
+## Projects, agents and runs
+
+P1-C2. All of these routes use `requireUser`. Another user's project, agent or run is `404 not_found` with no `details` and no write. A successful body uses the field names and nesting in `src/domain/types.ts` (`Project`, `LogicalAgent`, `Run`, `RunEvent`, `PrReference`, `ToolAggregate`) so a later HTTP client can map them without renaming. `WriteResult` is not a response envelope: `2xx` is the resource, and `409 conflict` puts that resource at `error.details.current`. `GET` of a missing id is `404`, which a client can treat as the contract's `null`.
+
+`GET /api/account` returns `{ id, name, email, emailVerified }`. `name` is `users.display_name`. There is no `demo` flag.
+
+Collections return `{ items, nextCursor }` using the pagination rules above. An empty `cursor` or `limit` is treated as omitted. Cursors are opaque and apply only to the same filters.
+
+| Method and path | Body | Success |
+|---|---|---|
+| `GET /api/projects?include_archived=&cursor=&limit=` | | `{ items: Project[], nextCursor }` |
+| `POST /api/projects` | `ProjectInput` plus `request_id` | `201` Project |
+| `GET /api/projects/:projectId` | | Project, including an archived project the caller owns |
+| `PATCH /api/projects/:projectId` | partial `ProjectInput` plus `expected_revision` and `request_id` | Project |
+| `GET /api/agents?project_id=&cursor=&limit=` | | `{ items: LogicalAgent[], nextCursor }` |
+| `GET /api/runs?project_id=&cursor=&limit=` | | `{ items, nextCursor }` — each item is a `Run` **without** `events` |
+| `GET /api/runs/:runId` | | `Run`, `events` included, oldest first |
+| `PATCH /api/runs/:runId` | `RunMetadataPatch` plus `expected_revision` and `request_id` | `Run` with `events` |
+| `POST /api/runs/:runId/close` | `{ outcome: "failed" \| "cancelled", reason, expected_revision, request_id }` | `Run` with `events` |
+
+`include_archived` is `true` or `false`. Omitted and `false` hide `lifecycle: "archived"`. `true` includes them in the same order as `listProjects`. Any other value is `validation_error`. Archiving does not remove the project; `GET` by id still returns it.
+
+`project_id` omitted means every agent or run on the caller's projects. A `project_id` the caller does not own is `404`, not an empty page. `GET /api/runs/:runId` has no project parameter. The server resolves the run to its project with `projects.owner_id` in the query, then loads it through the project repository. A client-supplied project id is ignored because the path does not accept one.
+
+List items include `prReferences`, `tools` (`null` when the run has no tool row), `childRunIds` and `parentRunId`. They do not include `events` (D-026). Detail and mutation responses include `events` ordered by `receivedAt` then `id`, oldest first. `actorId` is the user id or the credential id stored on the event. Timestamps are UTC ISO-8601.
+
+The flat columns `stale_threshold_minutes`, `heartbeat_expected` and `reporting_instructions` map to `reportingPolicy.{ staleThresholdMinutes, heartbeatExpected, instructions }` in both directions. Run responses omit `observedClientInfo`, `observedUserAgent` and `externalExecutionId`.
+
+Every mutation takes `request_id` and runs through `withIdempotency` on the supplied transaction. The hash is SHA-256 of the parsed body with object keys sorted, so key order does not matter and a different body is `idempotency_mismatch`. A replay returns the original status and body, including a stored `409`. Retries after a conflict need a new `request_id`. Existing-resource mutations take `expected_revision`. A mismatch is `409 conflict` with message `Revision conflict` and `error.details.current` set to the stored resource. The resource is unchanged.
+
+`PATCH /api/runs/:runId` corrects metadata only (`title`, `taskId`, `harness`, `model`, `completionSummary`, `blocker`, `noPrReason`, `prReferences`). It cannot set execution state or work status. It does not advance `lastContactAt`. The repository still appends one `status` event for the correction. Pull-request references are upserted by repository name and number; omitted references stay. At most one primary reference remains.
+
+`POST /api/runs/:runId/close` closes a **running** execution. `outcome` `failed` or `cancelled` becomes both `executionState` and `workStatus`. `reason` becomes the run `message` and the `manual_close` event message. The repository sets `finishedAt`, selects `manual_close`, and appends one audit event. Next steps are not changed and `lastContactAt` is not advanced. Closing an ended run — including a run that already has that outcome, and a `finished` run — is `409 conflict` with message `Run has already ended` and `error.details.current` set to the current run. Nothing else is written except the idempotency record for that `request_id`.
+
+Validation rejects the body before any write. Caps: short text (name, title, repository name, task id, harness, model, tag, pull-request title) is 1–300 characters after trim; description, reporting instructions, completion summary, blocker and no-PR reason are at most 8,000 characters; `reason` is 1–4,000 after trim; at most 32 tags, each 1–64 characters; at most 20 pull-request references; `staleThresholdMinutes` is an integer from 1 to 525,600. `repositoryUrl`, `prdUrl` and pull-request `url` must be absolute `http:` or `https:` after trim. `javascript:`, `data:` and any other scheme are `400 validation_error`. `error.details.fields` lists the rejected paths. A patch with no resource fields is `validation_error`. Unknown fields are rejected.
+## Next steps and private notes
+
+Browser session routes. Every one uses `requireUser`. A request that sends `Authorization: Bearer ...` and no session is `401 unauthenticated`, including a bearer value that names a real credential. These routes do not accept an MCP credential. Resource JSON uses the camelCase fields of `NextStep`, `WaitingNote`, `ProjectNextSteps`, and `PrivateNote` in `src/domain/types.ts` and `src/domain/privateNotes.ts`. Timestamps are ISO-8601 strings. Mutation bodies use `request_id` and `expected_revision`, and every mutation runs inside `withIdempotency` on the supplied transaction.
+
+| Method | Path | Body | Success |
+|---|---|---|---|
+| `GET` | `/api/projects/:projectId/next-steps` | | `200` `{ steps, waitingNote }` |
+| `POST` | `/api/projects/:projectId/next-steps/:stepId/completion` | `{ done, expected_revision, request_id }` | `200` the step |
+| `GET` | `/api/projects/:projectId/private-note` | | `200` the note |
+| `PUT` | `/api/projects/:projectId/private-note` | `{ text, expected_revision, request_id }` | `200` the note |
+
+`GET` next steps returns every step, including completed ones, ordered by position then id. `waitingNote` is `null` when the project has none.
+
+`done` is a boolean. The completion write records `completionChangedBy` (the signed-in user) and `completionChangedAt`, and appends an audit event (`next_step_completed` or `next_step_reopened`) in the same transaction. It succeeds after the source run has failed or ended. Repeating the same `request_id` and body returns the original step and does not append a second audit. A different body with that `request_id` is `409 idempotency_mismatch`. A stale `expected_revision` is `409 conflict` and `error.details.current` is the stored step.
+
+`PUT` with `expected_revision: 0` creates the note. Later writes send the stored revision. An absent note reads as `{ projectId, text: "", revision: 0, updatedAt: null }`. `text` may be empty and is capped at **20,000** characters (JavaScript string length, UTF-16 code units). A longer text is `400 validation_error` and is not stored. The same cap is `PRIVATE_NOTE_MAX_CHARS` in `server/notes/routes.ts`.
+
+Another user's project, or an unknown step, is `404 not_found`. The handler writes nothing.
+
+Agent reorder is not an HTTP route. D-023, implemented by `reorderNextSteps` in `server/steps/agent-steps.ts`: any credential granted the project may reorder. The request must name every current step of that project exactly once with its current revision. Anything else — a missing step, a duplicate, an unknown id, or one stale revision — is a conflict and no row changes. On success, positions become `0..n-1` in the given order. A step whose position changes increments its revision. A step that stays at the same index keeps its revision, so checking it off is not invalidated by a reorder that did not move it. Instruction text, source run, `done`, and the completion actor and time are left as stored.
+## Authentication
+
+Browser auth is mounted under `/api/auth`. Requests and responses use JSON; errors
+use the error envelope above. Unknown/unsupported auth paths return JSON 404. All
+auth responses use `Cache-Control: no-store`. These endpoints are library flows,
+not tracker mutations: they do not require `request_id`/`expected_revision` in bodies.
+
+| Method | Path suffix | Body / behavior |
+|---|---|---|
+| POST | `/sign-up/email` | `{name,email,password}`; allowlist only; 403 `forbidden`, "Registration is by invitation only" otherwise. Valid new/existing invited emails both return `{status:true}` |
+| GET | `/verify-email` | `?token=...`; verifies the signed emailed token |
+| POST | `/send-verification-email` | `{email,callbackURL?}`; generic `{status:true}` for unknown/known emails |
+| POST | `/sign-in/email` | `{email,password}`; requires verified email and sets a signed session cookie |
+| POST | `/sign-out` | `{}`; revokes current session and clears cookie |
+| GET | `/get-session` | Current library session/user, or null |
+| GET | `/list-sessions` | Current user's active sessions |
+| POST | `/revoke-session` | `{token}`; revokes only a session owned by current user |
+| POST | `/revoke-sessions` | `{}`; revokes all current user's sessions |
+| POST | `/revoke-other-sessions` | `{}`; revokes other sessions |
+| POST | `/change-password` | `{currentPassword,newPassword}`; always revokes old sessions and returns a new cookie, regardless of client `revokeOtherSessions` |
+| POST | `/request-password-reset` | `{email,redirectTo?}`; generic `{status:true}` whether account exists or delivery fails |
+| POST | `/reset-password` | `{token,newPassword}`; single use, one-hour expiry, revokes existing sessions |
+
+Session lifetime is fixed at seven days. Cookies are HttpOnly, SameSite=Lax and
+Secure for HTTPS PUBLIC_URL. `requireUser` resolves the session from cookies on
+every request and sets `{userId}`; missing/expired/revoked sessions return 401
+`unauthenticated`. Library/database lookup failures return 500 `internal_error`
+with a fixed safe log diagnostic, preserving the session for retry. The `x-test-user-id` seam is restricted to process NODE_ENV=test;
+it is not a production credential. MCP authentication remains separate.
+
+State-changing `/api` requests reject foreign Origins and cross-site fetch metadata;
+writes with cookies also require a matching Origin. Send `Origin: <PUBLIC_URL origin>`
+with browser-authenticated writes. Callback URLs must be trusted by Better Auth.
+Sign-in allows five attempts per email and socket IP in 60 seconds, counting success
+and failure, and returns 429 `rate_limited` thereafter. See server/README.md for
+memory-storage and proxy limitations, email configuration and storage disclosure.
+
+Verification/reset emails link to existing web routes `/verify-email` and
+`/reset-password`; P1-E must wire those screens to the API. Production console email
+suppresses secrets and does not deliver messages. Auth request logging is silent to
+keep URL tokens out of logs; no auth body or provider error is logged.
