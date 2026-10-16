@@ -193,7 +193,7 @@ sessions, rate limits and per-account isolation stay exactly as the PRD specifie
 without schema changes.
 
 ### D-023 — Next-step authorship and dispatcher reorder
-Status: Proposed by planner (2026-10-16); **operator to confirm** (PRD "Remaining decisions" 1).
+Status: **Confirmed by operator (2026-10-16)**. Resolves PRD "Remaining decisions" 1.
 A worker's "own" step is one whose source run was checked in by the same MCP credential (`run_events.actor_credential_id`
 on the run's check_in event). Only that credential may edit the step's text or position, or set the waiting note with that
 source run. "Dispatcher reconcile" means: any credential granted the project may **reorder** the whole list. The request
@@ -214,3 +214,10 @@ edits into 409 conflicts.
 Status: Proposed by planner (2026-10-16). Implements D-022.
 `REGISTRATION_ALLOWLIST` (comma-separated, case-insensitive). The operator edits it in Render env. There is no admin UI or
 table in Phase 1. Empty means nobody can register.
+
+### D-026 — Run list endpoints omit events
+Status: Proposed by planner (2026-10-16). Narrows the Phase 0 contract comment "full run detail is returned in list/get".
+`GET /api/runs` (and any cross-project run list) returns runs with PR references, tools, parent/child ids, and **no
+events**. `GET /api/runs/:runId` returns the full event timeline. Reason: heartbeats append events indefinitely (history is
+never purged), and P1-E polls every 5–10 s, so embedding events in lists grows payloads without bound. P1-E fetches detail
+when a run row is expanded.
