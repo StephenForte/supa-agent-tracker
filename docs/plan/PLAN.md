@@ -120,8 +120,9 @@ Probe torn down 2026-10-15 (Render service deleted, Cursor/Claude/Grok connector
 | 3b | **P1-D2 Next-step MCP tools**: register list/create/update_next_step, a reorder tool and a waiting-note tool on /mcp by calling server/steps/agent-steps.ts; no new logic | server/mcp/** (additive) | C1, D | Sonnet | **Merged** PR #41 (2026-10-16) · ran in Codex (GPT-6), not Sonnet · 9 min |
 | 3 | **P1-C2 User REST for projects and runs** (gap found 2026-10-16: no task owned it): projects create/list/get/update, agents and runs list/detail (per project and cross-project), run metadata correction, manual close (failed/cancelled + audit), account read; shapes map onto src/data/contracts.ts | server/api/** | B1 | Opus | **Merged** PR #38 (2026-10-16), planner merge commit 46b686a · 42 min |
 | 4 | **P1-E Wire the web app**: HTTP `TrackerDataSource`/`PrivateNotesSource`, real auth and token screens, 5–10 s polling, server-side counts/stale derivation parity with `src/domain` | src/data/http/**, src/pages/auth|settings (wiring) | B2, C1, C2, D, D2 | Opus | **Approved** PR #42 (2026-10-16) · ran in Codex (GPT-6), not Opus · 54 min · D-028 |
-| 5 | **P1-F Integrations**: reporting protocol + base prompt; setup guides for Cursor (`mcp.json` header), Claude Desktop (connector + request header), Grok Bot (settings screen, not chat); optional Cursor hook heartbeat adapter (R7) | docs/integrations/**, adapters/** | C1, D | Sonnet |
-| 6 | **P1-G Deploy + QA**: Render web Starter + Postgres Basic via Blueprint (planner provisions with operator approval, D-020), migrations on deploy, backup/restore doc, account-isolation tests, 25-concurrent-run load check, Resend domain | render.yaml, docs/ops/** | E, F | Opus |
+| 5 | **P1-F Integrations**: reporting protocol + base prompt (all 12 tools), setup guides for Cursor / Claude Desktop / Grok Bot from P1-A2 evidence, real in-app Integration setup page, zero-dependency heartbeat adapter for client hooks (D-029) | docs/integrations/**, adapters/**, src/*/integrations/** | C1, D2, E | Sonnet | Brief ready (2026-10-16) · docs/plan/briefs/P1-F.md · parallel with P1-G1 |
+| 6 | **P1-G1 Deploy readiness (code only)**: render.yaml adds `supa-agent-tracker-app` + `supa-agent-tracker-db` (D-030), `TRUST_PROXY_HOPS`, docs/ops/backup-restore.md, a 25-run / 2-account load script measured locally (latency, errors, idempotency_keys growth), production config checks. **PR stays unmerged until the cost gate** | render.yaml, server/app/build-app.ts + config (trust proxy only), docs/ops/**, scripts/load/** | E | Opus | Not yet briefed · parallel with P1-F |
+| 6 | **P1-G2 Provision + acceptance (planner + operator, no worker)**: cost gate → merge G1 → Blueprint provisions; operator enters secrets and the Resend domain; planner watches the deploy via the Render MCP; browser smoke on production; 25-run load check; backup/restore drill; real-client acceptance (PRD 20) with Cursor, Claude Desktop and Grok Bot following the P1-F guides; compat-matrix update; operator decides the static demo's fate | — | G1, F | — | Planned |
 
 Pre-assigned migration numbers: 0001 = P1-B1 (merged), 0002 = P1-B2, 0003 = P1-C1 (only if needed), 0004 = P1-D (only if needed); P1-C2 and P1-D2 add none. Wave-3 tasks
 must not add migrations outside their number; a later need gets a new number from the planner.
@@ -137,6 +138,30 @@ resolve gets a short rebase brief.
 `requireUser` keeps the `x-test-user-id` seam under NODE_ENV=test only, so C1/D route tests survive B2's merge.
 P1-C2 also runs in wave 3. It owns server/api/**, server/repo/views.ts, and additive changes to server/repo/projects.ts
 and agents.ts. It uses `:projectId` path params to match P1-D. It adds one routes.ts line (`registerUserApiRoutes`).
+### P1-G2 runbook and cost gate (planned 2026-10-16)
+1. **Cost gate.** Prices as seen 2026-10-16, from secondary sources only (render.com/pricing doesn't render to the
+   planner's fetcher): web Starter $7/mo (512 MB, 0.5 CPU); Postgres Basic-256mb $6/mo compute; Postgres storage $0.30/GB-mo;
+   Hobby workspace free with 5 GB bandwidth included since 1 Aug 2026, then $0.15/GB. Estimate: about $13/mo plus about
+   $0.30–1.50 storage. Polling is about 1 GB/month per tab left open 8 h/day, so a single user stays within 5 GB.
+   Backup/PITR retention on Basic is **unverified**. Before the operator says yes, the planner re-reads the live prices
+   (dashboard or the Blueprint preview) and states the final number. The operator's explicit "approve" in chat is the
+   only trigger for merging P1-G1.
+2. Merge P1-G1 → watch the Blueprint sync and first deploy with the Render MCP (list_deploys, list_logs); expect "Applied
+   0001…0002", then /ready 200.
+3. Operator, in the Render dashboard (never in chat): REGISTRATION_ALLOWLIST, RESEND_API_KEY, EMAIL_FROM; Resend domain
+   DNS verified. Redeploy.
+4. Planner browser smoke on production: the operator registers with their real email and clicks the real email; then
+   login, project, token, private note, logout. Probe the per-IP 429 with spoofed X-Forwarded-For (it must still key on
+   the real client).
+5. 25-run / 2-account load check on production with two allowlisted load-test accounts (projects archived afterwards):
+   p95 latency, error count, lock waits, idempotency_keys row growth. If growth is material, retention becomes a
+   follow-up task.
+6. Backup/restore drill per docs/ops/backup-restore.md into a scratch database; record the result.
+7. Real-client acceptance (PRD scenario 20): the operator connects Cursor, Claude Desktop and Grok Bot to production with
+   the P1-F guides and runs check_in → update_status → next step → check_out. The planner reads the server side and
+   updates compat-matrix.md.
+8. Operator decides whether to retire the Phase 0 static demo (D-020).
+
 Review probes to carry into wave-3 reviews:
 - P1-C1 must reject non-http(s) PR reference URLs from agents (C2 rejects them from users). The web renders them as anchors.
 - P1-E renders run lists without events (D-026).
