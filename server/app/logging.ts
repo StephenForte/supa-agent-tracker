@@ -2,8 +2,9 @@ import type { FastifyServerOptions } from 'fastify';
 
 /**
  * Fastify 5's built-in request serializer omits headers. These paths still censor
- * them if a later change logs the request, a child binding, or a header object.
- * The serializers below also copy headers with the secret ones already replaced.
+ * the named secrets if a later change logs a raw header object. The serializers
+ * below copy headers through an allowlist, so any other header value is replaced
+ * before it reaches the log.
  */
 export const logRedactPaths = [
   'req.headers.authorization',
@@ -22,13 +23,22 @@ export const logRedactPaths = [
 
 export const logRedactCensor = '[Redacted]';
 
-const secretHeaders = new Set(['authorization', 'cookie', 'set-cookie']);
+/** Values for these header names may appear in logs. Every other value is censored. */
+const safeHeaderNames = new Set([
+  'accept',
+  'content-type',
+  'content-length',
+  'user-agent',
+  'x-request-id',
+  'mcp-protocol-version',
+  'host',
+]);
 
 export function redactHeaders(headers: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
   if (headers === undefined) return undefined;
   const copy: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(headers)) {
-    copy[key] = secretHeaders.has(key.toLowerCase()) ? logRedactCensor : value;
+    copy[key] = safeHeaderNames.has(key.toLowerCase()) ? value : logRedactCensor;
   }
   return copy;
 }

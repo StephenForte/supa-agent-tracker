@@ -53,7 +53,7 @@ Defined here for the API and MCP tasks. They implement it; this task does not st
 
 ## Bodies and logs
 
-JSON bodies are limited to 1 MiB. Request logs are structured JSON. `authorization`, `cookie`, and `set-cookie` are redacted to `[Redacted]` on both the request and the response. Do not log tokens, password hashes, or `DATABASE_URL`.
+JSON bodies are limited to 1 MiB. Request logs are structured JSON. Header values are logged only for `accept`, `content-type`, `content-length`, `user-agent`, `x-request-id`, `mcp-protocol-version`, and `host`. Every other header value, including `authorization`, `cookie`, `set-cookie`, `x-api-key`, `x-auth-token`, and `proxy-authorization`, is `[Redacted]`. Do not log tokens, password hashes, or `DATABASE_URL`.
 
 ## Auth interfaces
 

@@ -69,4 +69,45 @@ describe('log redaction', () => {
     expect(logged).not.toContain(cookie);
     expect(logged).toContain(logRedactCensor);
   });
+
+  it('redacts credential headers outside the safe allowlist and keeps user-agent', async () => {
+    const apiKey = 'plain-text-x-api-key-value';
+    const authToken = 'plain-text-x-auth-token-value';
+    const proxyAuth = 'plain-text-proxy-authorization-value';
+    const agent = 'supa-test-user-agent';
+    writeFileSync(path.join(scratchRoot, 'index.html'), '<!doctype html><title>spa-fixture</title>');
+    const captured: string[] = [];
+    const secretApp = await buildApp({
+      config: testConfig(),
+      pool: idlePool(),
+      migrationsDir: scratchRoot,
+      spaRoot: scratchRoot,
+      logger: createLoggerOptions({
+        write(message) {
+          captured.push(message);
+        },
+      }),
+    });
+    try {
+      const response = await secretApp.inject({
+        method: 'GET',
+        url: '/health',
+        headers: {
+          'x-api-key': apiKey,
+          'x-auth-token': authToken,
+          'proxy-authorization': proxyAuth,
+          'user-agent': agent,
+        },
+      });
+      expect(response.statusCode).toBe(200);
+      const logged = captured.join('\n');
+      expect(logged).not.toContain(apiKey);
+      expect(logged).not.toContain(authToken);
+      expect(logged).not.toContain(proxyAuth);
+      expect(logged).toContain(agent);
+      expect(logged).toContain(logRedactCensor);
+    } finally {
+      await secretApp.close();
+    }
+  });
 });
