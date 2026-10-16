@@ -236,3 +236,27 @@ Status: Proposed by planner (2026-10-16), for P1-E.
 self-contained demo that makes no network calls. P1-G sets `VITE_DATA_SOURCE=http` for the Phase 1 web service build.
 The selection is a compile-time constant, so the demo bundle contains no HTTP-source code (proven by a dist grep for `/api/`).
 
+### D-029 — Tool usage is batched at check-out; adapters only heartbeat
+Status: Proposed by planner (2026-10-16), for P1-F.
+`record_tool_usage` and `check_out.tools` bump the run revision (only heartbeat is exempt, D-024). The reporting protocol
+therefore has agents report observed tool aggregates once, in `check_out`. Client hook adapters send **heartbeats only**,
+so a separate process never makes the agent's next status update conflict. The agent hands the run id to the adapter
+through a workspace file, `.supa/run-id` (one id, deleted at check-out). Adapter-captured tool telemetry (PRD R8) is
+deferred to Phase 2, where it gets a non-revision ingestion path if needed.
+
+### D-030 — Phase 1 deployment shape and the cost gate
+Status: Proposed by planner (2026-10-16), for P1-G. Implements D-020.
+- A new Render web service `supa-agent-tracker-app` (Node, Starter) and a Postgres instance `supa-agent-tracker-db`
+  (Basic-256mb) are added to the existing Blueprint (render.yaml). The Phase 0 static demo `supa-agent-tracker` stays
+  until the operator decides to retire it.
+- Build: `npm ci && VITE_DATA_SOURCE=http npm run build && npm run build:server`. Start: `npm start`, with
+  NODE_ENV=production, so migrations run before listen. DATABASE_URL comes from the database by internal connection
+  string, and the database has no public IP allowlist.
+- Fastify trusts exactly one proxy hop (`TRUST_PROXY_HOPS=1` on Render, default 0 locally). Trusting all hops would let
+  clients spoof `X-Forwarded-For` and evade the per-IP sign-in limit.
+- **Cost gate:** Blueprint sync provisions new resources when render.yaml lands on main, so the P1-G1 PR is **not
+  merged** until the operator explicitly approves the monthly cost, re-confirmed by the planner against Render's live
+  prices at that moment. Merging that PR is the provisioning step.
+- Secrets (RESEND_API_KEY, EMAIL_FROM, REGISTRATION_ALLOWLIST) are `sync: false`, entered by the operator in the Render
+  dashboard and never in chat. BETTER_AUTH_SECRET uses `generateValue: true`.
+
