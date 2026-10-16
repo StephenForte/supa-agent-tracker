@@ -22,7 +22,7 @@ services:
     name: supa-agent-tracker-app
     runtime: node
     plan: starter
-    region: singapore
+    region: oregon
     branch: main
     autoDeployTrigger: commit
     previews:
@@ -55,6 +55,6 @@ services:
 databases:
   - name: supa-agent-tracker-db
     plan: basic-256mb
-    region: singapore
+    region: oregon
     postgresMajorVersion: "18"
     ipAllowList: []

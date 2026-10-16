@@ -10,8 +10,8 @@ Checked against Render's docs on 2026-10-16: [Blueprint spec](https://render.com
 
 | Resource | Name | Plan | Region |
 |---|---|---|---|
-| Web service | `supa-agent-tracker-app` | `starter` (legacy name for `0.5c-512mb`, 0.5 CPU / 512 MB) | `singapore` |
-| Postgres | `supa-agent-tracker-db` | `basic-256mb` (legacy name for `0.1c-256mb`, 256 MB, 100 connections) | `singapore` |
+| Web service | `supa-agent-tracker-app` | `starter` (legacy name for `0.5c-512mb`, 0.5 CPU / 512 MB) | `oregon` |
+| Postgres | `supa-agent-tracker-db` | `basic-256mb` (legacy name for `0.1c-256mb`, 256 MB, 100 connections) | `oregon` |
 
 Postgres major version is `"18"`, the newest major in the Blueprint schema and the version Render's docs call the latest supported for new instances (13 through 18). The operator's Postgres.app is PostgreSQL 18.6, the same major.
 
@@ -33,7 +33,7 @@ That is about $13/month of compute before bandwidth and extra storage, which mat
 
 Merge this Blueprint only after an explicit approval to spend that money. With Blueprint sync, `render.yaml` on `main` can create `supa-agent-tracker-app` and `supa-agent-tracker-db` on the next sync. Opening or updating the pull request does not. Do not mark the pull request ready, and do not merge it, until that approval is on the record.
 
-Region `singapore` is a current Render region (`oregon`, `ohio`, `virginia`, `frankfurt`, `singapore`). Change it in `render.yaml` before the merge if you want a different one. The web service and the database must stay in the same region or the internal database URL will not work.
+Region `oregon` is the operator's choice (Portland; the operator is in Menlo Park). It is one of the current Render regions (`oregon`, `ohio`, `virginia`, `frankfurt`, `singapore`). The web service and the database are both there. They have to stay in the same region or the internal database URL will not work.
 
 ## Secrets
 
