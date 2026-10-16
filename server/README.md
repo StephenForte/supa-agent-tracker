@@ -164,6 +164,63 @@ Cursors preserve database timestamp precision; limits use `docs/api.md` defaults
 and validation. Runs have bounded ID-keyset list pages. A missing tool row returns
 `tools: null`; a reported zero-count row remains a real aggregate, never absence.
 
+## MCP and tokens (P1-C1)
+
+`registerMcpRoutes(app, deps)` registers `/mcp`, RFC 9728 protected-resource discovery,
+and `/api/tokens*`. The latter uses `requireUser`; the former authenticates hashed
+personal bearer tokens independently of browser sessions. No migration is needed.
+See [Tokens and MCP](../docs/api.md#tokens-p1-c1) for exact fields, caps, errors,
+copy-once replay semantics, session expiry and rate limits.
+
+The MCP SDK is exactly pinned to 1.31.0 (September 28, 2026), the newest stable
+release at least two weeks old on October 15. The [current v1 SDK documentation](https://ts.sdk.modelcontextprotocol.io/server)
+confirms Streamable HTTP JSON response mode, stateful transports and `registerTool`.
+We use bounded credential-bound sessions to preserve observed initialize clientInfo
+for D-018 metadata. Authentication runs on every request; sessions convey no scope
+or authority. AsyncLocalStorage carries that request's freshly loaded access and
+User-Agent, even for concurrent calls on a shared client session. Server info carries
+API version 1; `get_project` also returns it for SDKs that strip server-info extensions.
+
+`server/mcp/registry.ts` owns stable, non-echoing schema errors, idempotency and tool
+error conversion. Registrars receive its generic `register` function: P1-D2 can add
+an import and `registerNextStepTools(register)` beside `registerRunTools(register)`
+in `server/mcp/routes.ts`. Each registration supplies its schema, mutation flag and
+an operation receiving `(input, tx, context)`. Use the supplied transaction for all
+repository calls. Never register private notes. The SDK handles protocol negotiation,
+transport and schemas in tools/list; the shared registrar handles tools/call to avoid
+the SDK's default input-validation messages echoing arbitrary client arguments.
+
+Repository additions are deliberately separate from revisioned edits:
+`authenticateCredentialHash` is the trusted bootstrap; `touchCredentialLastUsed`
+checks revocation and throttles to one write/minute without changing revision;
+`heartbeatRun` checks scope and ended state and atomically advances contact time and
+appends an event without changing run revision. Existing edit signatures remain.
+Run-ID resolution tries only granted projects through `getRun`, so foreign aggregates
+never authorize themselves. This favors the small initial scope count; measure query
+and lock cost during P1-G capacity testing.
+
+Token issuance/rotation uses the repository transaction but persists **only metadata**
+in idempotency JSON. Plaintext stays in the first HTTP response and never enters the
+idempotency callback result. Replays return `plaintext: null`; rotate if the first
+response was lost. REST metadata adds `revision` to the web token shape for writes.
+MCP and token routes use a request logger that omits arbitrary request data, including
+query strings. Tool errors and caught database failures never log raw arguments or
+exceptions. The limiter is per credential (120 HTTP requests/minute), in memory,
+reset on restart; sessions are capped at 200 and expire after 15 idle minutes.
+
+Tests in `server/mcp/lifecycle.test.ts` create/drop their own real Postgres database,
+issue tokens through REST, and drive the server listening on port 0 using the SDK
+client. They cover lifecycle/revision/idempotency, grants and parent scope, owner and
+session isolation, revocation/rotation, validation, pagination, metadata, Origin,
+rate limiting, absence of private notes, and plaintext scans of every table plus logs.
+Real Cursor/Claude/Grok client setup remains P1-F.
+
+Capacity reservations are taken synchronously before awaiting SDK connection. A
+session moves from pending to active atomically; failed negotiation releases its
+reservation. The integration regression pauses the 200th handshake with 199 sessions
+already active and proves a concurrent 201st gets 429. Empty-scope tokens are also
+explicitly tested across all seven tools; Drizzle compiles `inArray(column, [])` to
+SQL `false`, so lists are empty and writes return not_found without SQL failures.
 ## User API (P1-C2)
 
 `server/api/user-routes.ts` registers the signed-in user's account, project, agent and run routes. `registerRoutes` calls `registerUserApiRoutes` once. The handlers are `requireUser` only: `UserAccess { kind: 'user', userId: request.user.userId }`. Tokens, next steps, private notes and real sessions are other tasks.

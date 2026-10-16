@@ -5,6 +5,7 @@ import { registerUserApiRoutes } from '../api/user-routes.js';
 import { registerAuthRoutes } from '../auth/routes.js';
 import { apiError, errorCodes } from './errors.js';
 import { migrationsAreCurrent } from '../db/migrate.js';
+import { registerMcpRoutes } from '../mcp/routes.js';
 import { registerStepsAndNotesRoutes } from '../steps/routes.js';
 import { registerSpa } from './spa.js';
 
@@ -21,7 +22,7 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
 
   // Wave-3 tasks append exactly one registration line each:
   await registerAuthRoutes(app, deps);
-  //   P1-C1 await registerMcpRoutes(app);
+  await registerMcpRoutes(app, deps);
   await registerStepsAndNotesRoutes(app, deps);
   await registerUserApiRoutes(app, deps);
 }

@@ -3,12 +3,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { requireMcpCredential, requireUser } from './auth-context.js';
 
-describe('auth stubs', () => {
+describe('browser test seam and bearer enforcement', () => {
   afterEach(() => {
     vi.unstubAllEnvs();
   });
 
-  it('attaches a test user and a stub bearer credential', async () => {
+  it('attaches a test user and refuses the retired stub bearer', async () => {
     const app = Fastify({ logger: false });
     app.get('/me', { preHandler: requireUser }, async (request) => ({ userId: request.user?.userId ?? null }));
     app.get('/mcp', { preHandler: requireMcpCredential }, async (request) => ({
@@ -29,8 +29,8 @@ describe('auth stubs', () => {
       url: '/mcp',
       headers: { authorization: 'Bearer stub:usr_demo:prj_offers,prj_other' },
     });
-    expect(credential.statusCode).toBe(200);
-    expect(credential.json()).toEqual({ userId: 'usr_demo', allowedProjectIds: ['prj_offers', 'prj_other'] });
+    expect(credential.statusCode).toBe(401);
+    expect(credential.headers['www-authenticate']).toContain('error="invalid_token"');
     await app.close();
   });
 

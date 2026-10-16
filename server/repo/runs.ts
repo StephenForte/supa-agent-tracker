@@ -83,3 +83,14 @@ export async function updateRun(db: Database, access: Access, projectId: string,
     return { status: 'saved', value: value! };
   });
 }
+
+/** Agent liveness advances independently of the editable run revision (D-024). */
+export async function heartbeatRun(db: Database, access: import('./access.js').CredentialAccess, projectId: string, runId: string): Promise<Run> {
+  return withProject(db, access, projectId, async (tx) => {
+    const current = await readRun(tx, projectId, runId);
+    if (current.executionState !== 'running') throw new AccessError('validation_error');
+    const [row] = await tx.update(runs).set({ lastContactAt: new Date() }).where(eq(runs.id, runId)).returning();
+    await event(tx, access, row!, { kind: 'heartbeat' });
+    return row!;
+  });
+}
