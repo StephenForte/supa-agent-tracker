@@ -163,3 +163,63 @@ by case-insensitive name and ID ascending as deterministic tie-breakers.
 Cursors preserve database timestamp precision; limits use `docs/api.md` defaults
 and validation. Runs have bounded ID-keyset list pages. A missing tool row returns
 `tools: null`; a reported zero-count row remains a real aggregate, never absence.
+
+## Auth (P1-B2)
+
+Better Auth **1.7.7** (released 2026-09-30, pinned exactly) supplies password
+hashing, verified-email login, sessions and single-use reset consumption. Migration
+0002 adds its models and a nullable `users.image`; existing domain fields remain
+intact. Its required OAuth account fields are nullable and SQL-constrained to NULL
+because only email/password authentication is exposed. All auth/user FKs RESTRICT.
+
+| Variable | Required | Meaning |
+|---|---|---|
+| `BETTER_AUTH_SECRET` | outside test | At least 32 characters; signs cookies and verification links |
+| `REGISTRATION_ALLOWLIST` | no | Trimmed, case-insensitive comma-separated emails; empty denies all registration |
+| `EMAIL_PROVIDER` | no | `console` (default) or `resend` |
+| `RESEND_API_KEY` | when resend | Resend API credential, never logged |
+| `EMAIL_FROM` | when resend | Operator-controlled verified sender |
+
+Sessions have a fixed **7-day** lifetime without refresh or cookie caching. Cookie
+attributes are HttpOnly, SameSite=Lax, Secure for HTTPS PUBLIC_URL. Each protected
+request queries server-side session state. Session lookup failures return a sanitized
+500 and a fixed diagnostic, so an outage is not mistaken for a logout. Password changes force revocation of all
+old sessions and issue a replacement cookie; resets revoke all existing sessions.
+Reset links expire after **one hour** and their database identifiers are hashed by
+the library. Verification links are signed JWTs with a one-hour expiry.
+
+Sign-in is limited to **5 attempts per normalized email and 5 per socket IP per
+60-second fixed window**, including successful attempts. Both must allow the
+attempt. The email/IP map is capped at 10,000 keys and rejects new attempts while
+full; expired entries are pruned. Better Auth also limits sign-in to 5/IP/60s,
+other sensitive operations to its built-in defaults (3/IP/10s), and other endpoints
+to 100/IP/60s. Storage is process memory, resets on restart and is not shared across
+replicas. Client proxy headers do not determine limiter identity; behind a proxy
+this conservatively limits the proxy IP until trusted-proxy policy is dispatched.
+
+All state-changing `/api` requests reject a mismatching Origin or cross-site fetch
+metadata. Cookie-authenticated writes also require Origin. Better Auth validates
+callback URLs against PUBLIC_URL. Auth handlers accept only the documented routes;
+unknown routes remain JSON 404s. The test identity header works only with the real
+process `NODE_ENV=test` and is ignored in development/production.
+
+Console email prints complete development messages to stdout and captures messages
+in memory in tests. **Production console email suppresses message contents** to
+avoid logging tokens; configure Resend for actual production delivery. Resend uses
+fetch with a 10-second timeout; provider responses/errors never reach logs or error
+bodies. Auth-route logs are silent because Fastify logs query strings before hooks;
+other API request logging retains the existing header redaction. Auth failures use
+safe generic messages, and reset/resend responses do not expose delivery failures.
+
+Storage disclosure: `accounts.password_hash` contains Better Auth's scrypt hash;
+`sessions.token` contains the **plain random session identifier** (the browser
+cookie is signed, but the database token is not hashed). This is an explicit planner
+decision before merge. The existing `mcp_credentials.token_hash` remains a hash.
+Unused account token columns and their expiry fields are constrained to NULL.
+`auth_verifications.identifier` holds hashed reset identifiers; `value` holds the
+user ID, not the reset secret. Verification JWTs are emailed, not stored.
+
+Email links use existing `/verify-email?token=...` and `/reset-password?token=...`
+web routes. Those screens remain the Phase 0 demo until P1-E wires their token to
+`GET /api/auth/verify-email` or `POST /api/auth/reset-password`; the server API works
+independently. No web bundle or deployment configuration is changed here.
