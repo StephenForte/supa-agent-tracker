@@ -65,7 +65,7 @@ A shell on your Mac cannot open a connection until you add your address and remo
 
 ## A healthy first deploy
 
-The service builds with `npm ci && VITE_DATA_SOURCE=http npm run build && npm run build:server` and starts with `npm start`. `NODE_ENV=production` applies pending SQL migrations before listen. The files today are `0001_initial.sql` and `0002_auth.sql`.
+The service builds with `npm ci --include=dev && VITE_DATA_SOURCE=http npm run build && npm run build:server` and starts with `npm start`. `--include=dev` is required: Render exposes the service's env vars (including `NODE_ENV=production`) during the build, and `npm ci` would otherwise skip the devDependencies (`typescript`, `vite` plugins) the build needs. `NODE_ENV=production` applies pending SQL migrations before listen. The files today are `0001_initial.sql` and `0002_auth.sql`.
 
 The process does not print those filenames. A local production boot against an empty scratch database confirmed that: the log showed the process listening, `GET /ready` returned `200` and `{"status":"ready"}`, and `schema_migrations` listed both files. Nothing in that log named the SQL files. A healthy deploy is:
 

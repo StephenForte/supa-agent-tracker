@@ -27,7 +27,7 @@ services:
     autoDeployTrigger: commit
     previews:
       generation: off
-    buildCommand: npm ci && VITE_DATA_SOURCE=http npm run build && npm run build:server
+    buildCommand: npm ci --include=dev && VITE_DATA_SOURCE=http npm run build && npm run build:server
     startCommand: npm start
     healthCheckPath: /ready
     envVars:
