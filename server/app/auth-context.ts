@@ -1,5 +1,7 @@
 import type { preHandlerAsyncHookHandler } from 'fastify';
 
+import { credentialOrigin, authenticateBearer } from '../tokens/auth.js';
+
 import { apiError, errorCodes } from './errors.js';
 
 /**
@@ -17,6 +19,7 @@ export interface BrowserSession {
 }
 
 export interface McpCredential {
+  credentialId: string;
   userId: string;
   allowedProjectIds: readonly string[];
 }
@@ -42,11 +45,10 @@ export const requireUser: preHandlerAsyncHookHandler = async (request, reply) =>
 };
 
 export const requireMcpCredential: preHandlerAsyncHookHandler = async (request, reply) => {
-  if (!stubAuthEnabled()) {
-    return reply.code(401).send(apiError(errorCodes.unauthenticated, 'Authentication is not implemented'));
-  }
-  const credential = parseStubBearer(request.headers.authorization);
+  const credential = await authenticateBearer(request);
   if (!credential) {
+    const origin = credentialOrigin(request.server);
+    reply.header('WWW-Authenticate', `Bearer resource_metadata="${origin}/.well-known/oauth-protected-resource"${request.headers.authorization !== undefined ? ', error="invalid_token"' : ''}`);
     return reply.code(401).send(apiError(errorCodes.unauthenticated, 'Bearer credential required'));
   }
   request.mcpCredential = credential;
@@ -54,16 +56,4 @@ export const requireMcpCredential: preHandlerAsyncHookHandler = async (request, 
 
 function stubAuthEnabled(): boolean {
   return process.env.NODE_ENV === 'test';
-}
-
-function parseStubBearer(header: string | undefined): McpCredential | null {
-  if (header === undefined || !header.startsWith('Bearer stub:')) return null;
-  const rest = header.slice('Bearer stub:'.length);
-  const colon = rest.indexOf(':');
-  const userId = colon === -1 ? rest : rest.slice(0, colon);
-  const projectList = colon === -1 ? '' : rest.slice(colon + 1);
-  const allowedProjectIds = projectList.length === 0 ? [] : projectList.split(',');
-  if (!ID_PATTERN.test(userId)) return null;
-  if (allowedProjectIds.some((id) => !ID_PATTERN.test(id))) return null;
-  return { userId, allowedProjectIds };
 }

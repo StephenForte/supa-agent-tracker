@@ -4,6 +4,7 @@ import type { FastifyReply } from 'fastify';
 export const JSON_BODY_LIMIT_BYTES = 1_048_576;
 
 export const errorCodes = {
+  rate_limited: 'rate_limited',
   validation_error: 'validation_error',
   unauthenticated: 'unauthenticated',
   forbidden: 'forbidden',

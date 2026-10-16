@@ -82,3 +82,21 @@ export async function touchCredential(db: Database, access: Access, credentialId
     return { status: 'saved', value: await accessibleSummary(tx, access, value!) };
   });
 }
+
+/** Trusted authentication bootstrap: stored grants are the sole source of scope. */
+export async function authenticateCredentialHash(db: Database, tokenHash: string): Promise<CredentialSummary | null> {
+  return db.transaction(async (tx) => {
+    const [row] = await tx.select().from(mcpCredentials).where(eq(mcpCredentials.tokenHash, tokenHash));
+    return row && !row.revokedAt ? summary(tx, row) : null;
+  });
+}
+/** Liveness bookkeeping, serialized with revocation, never an owner edit. */
+export async function touchCredentialLastUsed(db: Database, access: import('./access.js').CredentialAccess): Promise<void> {
+  await withActor(db, access, async (tx) => {
+    const [row] = await tx.select().from(mcpCredentials).where(eq(mcpCredentials.id, access.credentialId));
+    const now = new Date();
+    if (row && (!row.lastUsedAt || now.getTime() - row.lastUsedAt.getTime() >= 60_000)) {
+      await tx.update(mcpCredentials).set({ lastUsedAt: now }).where(eq(mcpCredentials.id, access.credentialId));
+    }
+  });
+}
