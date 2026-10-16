@@ -191,3 +191,26 @@ Status: **Confirmed by operator (2026-10-15)**. Supersedes the PRD's "open regis
 Registration is accepted only for emails on an operator-managed allowlist (env or DB table). Email verification, reset,
 sessions, rate limits and per-account isolation stay exactly as the PRD specifies. Open registration can be enabled later
 without schema changes.
+
+### D-023 — Next-step authorship and dispatcher reorder
+Status: Proposed by planner (2026-10-16); **operator to confirm** (PRD "Remaining decisions" 1).
+A worker's "own" step is one whose source run was checked in by the same MCP credential (`run_events.actor_credential_id`
+on the run's check_in event). Only that credential may edit the step's text or position, or set the waiting note with that
+source run. "Dispatcher reconcile" means: any credential granted the project may **reorder** the whole list. The request
+must name every current step with its current revision, or nothing changes. Reorder never alters text, source run or
+completion. No credential flag or schema change. Known edge: after a token rotation, the new token can't edit steps
+from runs the old token checked in (accepted for Phase 1).
+
+### D-024 — Token format and liveness writes don't bump revisions
+Status: Proposed by planner (2026-10-16). Technical; P1-C1 may argue alternatives with evidence.
+MCP tokens are `sat_` + 32 random bytes (base64url), stored as SHA-256 hex; display suffix = last 4 characters. Slow hashes
+are unnecessary for 256-bit random tokens. Issuance or rotation replays through `request_id` never return the plaintext
+again, and the plaintext is never stored, including in `idempotency_keys.response`. Heartbeats advance `last_contact_at`
+and append an event **without** bumping the run revision. Credential `last_used_at` updates (throttled to ≤1/min) don't
+bump the credential revision. Otherwise liveness traffic turns the agent's next status update and the owner's settings
+edits into 409 conflicts.
+
+### D-025 — Registration allowlist lives in an env var
+Status: Proposed by planner (2026-10-16). Implements D-022.
+`REGISTRATION_ALLOWLIST` (comma-separated, case-insensitive). The operator edits it in Render env. There is no admin UI or
+table in Phase 1. Empty means nobody can register.
