@@ -222,6 +222,13 @@ describe('browser authentication through HTTP and Postgres', () => {
     expect(response.json()).toEqual({ status: true });
     expect((await pool.query("SELECT id FROM users WHERE lower(email)='legacy@example.test'")).rows).toEqual([{ id: 'legacy-user' }]);
   });
+  it('rejects foreign callback URLs through the library origin check', async () => {
+    const reset = await post('/request-password-reset', { email: 'reset@example.test', redirectTo: 'https://attacker.test/steal' });
+    expect(reset.statusCode).toBe(403);
+    const token = emailToken([...inbox].reverse().find((m) => m.subject === 'Verify your email' && m.to === 'expire@example.test')!);
+    const verification = await get(`/api/auth/verify-email?token=${encodeURIComponent(token)}&callbackURL=https://attacker.test/steal`);
+    expect(verification.statusCode).toBe(403);
+  });
   it('never logs submitted secrets or email/session tokens during the production auth lifecycle', async () => {
     await signup('logs@example.test'); await verify('logs@example.test');
     const cookie = await login('logs@example.test', password, '192.0.8.1');

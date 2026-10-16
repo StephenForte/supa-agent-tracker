@@ -57,6 +57,9 @@ export function createAuthRuntime(pool: pg.Pool, config: AppConfig) {
     },
     rateLimit: { enabled: true, window: 60, max: 100, storage: 'memory', customRules: { '/sign-in/email': { window: 60, max: 5 } } },
     advanced: {
+      // Better Auth otherwise skips Origin validation under NODE_ENV=test.
+      // Keep the same callback checks active in HTTP tests and production.
+      disableOriginCheck: false,
       useSecureCookies: origin.startsWith('https:'),
       defaultCookieAttributes: { httpOnly: true, sameSite: 'lax', secure: origin.startsWith('https:') },
       ipAddress: { ipAddressHeaders: ['x-supa-auth-ip'] },
