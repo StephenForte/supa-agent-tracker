@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { Transaction } from '../repo/access.js';
 import { betterAuth } from 'better-auth';
+import { APIError } from 'better-auth/api';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import type { FastifyInstance } from 'fastify';
 import type pg from 'pg';
@@ -33,6 +34,13 @@ export function createAuthRuntime(pool: pg.Pool, config: AppConfig) {
     secret: settings.secret,
     trustedOrigins: [origin],
     logger: { disabled: true },
+    onAPIError: { onError(error) {
+      // Better Call otherwise prints raw non-API errors, including SQL params.
+      // Only signup's transaction uses this boundary; preserve normal API errors.
+      if (signupScope.getStore() && !(error instanceof APIError)) {
+        throw new APIError('INTERNAL_SERVER_ERROR', { message: 'Internal server error' });
+      }
+    } },
     database: drizzleAdapter(scopedDb, {
       provider: 'pg',
       transaction: true,

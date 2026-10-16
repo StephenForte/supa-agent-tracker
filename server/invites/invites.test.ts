@@ -1,3 +1,6 @@
+import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type pg from 'pg';
@@ -8,7 +11,7 @@ import { authRuntime } from '../auth/runtime.js';
 import { loadConfig } from '../config.js';
 import { createPool } from '../db/pool.js';
 import { runMigrations } from '../db/migrate.js';
-import { migrationsDir, spaRoot } from '../paths.js';
+import { migrationsDir } from '../paths.js';
 import { createScratchDatabase, type ScratchDatabase } from '../test/database.js';
 import { hashToken } from '../tokens/auth.js';
 import { createEmailSender } from '../email/index.js';
@@ -18,6 +21,7 @@ const password = 'invite-test-password-strong!';
 const forbidden = { error: { code: 'forbidden', message: 'This invitation is invalid or has expired' } };
 describe('P1-I invites through HTTP and real Postgres', () => {
   let scratch: ScratchDatabase; let pool: pg.Pool; let app: FastifyInstance; let closed: FastifyInstance;
+  let spaRoot: string;
   let adminCookie: string; let adminId: string; let address = 0;
   const logs: string[] = [];
   const post = (url: string, payload: Record<string, unknown>, cookie?: string) => app.inject({ method: 'POST', url, payload,
@@ -31,6 +35,8 @@ describe('P1-I invites through HTTP and real Postgres', () => {
   }
   function token(link: string) { return new URL(link).searchParams.get('invite')!; }
   beforeAll(async () => {
+    spaRoot = await mkdtemp(path.join(tmpdir(), 'invite-spa-'));
+    await writeFile(path.join(spaRoot, 'index.html'), '<!doctype html><html><body>Invite test SPA</body></html>');
     scratch = await createScratchDatabase(); pool = createPool(scratch.connectionString);
     await runMigrations(pool, migrationsDir);
     const config = loadConfig({ DATABASE_URL: scratch.connectionString, PUBLIC_URL: origin, NODE_ENV: 'test', ADMIN_EMAIL: ' ADMIN@Example.test ' });
@@ -46,7 +52,7 @@ describe('P1-I invites through HTTP and real Postgres', () => {
     adminId = (await pool.query("SELECT id FROM users WHERE email='admin@example.test'")).rows[0].id;
     await pool.query("INSERT INTO users(id,email,email_verified) VALUES ('other-user','other@example.test',true),('unverified-admin','ADMIN@example.invalid',false)");
   });
-  afterAll(async () => { await app?.close(); await closed?.close(); await pool?.end(); await scratch?.drop(); vi.restoreAllMocks(); });
+  afterAll(async () => { await app?.close(); await closed?.close(); await pool?.end(); await scratch?.drop(); await rm(spaRoot, { recursive: true, force: true }); vi.restoreAllMocks(); });
   it('requires authentication and a currently verified admin; account reports the same rule', async () => {
     for (const [method, url, payload] of [['GET', '/api/invites', undefined], ['POST', '/api/invites', { email: 'x@example.test', request_id: 'x' }], ['POST', '/api/invites/missing/revoke', { request_id: 'x' }]] as const) {
       expect((await app.inject({ method, url, payload })).statusCode).toBe(401);
@@ -135,8 +141,14 @@ describe('P1-I invites through HTTP and real Postgres', () => {
       IF EXISTS (SELECT 1 FROM users WHERE id=NEW.user_id AND email='rollback@example.test') THEN RAISE EXCEPTION 'test account failure'; END IF;
       RETURN NEW; END $$; CREATE TRIGGER reject_invite_account BEFORE INSERT ON accounts FOR EACH ROW EXECUTE FUNCTION reject_invite_account()`);
     let response;
-    try { response = await signup('rollback@example.test', token(invite.link)); }
-    finally { await pool.query('DROP TRIGGER reject_invite_account ON accounts; DROP FUNCTION reject_invite_account()'); }
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      response = await signup('rollback@example.test', token(invite.link));
+      expect(errors).not.toHaveBeenCalled();
+    } finally {
+      errors.mockRestore();
+      await pool.query('DROP TRIGGER reject_invite_account ON accounts; DROP FUNCTION reject_invite_account()');
+    }
     expect(response.statusCode).toBeGreaterThanOrEqual(400);
     expect((await pool.query("SELECT id FROM users WHERE email='rollback@example.test'")).rowCount).toBe(0);
     expect((await pool.query('SELECT used_at FROM invites WHERE id=$1', [invite.invite.id])).rows[0].used_at).toBeNull();
