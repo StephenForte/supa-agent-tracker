@@ -70,6 +70,3 @@ export const requireMcpCredential: preHandlerAsyncHookHandler = async (request, 
   request.mcpCredential = credential;
 };
 
-function stubAuthEnabled(): boolean {
-  return process.env.NODE_ENV === 'test';
-}
