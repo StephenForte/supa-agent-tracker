@@ -133,7 +133,8 @@ summaries omit the hash; credential last-use summaries also intersect the caller
 
 Existing-resource writes take an expected revision; successful writes increment
 it once. Run revisions cover PR/tool attachments too, and run events commit with
-the state change. Agent identity is immutable. Notes use expected revision **0**
+the state change. User metadata/review edits preserve last_contact_at; only credential
+reports advance agent liveness. Agent identity is immutable. Notes use expected revision **0**
 for first creation, then the stored revision. Next-step instruction writes check
 an immutable source-run precondition and never patch completion; P1-D must bind
 that source to the authenticated worker and implement dispatcher reconciliation.

@@ -62,7 +62,7 @@ export async function updateRun(db: Database, access: Access, projectId: string,
       workStatus: patch.workStatus, harness: patch.harness, model: patch.model, message: patch.message,
       completionSummary: patch.completionSummary, blocker: patch.blocker, noPrReason: patch.noPrReason,
       finishedAt: state === 'running' ? null : current.finishedAt ?? now,
-      lastContactAt: now, updatedAt: now, revision: expectedRevision + 1,
+      lastContactAt: access.kind === 'credential' ? now : undefined, updatedAt: now, revision: expectedRevision + 1,
     }).where(and(eq(runs.id, runId), eq(runs.projectId, projectId))).returning();
     for (const ref of report.prReferences ?? []) {
       if (ref.primary) await tx.update(pullRequestRefs).set({ primary: false }).where(eq(pullRequestRefs.runId, runId));

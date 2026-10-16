@@ -174,6 +174,31 @@ describe('access-controlled repositories on real Postgres', () => {
     })).rejects.toThrow('abort');
     expect(await snapshot()).toEqual(before);
   });
+  it('preserves stale liveness on user metadata writes and advances it on credential heartbeats', async () => {
+    const user: UserAccess = { kind: 'user', userId: 'liveness-owner' };
+    await db.insert(users).values({ id: user.userId, email: 'liveness@example.com' });
+    const staleProject = await projects.createProject(db, user, { name: 'Stale', type: 'automation' });
+    const healthyProject = await projects.createProject(db, user, { name: 'Healthy', type: 'automation' });
+    const staleAgent = await agents.createAgent(db, user, staleProject.id, { name: 'abandoned', title: 'Abandoned', workloadType: 'automation' });
+    const healthyAgent = await agents.createAgent(db, user, healthyProject.id, { name: 'healthy', title: 'Healthy', workloadType: 'automation' });
+    const issued = await credentials.createCredential(db, user, { label: 'Reporter', tokenHash: 'liveness-hash', displaySuffix: 'live', projectIds: [staleProject.id] });
+    const access: CredentialAccess = { kind: 'credential', userId: user.userId, credentialId: issued.id, projectIds: [staleProject.id] };
+    const stale = await runs.createRun(db, access, staleProject.id, runInput(staleAgent.id));
+    await runs.createRun(db, user, healthyProject.id, runInput(healthyAgent.id));
+    await db.execute(sql`UPDATE runs SET last_contact_at='2020-01-01T00:00:00Z', updated_at='2020-01-01T00:00:00Z' WHERE id=${stale.id}`);
+    const before = await runs.getRun(db, user, staleProject.id, stale.id);
+    const edit = await runs.updateRun(db, user, staleProject.id, stale.id, 1, { title: 'Corrected title', harness: 'Corrected harness' });
+    expect(edit.status).toBe('saved');
+    if (edit.status === 'saved') {
+      expect(edit.value.lastContactAt).toEqual(before.lastContactAt);
+      expect(edit.value.updatedAt.getTime()).toBeGreaterThan(before.updatedAt.getTime());
+    }
+    expect((await projects.listProjects(db, user)).items[0]!.id).toBe(healthyProject.id);
+    const heartbeat = await runs.updateRun(db, access, staleProject.id, stale.id, 2, {}, { event: { kind: 'heartbeat' } });
+    expect(heartbeat.status).toBe('saved');
+    if (heartbeat.status === 'saved') expect(heartbeat.value.lastContactAt.getTime()).toBeGreaterThan(before.lastContactAt.getTime());
+    expect((await projects.listProjects(db, user)).items[0]!.id).toBe(staleProject.id);
+  });
   it('limits last-use success/conflict summaries to the credential caller scope', async () => {
     const issued = await credentials.createCredential(db, a, { label: 'Narrow view', tokenHash: 'narrow-summary-hash', displaySuffix: 'view', projectIds: [x.id, y.id] });
     const access: CredentialAccess = { ...token, credentialId: issued.id, projectIds: [x.id] };
