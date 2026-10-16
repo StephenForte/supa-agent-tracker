@@ -57,4 +57,6 @@ databases:
     plan: basic-256mb
     region: oregon
     postgresMajorVersion: "18"
+    # 1 GB is included in the plan; Render's default (15 GB) bills 14 GB extra at $0.30/GB-month.
+    diskSizeGB: 1
     ipAllowList: []
