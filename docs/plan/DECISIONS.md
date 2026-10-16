@@ -229,3 +229,10 @@ BETTER_AUTH_SECRET. `requireUser` reads only the cookie, and no bearer plugin is
 produce a valid cookie (probed: real token + wrong signature → 401). No custom hashed-session adapter in Phase 1. Revisit
 if a bearer/session-token header is ever enabled.
 
+### D-028 — The demo build stays the default; the live web app is opt-in
+Status: Proposed by planner (2026-10-16), for P1-E.
+`VITE_DATA_SOURCE` selects the web data sources at build time: `demo` (the default, also when unset) uses the in-browser mock;
+`http` uses the real server. render.yaml's static site builds with no env vars, so the public Phase 0 demo stays a
+self-contained demo that makes no network calls. P1-G sets `VITE_DATA_SOURCE=http` for the Phase 1 web service build.
+The selection is a compile-time constant, so the demo bundle contains no HTTP-source code (proven by a dist grep for `/api/`).
+
