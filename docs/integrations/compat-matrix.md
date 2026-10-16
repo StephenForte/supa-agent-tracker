@@ -58,3 +58,12 @@ Single decision question: **After P1-A2, should Phase 1 implement OAuth alongsid
 - [M2 MCP 2026-07-28 authorization](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization)
 - [M3 MCP 2025-11-25 transports implemented by the stable SDK](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports)
 - [S1 Official SDK package source](https://github.com/modelcontextprotocol/typescript-sdk) — exact published package and protocol constants additionally inspected locally in `node_modules/@modelcontextprotocol/sdk/dist/esm/types.js`; see lockfile for integrity/version. No secondary sources used.
+
+## Production verification (P1-G2)
+
+| Client | Date | Version | Result |
+|---|---|---|---|
+| Cursor (macOS, Agent mode) | 2026-10-16 | 3.25.6 | ✅ `~/.cursor/mcp.json` with `headers.Authorization` (pasted bearer token, project-scoped). 12 tools listed. One agent session ran list_projects → get_project → check_in (coding, task_id) → heartbeat → update_status → list_next_steps → create_next_step → check_out (finished / waiting_for_review, no_pr_reason). Every call was HTTP 200 per Render request logs (UA `Cursor/3.25.6 (darwin arm64)`). The operator confirmed the run (Finished / Waiting for review), the next step and the timeline on the dashboard, with no tool errors in chat. Heartbeat hooks were not tested. |
+| Claude Desktop (macOS) | — | — | pending |
+| Grok Bot | — | — | pending |
+
