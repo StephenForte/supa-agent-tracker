@@ -12,11 +12,11 @@ export type QueryState<T> = { status: 'loading' } | { status: 'error'; error: Er
 export function useSourceQuery<T>(source: ObservableSource, read: () => Promise<T>): QueryState<T> {
   const revision = useSyncExternalStore(source.subscribe, source.getSnapshot, source.getSnapshot);
   const [result, setResult] = useState<{ source: ObservableSource; read: typeof read; revision: number; state: QueryState<T> } | null>(null);
+  useEffect(() => source.observe?.(read), [source, read]);
   useEffect(() => {
     let active = true;
-    const stopObserving = source.observe?.(read);
     void read().then(data => { if (active) setResult({ source, read, revision, state: { status: 'ready', data, refreshing: false } }); }, error => { if (active) setResult({ source, read, revision, state: { status: 'error', error: error instanceof Error ? error : new Error(String(error)) } }); });
-    return () => { active = false; stopObserving?.(); };
+    return () => { active = false; };
   }, [source, read, revision]);
   if (result?.source !== source || result.read !== read) return { status: 'loading' };
   if (result.state.status === 'ready') return { ...result.state, refreshing: result.revision !== revision };

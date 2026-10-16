@@ -10,7 +10,7 @@ export function createHttpPrivateNotes(client: HttpClient, visibility?: Visibili
     get: id => observable.read(id, () => client.request<PrivateNote>(`/api/projects/${segment(id)}/private-note`)),
     async save(id, text, revision) {
       const result = await write<PrivateNote>(client, `/api/projects/${segment(id)}/private-note`, 'PUT', { text, expected_revision: revision, ...actionFields() });
-      if (result.status === 'saved') observable.changed();
+      if (result.status === 'saved' || result.status === 'conflict') observable.changed();
       return result;
     },
   };

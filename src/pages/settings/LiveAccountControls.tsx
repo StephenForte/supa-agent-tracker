@@ -9,7 +9,7 @@ export function LiveAccountControls() {
     if (data.get('new') !== data.get('confirm')) { setMessage('Passwords do not match.'); return; }
     setPending(true); setMessage('');
     try { await auth.submit('change-password', { currentPassword: String(data.get('current')), newPassword: String(data.get('new')) }); form.reset(); setMessage('Password changed. Other sessions have been revoked.'); }
-    catch (error) { setMessage(error instanceof Error ? error.message : 'Unable to change password.'); }
+    catch { setMessage('Unable to change your password. Check your current password and try again.'); }
     finally { setPending(false); }
   }
   return <section className="slot"><h2>Password</h2><form onSubmit={event => void submit(event)} className="grid max-w-md gap-3">
@@ -19,6 +19,6 @@ export function LiveAccountControls() {
     <Button type="submit" disabled={pending}>Change password</Button>
   </form><h2>Sessions</h2><Button disabled={pending} onClick={() => {
     if (!auth || pending) return; setPending(true); setMessage('');
-    void auth.submit('revoke-other-sessions').then(() => setMessage('Other sessions revoked.'), error => setMessage(error instanceof Error ? error.message : 'Unable to revoke sessions.')).finally(() => setPending(false));
+    void auth.submit('revoke-other-sessions').then(() => setMessage('Other sessions revoked.'), () => setMessage('Unable to revoke sessions. Please try again.')).finally(() => setPending(false));
   }}>Revoke other sessions</Button>{message && <p role="status">{message}</p>}</section>;
 }

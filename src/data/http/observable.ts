@@ -3,7 +3,7 @@ export interface Visibility { readonly visibilityState: string; addEventListener
 export function createObservable(visibility: Visibility | undefined = (globalThis as { document?: Visibility }).document) {
   let revision = 0; let timer: ReturnType<typeof setTimeout> | undefined; let polling = false; let generation = 0;
   const listeners = new Set<() => void>();
-  const queries = new Map<() => Promise<unknown>, { value?: string }>();
+  const queries = new Map<() => Promise<unknown>, { value?: string; references: number }>();
   const cache = new Map<string, Promise<unknown>>();
   const visible = () => !visibility || visibility.visibilityState === 'visible';
   const notify = () => { revision++; listeners.forEach(listener => listener()); };
@@ -34,9 +34,11 @@ export function createObservable(visibility: Visibility | undefined = (globalThi
     },
     getSnapshot: () => revision,
     observe(read: () => Promise<unknown>) {
-      const state: { value?: string } = {}; queries.set(read, state);
-      void read().then(value => { if (queries.get(read) === state && state.value === undefined) state.value = JSON.stringify(value); }, () => {});
-      return () => { queries.delete(read); };
+      const existing = queries.get(read);
+      const state = existing ?? { references: 0, value: undefined as string | undefined };
+      state.references++; queries.set(read, state);
+      if (!existing) void read().then(value => { if (queries.get(read) === state && state.value === undefined) state.value = JSON.stringify(value); }, () => {});
+      return () => { if (--state.references === 0 && queries.get(read) === state) queries.delete(read); };
     },
     read<T>(key: string, load: () => Promise<T>): Promise<T> {
       if (!listeners.size) return load().then(value => structuredClone(value));
@@ -44,6 +46,12 @@ export function createObservable(visibility: Visibility | undefined = (globalThi
       if (!result) { result = load(); cache.set(key, result); }
       return result.then(value => structuredClone(value as T), error => { if (cache.get(key) === result) cache.delete(key); throw error; });
     },
-    changed() { generation++; cache.clear(); notify(); },
+    changed() {
+      generation++; const epoch = generation; cache.clear(); notify();
+      // The same refetch is shared with React; establish the new comparison baseline after our own write.
+      for (const [read, state] of queries) void read().then(value => {
+        if (generation === epoch && queries.get(read) === state) state.value = JSON.stringify(value);
+      }, () => {});
+    },
   };
 }

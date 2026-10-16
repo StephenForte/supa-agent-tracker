@@ -75,17 +75,27 @@ function NextStepsBody({ projectId, onRetry }: { projectId: string; onRetry: () 
     setUserHold({ id: step.id, revision: step.revision });
     setActionError(null);
     setUserConflict(null);
-    const before = source.getSnapshot();
-    const outcome = await source.setNextStepDone(step.id, desired, step.revision);
-    if (source.getSnapshot() === before) pendingFocus.current = null;
-    if (outcome.status === 'conflict') {
-      const fresh = await source.listNextSteps(projectId);
-      setUserConflict({ intent: desired, current: fresh.steps.find(item => item.id === step.id) ?? outcome.current });
-      setUserHold(null);
-    } else if (outcome.status === 'saved') setUserConflict(null);
-    else {
-      setActionError(outcome.status === 'invalid' ? outcome.message : 'That step could not be found.');
-      setUserHold(null);
+    let holdUntilRefresh = false;
+    try {
+      const before = source.getSnapshot();
+      const outcome = await source.setNextStepDone(step.id, desired, step.revision);
+      holdUntilRefresh = outcome.status === 'saved';
+      if (source.getSnapshot() === before) pendingFocus.current = null;
+      if (outcome.status === 'conflict') {
+        const fresh = await source.listNextSteps(projectId);
+        setUserConflict({ intent: desired, current: fresh.steps.find(item => item.id === step.id) ?? outcome.current });
+        setUserHold(null);
+      } else if (outcome.status === 'saved') setUserConflict(null);
+      else {
+        setActionError(outcome.status === 'invalid' ? outcome.message : 'That step could not be found.');
+        setUserHold(null);
+      }
+    } catch {
+      pendingFocus.current = null;
+      setActionError('Unable to update this step. Please try again.');
+    } finally {
+      // Successful writes retain the existing hold until the subscribed revision catches up.
+      if (!holdUntilRefresh) setUserHold(null);
     }
   }
 
@@ -95,17 +105,27 @@ function NextStepsBody({ projectId, onRetry }: { projectId: string; onRetry: () 
     pendingFocus.current = current.id;
     setUserHold({ id: current.id, revision: current.revision });
     setActionError(null);
-    const before = source.getSnapshot();
-    const outcome = await source.setNextStepDone(current.id, intent, current.revision);
-    if (source.getSnapshot() === before) pendingFocus.current = null;
-    if (outcome.status === 'conflict') {
-      const fresh = await source.listNextSteps(projectId);
-      setUserConflict({ intent, current: fresh.steps.find(item => item.id === current.id) ?? outcome.current });
-      setUserHold(null);
-    } else if (outcome.status === 'saved') setUserConflict(null);
-    else {
-      setActionError(outcome.status === 'invalid' ? outcome.message : 'That step could not be found.');
-      setUserHold(null);
+    let holdUntilRefresh = false;
+    try {
+      const before = source.getSnapshot();
+      const outcome = await source.setNextStepDone(current.id, intent, current.revision);
+      holdUntilRefresh = outcome.status === 'saved';
+      if (source.getSnapshot() === before) pendingFocus.current = null;
+      if (outcome.status === 'conflict') {
+        const fresh = await source.listNextSteps(projectId);
+        setUserConflict({ intent, current: fresh.steps.find(item => item.id === current.id) ?? outcome.current });
+        setUserHold(null);
+      } else if (outcome.status === 'saved') setUserConflict(null);
+      else {
+        setActionError(outcome.status === 'invalid' ? outcome.message : 'That step could not be found.');
+        setUserHold(null);
+      }
+    } catch {
+      pendingFocus.current = null;
+      setActionError('Unable to update this step. Please try again.');
+    } finally {
+      // Successful writes retain the existing hold until the subscribed revision catches up.
+      if (!holdUntilRefresh) setUserHold(null);
     }
   }
 
@@ -115,21 +135,27 @@ function NextStepsBody({ projectId, onRetry }: { projectId: string; onRetry: () 
     setDemoMessage(null);
     setDemoInstruction(null);
     setActionError(null);
-    const expected = kind === 'current' ? step.revision : staleRevision(step.revision);
-    const outcome = await source.simulateAgentStepUpdate(step.id, simulatedInstructionRewrite(step.instruction, step.revision), step.sourceRunId, expected);
-    if (outcome.status === 'saved') {
-      const completion = outcome.value.done === step.done ? 'Completion state was left unchanged.' : 'Completion state changed.';
-      setDemoMessage(`The source run rewrote the instruction using the current revision. ${completion}`);
-    } else if (outcome.status === 'conflict') {
-      const fresh = await source.listNextSteps(projectId);
-      const current = fresh.steps.find(item => item.id === step.id) ?? outcome.current;
-      setDemoMessage('This update used a stale revision. The agent must re-read and reconcile. Nothing was overwritten.');
-      setDemoInstruction(current.instruction);
-      setDemoHold(null);
-    } else {
-      setDemoMessage(outcome.status === 'invalid' ? outcome.message : 'That step could not be found.');
-      setDemoHold(null);
-    }
+    let holdUntilRefresh = false;
+    try {
+      const expected = kind === 'current' ? step.revision : staleRevision(step.revision);
+      const outcome = await source.simulateAgentStepUpdate(step.id, simulatedInstructionRewrite(step.instruction, step.revision), step.sourceRunId, expected);
+      holdUntilRefresh = outcome.status === 'saved';
+      if (outcome.status === 'saved') {
+        const completion = outcome.value.done === step.done ? 'Completion state was left unchanged.' : 'Completion state changed.';
+        setDemoMessage(`The source run rewrote the instruction using the current revision. ${completion}`);
+      } else if (outcome.status === 'conflict') {
+        const fresh = await source.listNextSteps(projectId);
+        const current = fresh.steps.find(item => item.id === step.id) ?? outcome.current;
+        setDemoMessage('This update used a stale revision. The agent must re-read and reconcile. Nothing was overwritten.');
+        setDemoInstruction(current.instruction);
+        setDemoHold(null);
+      } else {
+        setDemoMessage(outcome.status === 'invalid' ? outcome.message : 'That step could not be found.');
+        setDemoHold(null);
+      }
+    } catch {
+      setActionError('Unable to simulate this update. Please try again.');
+    } finally { if (!holdUntilRefresh) setDemoHold(null); }
   }
 
   return <section className="slot min-w-0" aria-labelledby={headingId} data-project-id={projectId}>

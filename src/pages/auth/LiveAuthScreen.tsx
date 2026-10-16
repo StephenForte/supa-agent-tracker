@@ -13,7 +13,7 @@ export function LiveAuthScreen() {
     if (path !== '/verify-email' || !auth || !token) return;
     let active = true;
     verification.current ??= auth.verify(token);
-    void verification.current.then(() => { if (active) { setMessage('Email verified. You can log in.'); navigate('/verify-email', { replace: true }); } }, error => { if (active) setMessage(error instanceof Error ? error.message : 'Email verification failed.'); });
+    void verification.current.then(() => { if (active) { setMessage('Email verified. You can log in.'); navigate('/verify-email', { replace: true }); } }, () => { if (active) setMessage('Email verification failed. Open a valid link from your email.'); });
     return () => { active = false; };
   }, [auth, path, token, navigate]);
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -33,7 +33,10 @@ export function LiveAuthScreen() {
       if (path === '/reset-password') { await auth.submit('reset-password', { token, newPassword: value('password') }); setMessage('Password reset. You can log in.'); navigate('/login', { replace: true }); }
       if (path === '/logout') { await auth.submit('sign-out'); navigate('/login', { replace: true }); }
       form.reset();
-    } catch (error) { setMessage(error instanceof Error ? error.message : 'Request failed. Please try again.'); }
+    } catch (error) {
+      const status = typeof error === 'object' && error !== null && 'status' in error ? error.status : undefined;
+      setMessage(status === 403 && path === '/register' ? 'Registration is by invitation only' : status === 429 ? 'Too many requests. Please try again shortly.' : path === '/login' ? 'Unable to log in. Check your email and password.' : 'Unable to complete this request. Please try again.');
+    }
     finally { setPending(false); }
   }
   if (!auth) return null;

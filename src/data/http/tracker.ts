@@ -7,7 +7,7 @@ export function createHttpTracker(client: HttpClient, visibility?: Visibility, o
   const stepProjects = new Map<string, string>();
   async function mutation<T>(operation: () => Promise<T>): Promise<T> {
     const result = await operation();
-    if (result && typeof result === 'object' && 'status' in result && (result.status === 'saved' || result.status === 'created')) observable.changed();
+    if (result && typeof result === 'object' && 'status' in result && (result.status === 'saved' || result.status === 'created' || result.status === 'conflict')) observable.changed();
     return result;
   }
   async function issue(path: string, body: unknown): Promise<TokenIssueResult> {
@@ -19,7 +19,7 @@ export function createHttpTracker(client: HttpClient, visibility?: Visibility, o
       if (error instanceof HttpError) {
         if (error.status === 404) return { status: 'not_found' };
         if (error.status === 400) return { status: 'invalid', message: error.message };
-        if (error.status === 409) return { status: 'invalid', message: 'This token changed. Refresh and try again.' };
+        if (error.status === 409 && error.current !== undefined) { observable.changed(); return { status: 'conflict', current: error.current as McpToken }; }
       }
       throw error;
     }

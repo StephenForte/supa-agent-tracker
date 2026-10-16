@@ -67,6 +67,24 @@ describe('HTTP contract adapters', () => {
     expect(await tracker.simulateAgentStepUpdate('s', '', 'r', 1)).toMatchObject({ status: 'invalid' });
     await expect(tracker.resetDemo()).rejects.toThrow('unavailable');
   });
+  it('invalidates cached next steps on conflict so conflict reconciliation reads the current revision', async () => {
+    let revision = 1;
+    const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation(async (_path, init) => {
+      if (init?.method === 'POST') { revision = 2; return json({ error: { details: { current: { id: 's', revision } } } }, 409); }
+      return json({ steps: [{ id: 's', projectId: 'p', revision }], waitingNote: null });
+    });
+    const { tracker } = createHttpSources({ fetch }); const stop = tracker.subscribe(() => {});
+    expect((await tracker.listNextSteps('p')).steps[0]!.revision).toBe(1);
+    expect(await tracker.setNextStepDone('s', true, 1)).toMatchObject({ status: 'conflict', current: { revision: 2 } });
+    expect((await tracker.listNextSteps('p')).steps[0]!.revision).toBe(2); stop();
+  });
+  it('returns token conflicts with the current metadata for rotate and revoke', async () => {
+    const current = { id: 't', revision: 3, label: 'Concurrent token' };
+    const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation(async (_path, init) => init?.method === 'POST' ? json({ error: { details: { current } } }, 409) : json([{ id: 't', revision: 2 }]));
+    const { tracker } = createHttpSources({ fetch });
+    expect(await tracker.rotateToken('t')).toEqual({ status: 'conflict', current });
+    expect(await tracker.revokeToken('t')).toEqual({ status: 'conflict', current });
+  });
   it('returns detached current values for direct reads without a mounted query', async () => {
     let name = 'First'; const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation(async () => json({ items: [{ id: 'p', name, tags: [] }], nextCursor: null }));
     const { tracker } = createHttpSources({ fetch });
@@ -98,6 +116,13 @@ describe('query-aware visible polling', () => {
     document.set('visible'); await vi.advanceTimersByTimeAsync(0); expect(fetch).toHaveBeenCalledTimes(4);
     unwatch(); unwatch2(); await vi.advanceTimersByTimeAsync(7000); expect(fetch).toHaveBeenCalledTimes(4);
     stop(); expect(vi.getTimerCount()).toBe(0); expect(document.listeners.size).toBe(0);
+  });
+  it('retains a shared callback until its last query registration unmounts', async () => {
+    vi.useFakeTimers(); const document = visibility(); const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation(async () => json({ items: [], nextCursor: null }));
+    const { tracker } = createHttpSources({ fetch, visibility: document }); const stop = tracker.subscribe(() => {}); const read = () => tracker.listProjects();
+    const first = tracker.observe!(read); const second = tracker.observe!(read); await read(); first();
+    await vi.advanceTimersByTimeAsync(7000); expect(fetch).toHaveBeenCalledTimes(2);
+    second(); stop(); expect(vi.getTimerCount()).toBe(0);
   });
   it('never overlaps a slow poll, and immediately invalidates after its own mutation', async () => {
     vi.useFakeTimers(); const visible = visibility(); const observable = createObservable(visible); let release: (() => void) | undefined;

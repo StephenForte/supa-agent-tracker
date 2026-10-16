@@ -42,7 +42,7 @@ function TokenActionDialog({ action, projects, onClose }: { action: Action; proj
       if (result.status === 'created') setPlaintext(result.plaintext);
       else if (result.status === 'saved') onClose();
       else setError(result.status === 'invalid' ? result.message : 'This token changed or is no longer available. Refresh and try again.');
-    } catch (error) { if (mounted.current) setError(error instanceof Error ? error.message : 'Unable to update token.'); }
+    } catch { if (mounted.current) setError('Unable to update this token. Please try again.'); }
     finally { if (mounted.current) setPending(false); }
   }
   return <Dialog open title={plaintext ? 'Copy your token' : action.kind === 'create' ? 'Create token' : action.kind === 'rotate' ? 'Rotate token?' : 'Revoke token?'} onClose={onClose}>

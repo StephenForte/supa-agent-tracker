@@ -20,3 +20,14 @@ it('reuses polled data for React refresh and releases query registration on unmo
   view.unmount(); expect(vi.getTimerCount()).toBe(0);
   await vi.advanceTimersByTimeAsync(14000); expect(fetch).toHaveBeenCalledTimes(2);
 });
+it('registers once per read identity and unregisters on read change and unmount', async () => {
+  const unwatch = vi.fn(); const observe = vi.fn(() => unwatch);
+  const source = { subscribe: () => () => {}, getSnapshot: () => 0, observe };
+  const first = vi.fn(async () => 'first'); const second = vi.fn(async () => 'second');
+  function Query({ read }: { read: () => Promise<string> }) { const result = useSourceQuery(source, read); return <p>{result.status === 'ready' ? result.data : 'loading'}</p>; }
+  const view = render(<Query read={first} />); await screen.findByText('first');
+  expect(observe).toHaveBeenCalledExactlyOnceWith(first); expect(unwatch).not.toHaveBeenCalled();
+  view.rerender(<Query read={second} />); await screen.findByText('second');
+  expect(unwatch).toHaveBeenCalledTimes(1); expect(observe).toHaveBeenLastCalledWith(second);
+  view.unmount(); expect(unwatch).toHaveBeenCalledTimes(2);
+});

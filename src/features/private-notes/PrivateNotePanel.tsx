@@ -58,16 +58,19 @@ function PrivateNoteEditor({ projectId, note, source }: { projectId: string; not
     const text = draft ?? serverNote.text;
     setSaving(true);
     setError(null);
-    const outcome = await source.save(projectId, text, serverNote.revision);
-    setSaving(false);
-    if (outcome.status === 'saved') {
-      setServerNote(outcome.value);
-      setDraft(current => current === null || current === text ? null : current);
-      setChoose(false);
-    } else if (outcome.status === 'conflict') {
-      setServerNote(outcome.current);
-      setChoose(true);
-    } else setError(outcome.status === 'invalid' ? outcome.message : 'This project has no private note to save.');
+    try {
+      const outcome = await source.save(projectId, text, serverNote.revision);
+      if (outcome.status === 'saved') {
+        setServerNote(outcome.value);
+        setDraft(current => current === null || current === text ? null : current);
+        setChoose(false);
+      } else if (outcome.status === 'conflict') {
+        setServerNote(outcome.current);
+        setChoose(true);
+      } else setError(outcome.status === 'invalid' ? outcome.message : 'This project has no private note to save.');
+    } catch {
+      setError('Unable to save your note. Your draft is still here. Please try again.');
+    } finally { setSaving(false); }
   }
 
   return <section className="slot min-w-0" aria-labelledby={headingId} data-project-id={projectId}>

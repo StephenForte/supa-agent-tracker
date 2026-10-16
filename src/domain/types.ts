@@ -47,4 +47,4 @@ export interface McpToken {
   lastUsedAt: Timestamp | null; revokedAt: Timestamp | null;
 }
 export type WriteResult<T> = { status: 'saved'; value: T } | { status: 'conflict'; current: T } | { status: 'not_found' } | { status: 'invalid'; message: string };
-export type TokenIssueResult = { status: 'created'; token: McpToken; plaintext: string } | { status: 'not_found' } | { status: 'invalid'; message: string };
+export type TokenIssueResult = { status: 'conflict'; current: McpToken } | { status: 'created'; token: McpToken; plaintext: string } | { status: 'not_found' } | { status: 'invalid'; message: string };
