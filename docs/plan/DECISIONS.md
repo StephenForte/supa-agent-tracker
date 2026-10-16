@@ -249,7 +249,8 @@ Status: Proposed by planner (2026-10-16), for P1-G. Implements D-020.
 - A new Render web service `supa-agent-tracker-app` (Node, Starter) and a Postgres instance `supa-agent-tracker-db`
   (Basic-256mb) are added to the existing Blueprint (render.yaml). The Phase 0 static demo `supa-agent-tracker` stays
   until the operator decides to retire it.
-- Build: `npm ci && VITE_DATA_SOURCE=http npm run build && npm run build:server`. Start: `npm start`, with
+- Build: `npm ci --include=dev && VITE_DATA_SOURCE=http npm run build && npm run build:server`. (Corrected 2026-10-16: the
+  original `npm ci` skips devDependencies because Render exposes NODE_ENV=production at build time; the build failed with exit 127 when reproduced.) Start: `npm start`, with
   NODE_ENV=production, so migrations run before listen. DATABASE_URL comes from the database by internal connection
   string, and the database has no public IP allowlist.
 - Fastify trusts exactly one proxy hop (`TRUST_PROXY_HOPS=1` on Render, default 0 locally). Trusting all hops would let
