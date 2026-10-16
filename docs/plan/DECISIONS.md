@@ -254,7 +254,8 @@ Status: Proposed by planner (2026-10-16), for P1-G. Implements D-020.
   string, and the database has no public IP allowlist.
 - Fastify trusts exactly one proxy hop (`TRUST_PROXY_HOPS=1` on Render, default 0 locally). Trusting all hops would let
   clients spoof `X-Forwarded-For` and evade the per-IP sign-in limit.
-- **Cost gate:** Blueprint sync provisions new resources when render.yaml lands on main, so the P1-G1 PR is **not
+- **Cost gate:** with auto-sync, Blueprint can provision new resources as soon as render.yaml lands on main (the
+  exact sync behaviour for new paid resources is unverified, so the gate assumes it). The P1-G1 PR is **not
   merged** until the operator explicitly approves the monthly cost, re-confirmed by the planner against Render's live
   prices at that moment. Merging that PR is the provisioning step.
 - Secrets (RESEND_API_KEY, EMAIL_FROM, REGISTRATION_ALLOWLIST) are `sync: false`, entered by the operator in the Render
