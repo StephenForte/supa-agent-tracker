@@ -49,7 +49,10 @@ export const requireUser: preHandlerAsyncHookHandler = async (request, reply) =>
         return;
       }
     } catch {
-      // Neither library/database errors nor request secrets enter logs or bodies.
+      // A lookup outage is not a revoked session. Log only a fixed diagnostic;
+      // library/database errors may contain credentials or connection details.
+      request.log.error('Browser session lookup failed');
+      return reply.code(500).send(apiError(errorCodes.internal_error, 'Internal server error'));
     }
   }
   return reply.code(401).send(apiError(errorCodes.unauthenticated, 'Sign in required'));

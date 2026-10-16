@@ -182,7 +182,8 @@ because only email/password authentication is exposed. All auth/user FKs RESTRIC
 
 Sessions have a fixed **7-day** lifetime without refresh or cookie caching. Cookie
 attributes are HttpOnly, SameSite=Lax, Secure for HTTPS PUBLIC_URL. Each protected
-request queries server-side session state. Password changes force revocation of all
+request queries server-side session state. Session lookup failures return a sanitized
+500 and a fixed diagnostic, so an outage is not mistaken for a logout. Password changes force revocation of all
 old sessions and issue a replacement cookie; resets revoke all existing sessions.
 Reset links expire after **one hour** and their database identifiers are hashed by
 the library. Verification links are signed JWTs with a one-hour expiry.

@@ -103,7 +103,8 @@ not tracker mutations: they do not require `request_id`/`expected_revision` in b
 Session lifetime is fixed at seven days. Cookies are HttpOnly, SameSite=Lax and
 Secure for HTTPS PUBLIC_URL. `requireUser` resolves the session from cookies on
 every request and sets `{userId}`; missing/expired/revoked sessions return 401
-`unauthenticated`. The `x-test-user-id` seam is restricted to process NODE_ENV=test;
+`unauthenticated`. Library/database lookup failures return 500 `internal_error`
+with a fixed safe log diagnostic, preserving the session for retry. The `x-test-user-id` seam is restricted to process NODE_ENV=test;
 it is not a production credential. MCP authentication remains separate.
 
 State-changing `/api` requests reject foreign Origins and cross-site fetch metadata;

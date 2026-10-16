@@ -56,7 +56,7 @@ describe('browser authentication through HTTP and Postgres', () => {
     await runMigrations(pool, migrationsDir);
     const config = loadConfig({ DATABASE_URL: scratch.connectionString, PUBLIC_URL: origin, NODE_ENV: 'production', BETTER_AUTH_SECRET: secret,
       EMAIL_PROVIDER: 'resend', RESEND_API_KEY: resendKey, EMAIL_FROM: 'sender@example.test',
-      REGISTRATION_ALLOWLIST: ' Invited@Example.test , reset@example.test, change@example.test, expire@example.test, logs@example.test, race@example.test, legacy@example.test ',
+      REGISTRATION_ALLOWLIST: ' Invited@Example.test , reset@example.test, change@example.test, expire@example.test, logs@example.test, race@example.test, legacy@example.test, outage@example.test ',
     });
     app = await buildApp({ config, pool, migrationsDir, spaRoot, logger: createLoggerOptions({ write: (msg) => logs.push(msg) }) });
     vi.stubGlobal('fetch', async (_url: string, init: RequestInit) => { inbox.push(JSON.parse(String(init.body)) as Email); return new Response('{}', { status: 200 }); });
@@ -228,6 +228,23 @@ describe('browser authentication through HTTP and Postgres', () => {
     const token = emailToken([...inbox].reverse().find((m) => m.subject === 'Verify your email' && m.to === 'expire@example.test')!);
     const verification = await get(`/api/auth/verify-email?token=${encodeURIComponent(token)}&callbackURL=https://attacker.test/steal`);
     expect(verification.statusCode).toBe(403);
+  });
+  it('reports session lookup outages as server failures without leaking exception secrets', async () => {
+    await signup('outage@example.test'); await verify('outage@example.test');
+    const cookie = await login('outage@example.test', password, '192.0.30.1');
+    const marker = 'database-exception-password-and-token-marker';
+    // Exercise the real auth library and signed cookie; fail only its PG query.
+    const query = vi.spyOn(pool, 'query').mockImplementation(() => { throw new Error(marker); });
+    try {
+      const response = await get('/api/protected', cookie);
+      expect(response.statusCode).toBe(500);
+      expect(response.json()).toEqual({ error: { code: 'internal_error', message: 'Internal server error' } });
+      expect(response.body).not.toContain(marker);
+      expect(logs.join('')).toContain('Browser session lookup failed');
+      expect(logs.join('')).not.toContain(marker);
+      expect(logs.join('')).not.toContain(cookie);
+    } finally { query.mockRestore(); }
+    expect((await get('/api/protected', cookie)).statusCode).toBe(200);
   });
   it('never logs submitted secrets or email/session tokens during the production auth lifecycle', async () => {
     await signup('logs@example.test'); await verify('logs@example.test');
