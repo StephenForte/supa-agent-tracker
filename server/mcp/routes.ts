@@ -24,6 +24,7 @@ export async function registerMcpRoutes(app: FastifyInstance, deps: RouteDeps & 
   bindCredentialDatabase(app, db, origin);
   const context = new AsyncLocalStorage<ToolContext>();
   const sessions = new Map<string, Session>();
+  const initializing = new Set<Session>();
   const limits = new Map<string, { start: number; count: number }>();
   const drop = async (id: string) => { const entry = sessions.get(id); sessions.delete(id); await entry?.server.close(); };
   const timer = setInterval(() => {
@@ -32,7 +33,11 @@ export async function registerMcpRoutes(app: FastifyInstance, deps: RouteDeps & 
     for (const [id, entry] of limits) if (now - entry.start >= 60_000) limits.delete(id);
   }, 60_000);
   timer.unref();
-  app.addHook('onClose', async () => { clearInterval(timer); await Promise.all([...sessions.keys()].map(drop)); });
+  app.addHook('onClose', async () => {
+    clearInterval(timer);
+    await Promise.all([...sessions.keys()].map(drop));
+    await Promise.all([...initializing].map(async (entry) => { initializing.delete(entry); await entry.server.close(); }));
+  });
   app.get('/.well-known/oauth-protected-resource', { childLoggerFactory: secretSafeLogger }, async (_request, reply) => {
     reply.header('Cache-Control', 'no-store');
     return { resource: `${origin}/mcp`, bearer_methods_supported: ['header'], resource_name: 'Supa Agent Tracker' };
@@ -65,16 +70,22 @@ export async function registerMcpRoutes(app: FastifyInstance, deps: RouteDeps & 
       }
       if (!entry && sessionId !== undefined) return reply.code(404).send(apiError('not_found', 'Session not found'));
       if (!entry && request.method === 'POST' && isInitializeRequest(request.body)) {
-        if (sessions.size >= MAX_SESSIONS) return reply.code(429).send(apiError('rate_limited', 'Session limit exceeded'));
+        if (sessions.size + initializing.size >= MAX_SESSIONS) return reply.code(429).send(apiError('rate_limited', 'Session limit exceeded'));
         const info = { name: 'supa-agent-tracker', version: '1.0.0', api_version: API_VERSION, _meta: { api_version: API_VERSION } };
         const server = new McpServer(info);
         const register = createToolRegistrar(server, { db, context: () => ({ ...context.getStore()!, clientInfo: observedClientInfo(server.server.getClientVersion()) }) });
         registerRunTools(register);
         const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: randomUUID, enableJsonResponse: true,
-          onsessioninitialized: (id) => { sessions.set(id, entry!); } });
+          onsessioninitialized: (id) => { initializing.delete(entry!); sessions.set(id, entry!); } });
         entry = { server, transport, credentialId: credential.credentialId, touched: Date.now() };
-        transport.onclose = () => { if (transport.sessionId) sessions.delete(transport.sessionId); };
-        await server.connect(transport);
+        transport.onclose = () => { initializing.delete(entry!); if (transport.sessionId) sessions.delete(transport.sessionId); };
+        // Reserve before the first await so concurrent handshakes cannot overbook capacity.
+        initializing.add(entry);
+        try { await server.connect(transport); }
+        catch {
+          initializing.delete(entry); await server.close();
+          return reply.code(500).send(apiError('internal_error', 'Internal server error'));
+        }
       }
       if (!entry) return reply.code(400).send(apiError('validation_error', 'Initialize a new session'));
       entry.touched = Date.now();
@@ -91,6 +102,7 @@ export async function registerMcpRoutes(app: FastifyInstance, deps: RouteDeps & 
         if (!reply.raw.headersSent) { reply.raw.writeHead(500, { 'Content-Type': 'application/json' }); reply.raw.end(JSON.stringify(apiError('internal_error', 'Internal server error'))); }
         else reply.raw.end();
       }
+      if (!entry.transport.sessionId) { initializing.delete(entry); await entry.server.close(); }
       if (request.method === 'DELETE' && typeof sessionId === 'string') await drop(sessionId);
     },
   });

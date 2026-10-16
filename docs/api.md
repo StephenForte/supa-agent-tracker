@@ -132,7 +132,7 @@ before authentication, parsing or tool dispatch.
 
 HTTP sessions retain observed initialize `clientInfo` for reporting metadata. Each
 session is bound to its authenticated credential; another credential cannot reuse it.
-At most 200 sessions are held globally, expiring after 15 minutes idle; exceeding that
+At most 200 sessions (including handshakes in progress) are held globally, expiring after 15 minutes idle; exceeding that
 cap returns HTTP 429 `rate_limited`. A missing/expired session gets 404; initialize
 again. DELETE closes a session. Restart loses sessions only; durable run/idempotency
 state remains in Postgres. Server info includes `name: "supa-agent-tracker"`,

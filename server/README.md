@@ -214,3 +214,10 @@ client. They cover lifecycle/revision/idempotency, grants and parent scope, owne
 session isolation, revocation/rotation, validation, pagination, metadata, Origin,
 rate limiting, absence of private notes, and plaintext scans of every table plus logs.
 Real Cursor/Claude/Grok client setup remains P1-F.
+
+Capacity reservations are taken synchronously before awaiting SDK connection. A
+session moves from pending to active atomically; failed negotiation releases its
+reservation. The integration regression pauses the 200th handshake with 199 sessions
+already active and proves a concurrent 201st gets 429. Empty-scope tokens are also
+explicitly tested across all seven tools; Drizzle compiles `inArray(column, [])` to
+SQL `false`, so lists are empty and writes return not_found without SQL failures.

@@ -1,4 +1,6 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import Fastify from 'fastify';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { FastifyInstance } from 'fastify';
@@ -17,7 +19,7 @@ import { createRun, getRun } from '../repo/runs.js';
 import { getCredential } from '../repo/credentials.js';
 import { createNextStep, setStepCompletion, setWaitingNote } from '../repo/next-steps.js';
 import { setPrivateNote } from '../repo/private-notes.js';
-import { CREDENTIAL_REQUESTS_PER_MINUTE } from './routes.js';
+import { registerMcpRoutes, CREDENTIAL_REQUESTS_PER_MINUTE } from './routes.js';
 
 const owner = { kind: 'user' as const, userId: 'mcp-owner' };
 let scratch: ScratchDatabase; let pool: pg.Pool; let db: AppDatabase; let app: FastifyInstance; let base: string;
@@ -217,6 +219,58 @@ describe('MCP and tokens over real Postgres and the SDK HTTP client', () => {
     const independent = await issue('independent');
     expect((await app.inject({ url: '/mcp', headers: { authorization: `Bearer ${independent.plaintext}` } })).statusCode).toBe(400);
   });
+  it('permits empty-scope tokens while returning no projects and rejecting every mutation safely', async () => {
+    const empty = await issue('empty-token', []); const c = await connect(empty.plaintext);
+    expect((await call('list_projects', {}, c)).items).toEqual([]);
+    expect((await call('get_project', { project_id: x.id }, c)).error.code).toBe('not_found');
+    expect((await call('check_in', checkIn('empty-in'), c)).error.code).toBe('not_found');
+    for (const name of ['update_status', 'heartbeat', 'check_out', 'record_tool_usage']) {
+      const args = name === 'heartbeat' ? { run_id: parentId, request_id: `empty-${name}` }
+        : name === 'record_tool_usage' ? { run_id: parentId, tools: [], request_id: `empty-${name}` }
+        : name === 'check_out' ? { run_id: parentId, expected_revision: 1, execution_state: 'finished', work_status: 'completed', request_id: `empty-${name}` }
+        : { run_id: parentId, expected_revision: 1, message: 'Denied', request_id: `empty-${name}` };
+      expect((await call(name, args, c)).error.code).toBe('not_found');
+    }
+  });
+  it('holds the 200-session limit across concurrent initialization and releases failed reservations', async () => {
+    const bounded = Fastify({ logger: false });
+    const pending: Promise<Response>[] = []; let release: () => void = () => undefined; let spy: ReturnType<typeof vi.spyOn> | undefined;
+    try {
+      await registerMcpRoutes(bounded, { pool, migrationsDir, spaRoot: '/unused', config: { publicUrl: 'http://localhost' } });
+      const url = await bounded.listen({ port: 0, host: '127.0.0.1' });
+      const tokens: string[] = [];
+      for (let i = 0; i < 3; i++) {
+        const issued = (await bounded.inject({ method: 'POST', url: '/api/tokens', headers: { 'x-test-user-id': owner.userId }, payload: { label: 'Capacity test', project_ids: [x.id], request_id: `capacity-token-${i}` } })).json();
+        expect(issued.plaintext).toBeTruthy(); tokens.push(issued.plaintext); secrets.push(issued.plaintext);
+      }
+      const initialize = (token: string, accept = 'application/json, text/event-stream') => fetch(`${url}/mcp`, {
+        method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: accept },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'capacity-test', version: '1' } } }),
+      });
+      // Failed transport negotiation must not consume a slot.
+      const failed = await initialize(tokens[2]!, 'application/json'); expect(failed.status).toBe(406); await failed.text();
+      for (let i = 0; i < 199; i++) {
+        const response = await initialize(tokens[Math.floor(i / 100)]!); expect(response.status).toBe(200); await response.json();
+      }
+      const gate = new Promise<void>((resolve) => { release = resolve; });
+      const original = McpServer.prototype.connect;
+      spy = vi.spyOn(McpServer.prototype, 'connect').mockImplementation(async function (this: McpServer, ...args: Parameters<McpServer['connect']>) {
+        await gate; return original.apply(this, args);
+      });
+      const first = initialize(tokens[2]!); pending.push(first);
+      await vi.waitFor(() => expect(spy!.mock.calls.length).toBe(1));
+      let secondFinished = false;
+      const second = initialize(tokens[2]!).then((response) => { secondFinished = true; return response; }); pending.push(second);
+      await vi.waitFor(() => expect(secondFinished || spy!.mock.calls.length === 2).toBe(true));
+      release();
+      const responses = await Promise.all(pending);
+      const statuses = responses.map((response) => response.status).sort();
+      await Promise.all(responses.map((response) => response.text()));
+      expect(statuses).toEqual([200, 429]);
+    } finally {
+      release(); await Promise.allSettled(pending); spy?.mockRestore(); await bounded.close();
+    }
+  }, 30_000);
   it('never persists plaintext in any text/jsonb column or logs and excludes notes from every tool response', async () => {
     const tables = (await pool.query("select table_name from information_schema.tables where table_schema='public' and table_type='BASE TABLE'")).rows as { table_name: string }[];
     for (const { table_name } of tables) {
