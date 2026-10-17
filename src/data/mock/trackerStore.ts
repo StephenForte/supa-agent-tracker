@@ -28,10 +28,15 @@ export function createTrackerStore({ clock, initial, persist, onReset }: Tracker
     }
     if (changed) commit();
   }
-  function issue(label: string, projectIds: string[]): TokenIssueResult {
-    if (!label.trim() || !projectIds.length || projectIds.some(id => !state.projects.some(project => project.id === id))) return { status: 'invalid', message: 'Provide a label and at least one existing project scope.' };
+  function issue(label: string, projectIds: string[], allProjects = false): TokenIssueResult {
+    if (!label.trim()) return { status: 'invalid', message: 'Provide a label and at least one existing project scope.' };
+    if (allProjects) {
+      if (projectIds.length) return { status: 'invalid', message: 'All my projects cannot also list specific projects.' };
+    } else if (projectIds.some(id => !state.projects.some(project => project.id === id))) {
+      return { status: 'invalid', message: 'Provide a label and at least one existing project scope.' };
+    }
     const suffix = crypto.randomUUID();
-    const token: McpToken = { id: `tok_${++state.sequence}`, label: label.trim(), projectIds: [...new Set(projectIds)], display: `sat_demo_…${suffix.slice(-6)}`, createdAt: timestamp(), lastUsedAt: null, revokedAt: null };
+    const token: McpToken = { id: `tok_${++state.sequence}`, label: label.trim(), allProjects, projectIds: allProjects ? [] : [...new Set(projectIds)], display: `sat_demo_…${suffix.slice(-6)}`, createdAt: timestamp(), lastUsedAt: null, revokedAt: null };
     state.tokens.push(token);
     return { status: 'created', token: copy(token), plaintext: `sat_demo_NOT_A_REAL_TOKEN_${suffix}` };
   }
@@ -104,17 +109,30 @@ export function createTrackerStore({ clock, initial, persist, onReset }: Tracker
       commit(); return { status: 'saved', value: copy(step) };
     },
     async listTokens() { return copy(state.tokens); },
-    async createToken(input) { const result = issue(input.label, input.projectIds); if (result.status === 'created') commit(); return result; },
+    async createToken(input) { const result = issue(input.label, input.projectIds, input.allProjects === true); if (result.status === 'created') commit(); return result; },
     async revokeToken(id) {
       const token = state.tokens.find(item => item.id === id);
       if (!token) return { status: 'not_found' };
       token.revokedAt ??= timestamp(); commit(); return { status: 'saved', value: copy(token) };
     },
+    async updateTokenScope(id, input) {
+      const token = state.tokens.find(item => item.id === id);
+      if (!token) return { status: 'not_found' };
+      if (token.revokedAt !== null) return { status: 'invalid', message: 'Revoked tokens cannot change scope.' };
+      if (input.allProjects) {
+        if (input.projectIds.length) return { status: 'invalid', message: 'All my projects cannot also list specific projects.' };
+        token.allProjects = true; token.projectIds = [];
+      } else {
+        if (input.projectIds.some(projectId => !state.projects.some(project => project.id === projectId))) return { status: 'invalid', message: 'Choose projects that exist in this demo.' };
+        token.allProjects = false; token.projectIds = [...new Set(input.projectIds)];
+      }
+      commit(); return { status: 'saved', value: copy(token) };
+    },
     async rotateToken(id) {
       const token = state.tokens.find(item => item.id === id);
       if (!token) return { status: 'not_found' };
       if (token.revokedAt !== null) return { status: 'invalid', message: 'Revoked tokens cannot be rotated.' };
-      const result = issue(token.label, token.projectIds);
+      const result = issue(token.label, token.allProjects ? [] : token.projectIds, token.allProjects);
       if (result.status === 'created') { token.revokedAt = timestamp(); commit(); }
       return result;
     },

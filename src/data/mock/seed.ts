@@ -57,5 +57,5 @@ export function seedTracker(now: number): TrackerState {
   ].map(step => ({ ...step, createdAt: at(-90), updatedAt: at(-10), revision: 1 }));
   return { demoLiveRunIds: [...DEMO_LIVE_RUN_IDS], account: { id: 'usr_demo', name: 'Demo operator', email: 'demo@example.invalid', emailVerified: true, demo: true }, projects, agents, runs, steps,
     waitingNotes: [{ projectId: 'prj_offers', text: 'T0-11a is still implementing the second form variant.', sourceRunId: 'run_1', updatedAt: at(-2), revision: 1 }],
-    tokens: [1, 2].map(n => ({ id: `tok_${n}`, label: n === 1 ? 'Demo coding client' : 'Demo weather bot', projectIds: [n === 1 ? 'prj_offers' : 'prj_weather'], display: `sat_demo_…FAKE_${n}`, createdAt: at(-1440), lastUsedAt: n === 1 ? at(-2) : null, revokedAt: null })), sequence: 10 };
+    tokens: [1, 2].map(n => ({ id: `tok_${n}`, label: n === 1 ? 'Demo coding client' : 'Demo weather bot', allProjects: false, projectIds: [n === 1 ? 'prj_offers' : 'prj_weather'], display: `sat_demo_…FAKE_${n}`, createdAt: at(-1440), lastUsedAt: n === 1 ? at(-2) : null, revokedAt: null })), sequence: 10 };
 }

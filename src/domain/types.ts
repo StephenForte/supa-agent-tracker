@@ -43,7 +43,7 @@ export interface WaitingNote { projectId: string; text: string; sourceRunId: str
 export interface ProjectNextSteps { steps: NextStep[]; waitingNote: WaitingNote | null }
 /** display is a masked suffix only, never sufficient to reconstruct plaintext. No credential is stored in Phase 0. */
 export interface McpToken {
-  id: string; label: string; projectIds: string[]; display: string; createdAt: Timestamp;
+  id: string; label: string; allProjects: boolean; projectIds: string[]; display: string; createdAt: Timestamp;
   lastUsedAt: Timestamp | null; revokedAt: Timestamp | null;
 }
 export type WriteResult<T> = { status: 'saved'; value: T } | { status: 'conflict'; current: T } | { status: 'not_found' } | { status: 'invalid'; message: string };

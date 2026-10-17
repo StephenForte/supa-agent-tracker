@@ -36,9 +36,20 @@ export async function withActor<T>(db: Database, access: Access, operation: (tx:
   });
 }
 
+/** True when this credential authorizes every project its owner owns, including future ones.
+ * The credential row is already UPDATE-locked by withActor; FOR SHARE re-reads that same row.
+ */
+export async function credentialAllowsEveryOwnedProject(tx: Transaction, access: CredentialAccess): Promise<boolean> {
+  const [row] = await tx.select({ allProjects: mcpCredentials.allProjects }).from(mcpCredentials).where(and(
+    eq(mcpCredentials.id, access.credentialId), eq(mcpCredentials.userId, access.userId),
+  )).for('share');
+  return row?.allProjects === true;
+}
+
 /** Recheck the stored grant and ownership, never trust the caller's cached project IDs alone.
  * Lock order: user, credential, project, grant, aggregate. A project lock serializes project
  * operations; credential UPDATE locks linearize writes with revocation. No authorization cache.
+ * An all-projects credential replaces the grant row with owner binding, under those same locks.
  */
 export async function withProject<T>(db: Database, access: Access, projectId: string, operation: (tx: Transaction) => Promise<T>): Promise<T> {
   return withActor(db, access, async (tx) => {
@@ -47,7 +58,7 @@ export async function withProject<T>(db: Database, access: Access, projectId: st
       eq(projects.id, projectId), eq(projects.ownerId, access.userId),
     )).for('update');
     if (!project) throw new AccessError('not_found');
-    if (access.kind === 'credential') {
+    if (access.kind === 'credential' && !await credentialAllowsEveryOwnedProject(tx, access)) {
       const [grant] = await tx.select({ id: mcpCredentialProjects.projectId }).from(mcpCredentialProjects).where(and(
         eq(mcpCredentialProjects.credentialId, access.credentialId), eq(mcpCredentialProjects.userId, access.userId),
         eq(mcpCredentialProjects.projectId, projectId),

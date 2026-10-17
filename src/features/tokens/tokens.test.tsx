@@ -86,6 +86,7 @@ describe('MCP tokens', () => {
     await user.click(screen.getByRole('button', { name: 'Create token' }));
     const dialog = await screen.findByRole('dialog', { name: 'Create a fake token' });
     await user.type(within(dialog).getByRole('textbox', { name: 'Label' }), 'Preview client');
+    await user.click(within(dialog).getByRole('radio', { name: 'Specific projects' }));
     await user.click(within(dialog).getByRole('checkbox', { name: 'Offers workspace' }));
     await user.click(within(dialog).getByRole('checkbox', { name: 'Daily weather briefing' }));
     await user.click(within(dialog).getByRole('button', { name: 'Create token' }));
@@ -102,6 +103,14 @@ describe('MCP tokens', () => {
     await user.click(screen.getByRole('button', { name: 'Copy' }));
     expect(await screen.findByText('Copied.')).toBeVisible();
     expect(writeText).toHaveBeenCalledWith(secret);
+    const cursorConfig = (screen.getByRole('textbox', { name: 'Cursor config' }) as HTMLTextAreaElement).value;
+    expect(JSON.parse(cursorConfig).mcpServers['supa-agent-tracker'].headers.Authorization).toBe(`Bearer ${secret}`);
+    expect((screen.getByRole('textbox', { name: 'Claude Desktop config' }) as HTMLTextAreaElement).value).toContain(`Bearer ${secret}`);
+    expect((screen.getByRole('textbox', { name: 'Grok Bot config' }) as HTMLTextAreaElement).value).toContain(`Masked secret: ${secret}`);
+    await user.click(screen.getByRole('button', { name: 'Copy Cursor config' }));
+    await user.click(screen.getByRole('button', { name: 'Copy Claude Desktop config' }));
+    await user.click(screen.getByRole('button', { name: 'Copy Grok Bot config' }));
+    expect(writeText.mock.calls.map(call => call[0])).toEqual(expect.arrayContaining([secret, cursorConfig]));
     await user.click(screen.getByRole('button', { name: 'Dismiss' }));
     expect(screen.queryByRole('textbox', { name: 'Fake demo token' })).not.toBeInTheDocument();
     expect(screen.queryByText('Fake demo token — cannot authenticate anything')).not.toBeInTheDocument();
@@ -117,6 +126,7 @@ describe('MCP tokens', () => {
     await user.click(screen.getByRole('button', { name: 'Create token' }));
     const dialog = await screen.findByRole('dialog', { name: 'Create a fake token' });
     await user.type(within(dialog).getByRole('textbox', { name: 'Label' }), 'Ephemeral');
+    await user.click(within(dialog).getByRole('radio', { name: 'Specific projects' }));
     await user.click(within(dialog).getByRole('checkbox', { name: 'Offers workspace' }));
     await user.click(within(dialog).getByRole('button', { name: 'Create token' }));
     const secret = (await screen.findByRole('textbox', { name: 'Fake demo token' }) as HTMLInputElement).value;
@@ -137,6 +147,7 @@ describe('MCP tokens', () => {
     await user.click(screen.getByRole('button', { name: 'Create token' }));
     const dialog = await screen.findByRole('dialog', { name: 'Create a fake token' });
     await user.type(within(dialog).getByRole('textbox', { name: 'Label' }), 'Copied once');
+    await user.click(within(dialog).getByRole('radio', { name: 'Specific projects' }));
     await user.click(within(dialog).getByRole('checkbox', { name: 'Offers workspace' }));
     await user.click(within(dialog).getByRole('button', { name: 'Create token' }));
     const first = (await screen.findByRole('textbox', { name: 'Fake demo token' }) as HTMLInputElement).value;
@@ -184,6 +195,7 @@ describe('MCP tokens', () => {
     await user.click(screen.getByRole('button', { name: 'Create token' }));
     const dialog = await screen.findByRole('dialog', { name: 'Create a fake token' });
     await user.type(within(dialog).getByRole('textbox', { name: 'Label' }), 'Clipboard');
+    await user.click(within(dialog).getByRole('radio', { name: 'Specific projects' }));
     await user.click(within(dialog).getByRole('checkbox', { name: 'Offers workspace' }));
     await user.click(within(dialog).getByRole('button', { name: 'Create token' }));
     const revealed = await screen.findByRole('textbox', { name: 'Fake demo token' });
@@ -207,6 +219,32 @@ describe('MCP tokens', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Create token' }));
     expect(await within(dialog).findByRole('alert')).toHaveTextContent('Provide a label and at least one existing project scope.');
     expect(screen.queryByRole('textbox', { name: 'Fake demo token' })).not.toBeInTheDocument();
+    sources.dispose();
+  });
+
+  it('defaults to all projects, then an edit to specific projects replaces that mode', async () => {
+    const user = userEvent.setup();
+    const { sources, storage } = renderTokens();
+    await screen.findByRole('article', { name: 'Demo coding client tok_1' });
+    await user.click(screen.getByRole('button', { name: 'Create token' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Create a fake token' });
+    expect(within(dialog).getByRole('radio', { name: 'All my projects (including future ones)' })).toBeChecked();
+    expect(within(dialog).queryByRole('checkbox')).not.toBeInTheDocument();
+    await user.type(within(dialog).getByRole('textbox', { name: 'Label' }), 'Future projects');
+    await user.click(within(dialog).getByRole('button', { name: 'Create token' }));
+    const secret = (await screen.findByRole('textbox', { name: 'Fake demo token' }) as HTMLInputElement).value;
+    const created = screen.getByRole('article', { name: /Future projects/ });
+    expect(within(created).getByText('All my projects')).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Dismiss' }));
+    assertSecretGone(secret, storage);
+    await user.click(within(created).getByRole('button', { name: 'Edit scope' }));
+    const scope = await screen.findByRole('dialog', { name: 'Edit scope' });
+    expect(within(scope).getByRole('radio', { name: 'All my projects (including future ones)' })).toBeChecked();
+    await user.click(within(scope).getByRole('radio', { name: 'Specific projects' }));
+    await user.click(within(scope).getByRole('checkbox', { name: 'Offers workspace' }));
+    await user.click(within(scope).getByRole('button', { name: 'Save scope' }));
+    expect(within(await screen.findByRole('article', { name: /Future projects/ })).getByText('Offers workspace')).toBeVisible();
+    expect(screen.queryByRole('textbox', { name: 'Cursor config' })).not.toBeInTheDocument();
     sources.dispose();
   });
 

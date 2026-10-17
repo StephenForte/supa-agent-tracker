@@ -14,7 +14,7 @@ it('applies 0003 to populated 0001+0002, preserving all existing data, and rerun
     await pool.query("INSERT INTO users(id,email) VALUES ('migration-user','migration@example.test'); INSERT INTO projects(id,owner_id,name,type) VALUES ('migration-project','migration-user','Kept project','coding'); INSERT INTO agents(id,project_id,name,title,workload_type) VALUES ('migration-agent','migration-project','Agent','Kept agent','coding'); INSERT INTO runs(id,project_id,agent_id,title,workload_type) VALUES ('migration-run','migration-project','migration-agent','Kept run','coding')");
     const snapshot = async () => (await Promise.all(['users', 'projects', 'agents', 'runs'].map(table => pool.query(`SELECT to_jsonb(t) AS row FROM ${table} t`)))).map(result => result.rows);
     const before = await snapshot();
-    expect(await runMigrations(pool, migrationsDir)).toEqual({ applied: ['0003_invites.sql'] });
+    expect(await runMigrations(pool, migrationsDir)).toEqual({ applied: ['0003_invites.sql', '0004_token_all_projects.sql'] });
     expect(await snapshot()).toEqual(before);
     expect(await runMigrations(pool, migrationsDir)).toEqual({ applied: [] });
     await pool.query("INSERT INTO invites(id,email,token_hash,invited_by) VALUES ('migration-invite','invitee@example.test',repeat('a',64),'migration-user')");

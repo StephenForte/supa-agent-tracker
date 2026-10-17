@@ -33,7 +33,8 @@ describe('integration setup', () => {
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Integration setup' })).toBeVisible();
     expect(screen.getAllByText('Not connected · Not tested')).toHaveLength(3);
-    expect(screen.getAllByText('Probe-verified 2026-10-15 (P1-A2); production verification pending (P1-G2)')).toHaveLength(3);
+    expect(screen.getByText('Production-verified 2026-10-16 (P1-G2, Cursor 3.25.6)')).toBeVisible();
+    expect(screen.getAllByText('Production-verified 2026-10-16 (P1-G2)')).toHaveLength(2);
     for (const name of ['Cursor', 'Claude Desktop (macOS)', 'Grok Bot']) {
       const card = screen.getByRole('article', { name });
       expect(card).toHaveTextContent('https://<your tracker host>/mcp');
@@ -73,7 +74,8 @@ describe('integration setup', () => {
     expect(document.body).not.toHaveTextContent('https://<your tracker host>/mcp');
     expect(document.body).not.toHaveTextContent('sat_');
     expect(screen.queryByText('Not connected · Not tested')).not.toBeInTheDocument();
-    expect(screen.getAllByText('Probe-verified 2026-10-15 (P1-A2); production verification pending (P1-G2)')).toHaveLength(3);
+    expect(screen.getByText('Production-verified 2026-10-16 (P1-G2, Cursor 3.25.6)')).toBeVisible();
+    expect(screen.getAllByText('Production-verified 2026-10-16 (P1-G2)')).toHaveLength(2);
     await user.click(screen.getByRole('button', { name: 'Copy MCP URL' }));
     expect(writeText).toHaveBeenLastCalledWith(`${window.location.origin}/mcp`);
     await user.click(screen.getByRole('button', { name: 'Copy base prompt' }));

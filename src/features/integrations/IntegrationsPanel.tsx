@@ -5,12 +5,12 @@ import { Button } from '../../components/ui/Button';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { useSourceQuery, useTrackerData } from '../../data/hooks';
 import { agentFacingContext, BASE_INSTRUCTION_DRAFT } from '../../domain/integrations/agentContext';
-import { CURSOR_HOOK_EXAMPLE, integrationExamples, MCP_PLACEHOLDER_URL } from '../../domain/integrations/examples';
+import { CURSOR_HOOK_EXAMPLE, deploymentMcpUrl, integrationExamples } from '../../domain/integrations/examples';
 
 export function IntegrationsPanel() {
   const tracker = useTrackerData();
   const demo = useDemoAccount();
-  const mcpUrl = demo ? MCP_PLACEHOLDER_URL : `${window.location.origin}/mcp`;
+  const mcpUrl = deploymentMcpUrl(demo ? null : window.location.origin);
   const [copyStatus, setCopyStatus] = useState('');
   async function copy(value: string, label: string) {
     try { await navigator.clipboard.writeText(value); setCopyStatus(`${label} copied.`); }

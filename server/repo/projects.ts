@@ -1,7 +1,7 @@
 import { and, eq, exists, inArray, sql } from 'drizzle-orm';
 import { mcpCredentialProjects, projects } from '../db/schema.js';
 import { pageItems, parsePageQuery, PaginationError, type Page } from '../app/pagination.js';
-import { checkRevision, requireUser, withActor, withProject, type Access, type Database, type UserAccess, type WriteResult } from './access.js';
+import { checkRevision, credentialAllowsEveryOwnedProject, requireUser, withActor, withProject, type Access, type Database, type UserAccess, type WriteResult } from './access.js';
 
 export type Project = typeof projects.$inferSelect;
 export type ProjectInput = Pick<typeof projects.$inferInsert, 'name' | 'description' | 'type' | 'lifecycle' | 'repositoryName' | 'repositoryUrl' | 'prdUrl' | 'tags' | 'staleThresholdMinutes' | 'heartbeatExpected' | 'reportingInstructions'>;
@@ -52,11 +52,14 @@ export async function listProjects(db: Database, access: Access, query: { cursor
   const { cursor, limit } = parsePageQuery(query);
   const after = cursor ? decodeCursor(cursor) : null;
   return withActor(db, access, async (tx) => {
-    const scope = access.kind === 'credential' ? exists(tx.select({ id: mcpCredentialProjects.projectId }).from(mcpCredentialProjects).where(and(
-      eq(mcpCredentialProjects.projectId, projects.id), eq(mcpCredentialProjects.userId, access.userId),
-      eq(mcpCredentialProjects.credentialId, access.credentialId),
-      inArray(projects.id, [...access.projectIds]),
-    ))) : undefined;
+    const allProjects = access.kind === 'credential' && await credentialAllowsEveryOwnedProject(tx, access);
+    const scope = access.kind !== 'credential' ? undefined : allProjects
+      ? (access.projectIds.length ? inArray(projects.id, [...access.projectIds]) : sql`false`)
+      : exists(tx.select({ id: mcpCredentialProjects.projectId }).from(mcpCredentialProjects).where(and(
+        eq(mcpCredentialProjects.projectId, projects.id), eq(mcpCredentialProjects.userId, access.userId),
+        eq(mcpCredentialProjects.credentialId, access.credentialId),
+        inArray(projects.id, [...access.projectIds]),
+      )));
     const live = sql<boolean>`EXISTS (SELECT 1 FROM runs r WHERE r.project_id = "projects"."id" AND r.execution_state = 'running' AND r.last_contact_at >= now() - "projects"."stale_threshold_minutes" * interval '1 minute')`;
     const activity = sql<string>`to_char(coalesce((SELECT max(r.updated_at) FROM runs r WHERE r.project_id = "projects"."id"), "projects"."updated_at") AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
     // Resolve the name from an authorized cursor anchor so arbitrarily long names do not

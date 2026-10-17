@@ -64,6 +64,7 @@ export const mcpCredentials = pgTable('mcp_credentials', {
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
   lastUsedAt: timestamp('last_used_at', { withTimezone: true, mode: 'date' }),
   revokedAt: timestamp('revoked_at', { withTimezone: true, mode: 'date' }),
+  allProjects: boolean('all_projects').notNull().default(false),
   revision: integer('revision').notNull().default(1),
 }, (t) => [
   check('mcp_credentials_revision_positive', sql`revision > 0`),

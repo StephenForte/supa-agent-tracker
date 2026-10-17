@@ -1,10 +1,10 @@
 # Reporting protocol
 
-Canonical Phase 1 agent protocol, checked against [the API](../api.md) and strict server schemas. The server implements 12 tools. Do not send extra fields or an owner ID. Authentication is a project-scoped bearer token; observed clientInfo/User-Agent are metadata, never agent or model identity. Private user notes have no MCP projection.
+Canonical Phase 1 agent protocol, checked against [the API](../api.md) and strict server schemas. The server implements 12 tools. Do not send extra fields or an owner ID. Authentication is a bearer token scoped to specific projects or to all of the owner's current and future projects; observed clientInfo/User-Agent are metadata, never agent or model identity. Private user notes have no MCP projection.
 
 ## Start and identity
 
-Use `list_projects` with optional `cursor`, `limit` to discover authorized projects (default 50, maximum 100; follow `nextCursor`). Call `get_project` with `project_id`. Read `reporting_policy` (`reporting_instructions`, `stale_threshold_minutes`, `heartbeat_expected`), `open_to_dos`, `waiting_note` and `running_runs` before starting.
+Use `list_projects` with optional `cursor`, `limit` to discover authorized projects (default 50, maximum 100; follow `nextCursor`). Match this workspace's repository (git remote URL or owner/name) against each project's `repositoryName` and `repositoryUrl` (`repository_name` / `repository_url`). Exactly one match: use it. None or several: ask the user once, then keep that answer for the session. If nobody can be asked, do the work without reporting. Call `get_project` with `project_id`. Read `reporting_policy` (`reporting_instructions`, `stale_threshold_minutes`, `heartbeat_expected`), `open_to_dos`, `waiting_note` and `running_runs` before starting.
 
 Call `check_in` with `project_id`, `agent_name`, `title`, `workload_type` (`coding` or `automation`), and a fresh `request_id`. Coding also requires `task_id`. Optional known values: `harness`, `model`, `parent_run_id`, `external_execution_id`. Never infer harness/model from connection metadata; omit unknown values. Retain returned `run_id`, `revision`, and policy. Every recurring execution checks in separately, rather than reusing yesterday's run.
 
