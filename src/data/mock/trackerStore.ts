@@ -32,7 +32,7 @@ export function createTrackerStore({ clock, initial, persist, onReset }: Tracker
     if (!label.trim()) return { status: 'invalid', message: 'Provide a label and at least one existing project scope.' };
     if (allProjects) {
       if (projectIds.length) return { status: 'invalid', message: 'All my projects cannot also list specific projects.' };
-    } else if (!projectIds.length || projectIds.some(id => !state.projects.some(project => project.id === id))) {
+    } else if (projectIds.some(id => !state.projects.some(project => project.id === id))) {
       return { status: 'invalid', message: 'Provide a label and at least one existing project scope.' };
     }
     const suffix = crypto.randomUUID();
