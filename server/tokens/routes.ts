@@ -9,11 +9,13 @@ import { secretSafeLogger, hashToken } from './auth.js';
 import { failure, httpStatus, id, ProtocolError, requestHash, requestId, revision, short } from '../mcp/protocol.js';
 
 export function tokenView(row: CredentialSummary) {
-  return { id: row.id, label: row.label, projectIds: row.projectIds, display: `••••${row.displaySuffix}`,
-    createdAt: row.createdAt, lastUsedAt: row.lastUsedAt, revokedAt: row.revokedAt, revision: row.revision };
+  return { id: row.id, label: row.label, allProjects: row.allProjects, projectIds: row.allProjects ? [] : row.projectIds,
+    display: `••••${row.displaySuffix}`, createdAt: row.createdAt, lastUsedAt: row.lastUsedAt, revokedAt: row.revokedAt, revision: row.revision };
 }
-const issue = z.strictObject({ label: short, project_ids: z.array(id).max(100), request_id: requestId });
+// Omitted all_projects stays false so an existing client that names project_ids is not silently widened.
+const issue = z.strictObject({ label: short, project_ids: z.array(id).max(100), all_projects: z.boolean().optional(), request_id: requestId });
 const edit = z.strictObject({ request_id: requestId, expected_revision: revision });
+const scopeBody = z.strictObject({ request_id: requestId, expected_revision: revision, all_projects: z.boolean(), project_ids: z.array(id).max(100) });
 
 export async function registerTokenRoutes(app: FastifyInstance, db: AppDatabase): Promise<void> {
   app.get('/api/tokens', { preHandler: requireUser, childLoggerFactory: secretSafeLogger }, async (request, reply) => {
@@ -31,8 +33,11 @@ export async function registerTokenRoutes(app: FastifyInstance, db: AppDatabase)
         const access = { kind: 'user' as const, userId: request.user!.userId };
         let plaintext: string | null = null;
         const result = await withIdempotency(db, access, input.request_id, requestHash({ action, tokenId, input: request.body }), async (tx) => {
-          let label: string; let projectIds: readonly string[];
-          if ('label' in input) { label = input.label; projectIds = input.project_ids; }
+          let label: string; let projectIds: readonly string[]; let allProjects: boolean;
+          if ('label' in input) {
+            label = input.label; allProjects = input.all_projects ?? false; projectIds = allProjects ? [] : input.project_ids;
+            if (allProjects && input.project_ids.length) throw new ProtocolError('validation_error');
+          }
           else {
             const previous = await getCredential(tx, access, tokenId!);
             if (previous.revision !== input.expected_revision) throw new ProtocolError('conflict', tokenView(previous));
@@ -40,10 +45,10 @@ export async function registerTokenRoutes(app: FastifyInstance, db: AppDatabase)
             const saved = await updateCredential(tx, access, tokenId!, input.expected_revision, { revoke: true });
             if (saved.status === 'conflict') throw new ProtocolError('conflict', tokenView(saved.current));
             if (action === 'revoke') return { token: tokenView(saved.value) };
-            label = previous.label; projectIds = previous.projectIds;
+            label = previous.label; allProjects = previous.allProjects; projectIds = allProjects ? [] : previous.projectIds;
           }
           plaintext = `sat_${randomBytes(32).toString('base64url')}`;
-          const row = await createCredential(tx, access, { label, projectIds, tokenHash: hashToken(plaintext), displaySuffix: plaintext.slice(-4) });
+          const row = await createCredential(tx, access, { label, projectIds, allProjects, tokenHash: hashToken(plaintext), displaySuffix: plaintext.slice(-4) });
           // Only safe metadata enters idempotency_keys.response. Copy-once even on retries.
           return { token: tokenView(row), plaintext: null };
         });
@@ -52,4 +57,25 @@ export async function registerTokenRoutes(app: FastifyInstance, db: AppDatabase)
       } catch (error) { const body = failure(error); return reply.code(httpStatus(body.error.code)).send(body); }
     });
   }
+  app.post('/api/tokens/:id/scope', { preHandler: requireUser, childLoggerFactory: secretSafeLogger }, async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    try {
+      const input = scopeBody.parse(request.body);
+      if (input.all_projects && input.project_ids.length) throw new ProtocolError('validation_error');
+      const tokenId = id.parse((request.params as { id: string }).id);
+      const access = { kind: 'user' as const, userId: request.user!.userId };
+      const result = await withIdempotency(db, access, input.request_id, requestHash({ action: 'scope', tokenId, input: request.body }), async (tx) => {
+        const previous = await getCredential(tx, access, tokenId);
+        if (previous.revokedAt) throw new ProtocolError('validation_error');
+        if (previous.revision !== input.expected_revision) throw new ProtocolError('conflict', tokenView(previous));
+        const saved = await updateCredential(tx, access, tokenId, input.expected_revision, {
+          allProjects: input.all_projects, projectIds: input.all_projects ? [] : input.project_ids,
+        });
+        if (saved.status === 'conflict') throw new ProtocolError('conflict', tokenView(saved.current));
+        return { token: tokenView(saved.value) };
+      });
+      if (result.status === 'idempotency_mismatch') throw new ProtocolError(result.status);
+      return result.response;
+    } catch (error) { const body = failure(error); return reply.code(httpStatus(body.error.code)).send(body); }
+  });
 }

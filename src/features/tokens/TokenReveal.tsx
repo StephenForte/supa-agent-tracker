@@ -1,19 +1,27 @@
 import { useRef, useState } from 'react';
 import { Button } from '../../components/ui/Button';
+import { claudeDesktopConfigSnippet, cursorConfigSnippet, grokBotConfigSnippet } from '../../domain/integrations/clientConfig';
 
-export function TokenReveal({ plaintext, onDismiss, demo = true }: { plaintext: string; onDismiss: () => void; demo?: boolean }) {
+const snippetsFor = (mcpUrl: string, plaintext: string) => [
+  { name: 'Cursor config', copy: 'Copy Cursor config', text: cursorConfigSnippet(mcpUrl, plaintext) },
+  { name: 'Claude Desktop config', copy: 'Copy Claude Desktop config', text: claudeDesktopConfigSnippet(mcpUrl, plaintext) },
+  { name: 'Grok Bot config', copy: 'Copy Grok Bot config', text: grokBotConfigSnippet(mcpUrl, plaintext) },
+] as const;
+
+/** Plaintext and client snippets exist only while this reveal is mounted. */
+export function TokenReveal({ plaintext, mcpUrl, onDismiss, demo = true }: { plaintext: string; mcpUrl: string; onDismiss: () => void; demo?: boolean }) {
   const field = useRef<HTMLInputElement>(null);
   const [copyError, setCopyError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-  async function copy() {
+  const [copied, setCopied] = useState<string | null>(null);
+  async function copy(value: string, label: string) {
     try {
-      await navigator.clipboard.writeText(plaintext);
-      setCopied(true);
+      await navigator.clipboard.writeText(value);
+      setCopied(label);
       setCopyError(null);
     } catch {
       field.current?.focus();
       field.current?.select();
-      setCopied(false);
+      setCopied(null);
       setCopyError('Clipboard copy failed. The token is selected so you can copy it manually.');
     }
   }
@@ -22,10 +30,18 @@ export function TokenReveal({ plaintext, onDismiss, demo = true }: { plaintext: 
     <label htmlFor="demo-token-plaintext" className="mt-3 block text-sm">{demo ? 'Fake demo token' : 'Access token'}</label>
     <input id="demo-token-plaintext" ref={field} readOnly value={plaintext} autoComplete="off" spellCheck={false} className="mt-1 w-full max-w-full break-all rounded border border-slate-400 bg-white px-2 py-2 font-mono text-sm" />
     <div className="mt-3 flex flex-wrap gap-2">
-      <Button variant="primary" onClick={() => void copy()}>Copy</Button>
+      <Button variant="primary" onClick={() => void copy(plaintext, 'Copied.')}>Copy</Button>
       <Button onClick={onDismiss}>Dismiss</Button>
     </div>
-    {copied && <p role="status">Copied.</p>}
+    {snippetsFor(mcpUrl, plaintext).map(snippet => {
+      const fieldId = `token-config-${snippet.name.replaceAll(' ', '-').toLowerCase()}`;
+      return <div key={snippet.name} className="mt-3">
+        <label htmlFor={fieldId} className="block text-sm">{snippet.name}</label>
+        <textarea id={fieldId} readOnly value={snippet.text} autoComplete="off" spellCheck={false} rows={snippet.name === 'Cursor config' ? 8 : 4} className="mt-1 w-full max-w-full break-all rounded border border-slate-400 bg-white px-2 py-2 font-mono text-sm" />
+        <Button onClick={() => void copy(snippet.text, `${snippet.name} copied.`)}>{snippet.copy}</Button>
+      </div>;
+    })}
+    {copied && <p role="status">{copied}</p>}
     {copyError && <p role="alert">{copyError}</p>}
   </section>;
 }

@@ -32,9 +32,11 @@ export interface TrackerDataSource extends ObservableSource {
   /** Demo only. A worker may rewrite its own instruction, never user completion or another worker's step. */
   simulateAgentStepUpdate(stepId: string, instruction: string, sourceRunId: string, expectedRevision: number): Promise<WriteResult<NextStep>>;
   listTokens(): Promise<McpToken[]>;
-  createToken(input: { label: string; projectIds: string[] }): Promise<TokenIssueResult>;
+  createToken(input: { label: string; projectIds: string[]; allProjects?: boolean }): Promise<TokenIssueResult>;
   revokeToken(tokenId: string): Promise<WriteResult<McpToken>>;
   rotateToken(tokenId: string): Promise<TokenIssueResult>;
+  /** Switches all-projects and a specific list without issuing a new plaintext. */
+  updateTokenScope(tokenId: string, input: { allProjects: boolean; projectIds: string[] }): Promise<WriteResult<McpToken>>;
   resetDemo(): Promise<void>;
 }
 /** Not reachable through TrackerDataSource. Never pass this source into agent-facing code. */

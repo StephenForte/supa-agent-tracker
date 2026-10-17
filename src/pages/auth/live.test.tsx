@@ -78,7 +78,10 @@ it('owns live plaintext only in the open dialog and discards it on dismiss and n
   const user = userEvent.setup(); const { router } = await setup('/settings/tokens');
   const create = await screen.findByRole('button', { name: 'Create token' }); await user.click(create);
   const dialog = await screen.findByRole('dialog', { name: 'Create token' });
-  await user.type(within(dialog).getByLabelText('Label'), 'Live token'); await user.click(within(dialog).getByRole('checkbox', { name: 'Offers workspace' }));
+  await user.type(within(dialog).getByLabelText('Label'), 'Live token');
+  expect(within(dialog).getByRole('radio', { name: 'All my projects (including future ones)' })).toBeChecked();
+  await user.click(within(dialog).getByRole('radio', { name: 'Specific projects' }));
+  await user.click(within(dialog).getByRole('checkbox', { name: 'Offers workspace' }));
   await user.click(within(dialog).getByRole('button', { name: 'Create token' }));
   expect(await screen.findByRole('textbox', { name: 'Access token' })).toHaveValue(secret);
   expect(screen.queryByText(/Fake demo token/)).not.toBeInTheDocument();

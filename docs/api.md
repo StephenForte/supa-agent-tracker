@@ -83,25 +83,33 @@ The SPA consumes these routes through its HTTP sources when built with `VITE_DAT
 These routes require `requireUser` (a browser session once P1-B2 lands; the existing
 `x-test-user-id` seam only in tests). MCP bearer tokens cannot administer tokens.
 Responses set `Cache-Control: no-store`. Token metadata uses the web `McpToken`
-fields: `id`, `label`, `projectIds`, `display` (masked last four characters),
+fields: `id`, `label`, `allProjects`, `projectIds`, `display` (masked last four characters),
 `createdAt`, `lastUsedAt`, `revokedAt`, plus `revision` for optimistic writes.
+`allProjects: true` means every project this owner has now or creates later, and `projectIds` is empty.
+`allProjects: false` means only the ids in `projectIds`.
 Timestamps are UTC ISO strings; nullable times remain null. Hashes are never returned.
 
 | Route | Body | Response |
 |---|---|---|
 | `GET /api/tokens` | none | Array of the owner's token metadata, including revoked tokens |
-| `POST /api/tokens` | `label`, `project_ids`, `request_id` | `{ token, plaintext }` |
-| `POST /api/tokens/:id/rotate` | `request_id`, `expected_revision` | `{ token, plaintext }`; old token revoked and replacement issued atomically with identical label/grants |
+| `POST /api/tokens` | `label`, `project_ids`, `request_id`, optional `all_projects` (default `false`) | `{ token, plaintext }` |
+| `POST /api/tokens/:id/rotate` | `request_id`, `expected_revision` | `{ token, plaintext }`; old token revoked and replacement issued atomically with the same label and scope |
 | `POST /api/tokens/:id/revoke` | `request_id`, `expected_revision` | `{ token }` with revocation time and incremented revision |
+| `POST /api/tokens/:id/scope` | `request_id`, `expected_revision`, `all_projects`, `project_ids` | `{ token }`; switches all-projects and a specific list without a new plaintext |
 
 Tokens are `sat_` followed by 32 cryptographically random bytes encoded base64url.
 Only a SHA-256 hex hash and the last four characters are stored. The first successful
 issuance/rotation returns plaintext once. The idempotency response stores metadata
 and `plaintext: null`; every replay returns null. A lost first response requires
 rotation or a new token. Revocation is irreversible, and a revoked token cannot be
-rotated. Label/scope edits are outside this endpoint's contract. Labels are trimmed,
+rotated or have its scope edited. Labels are trimmed,
 1–200 characters; project IDs are 1–128 characters and at most 100 grants per token.
-Unknown fields are rejected. Empty scope is permitted and grants no project access.
+Unknown fields are rejected. Empty specific scope is permitted and grants no project access.
+`all_projects: true` requires `project_ids` to be empty; omitting `all_projects` keeps the
+historical specific-scope behavior so an existing client is not silently widened. The issue
+form defaults to all-projects. Scope edits are owner-only, revision-checked and idempotent.
+An all-projects token stores no grant rows. Authentication resolves that token to the owner's
+current projects on every request. A revoked token's scope edit is `validation_error`.
 Conflicts include safe current token metadata at `error.details.current`.
 
 ## MCP (P1-C1)
@@ -113,10 +121,11 @@ Conflicts include safe current token metadata at `error.details.current`.
 
 Authenticate **every request** with `Authorization: Bearer sat_…`. Browser cookies,
 URL query tokens, and the retired `stub:` bearer are never accepted. Authentication
-loads identity and project grants from the database, checks revocation, and updates
+loads identity and scope from the database, checks revocation, and updates
 last-used at most once per minute without changing the credential revision.
-Repositories recheck revocation and stored grants for all tool reads/writes. A token
-revoked or rotated during a session fails on its next HTTP request.
+An all-projects token's project ids are the owner's projects at that request, not a cached grant list.
+Repositories recheck revocation and either the stored grants or the all-projects owner binding for all tool reads/writes. A token
+revoked, rotated, or narrowed during a session fails closed on its next HTTP request.
 
 Missing, malformed, unknown and revoked credentials receive HTTP 401:
 

@@ -27,7 +27,7 @@ const run = z.object({
 });
 const step = z.object({ id: z.string(), projectId: z.string(), position: z.number(), instruction: z.string(), done: z.boolean(), sourceRunId: z.string(), createdAt: time, updatedAt: time, revision, completionChangedBy: nullableText, completionChangedAt: time.nullable() });
 const waiting = z.object({ projectId: z.string(), text: z.string(), sourceRunId: z.string(), updatedAt: time, revision });
-const token = z.object({ id: z.string(), label: z.string(), projectIds: z.array(z.string()), display: z.string().startsWith('sat_demo_…'), createdAt: time, lastUsedAt: time.nullable(), revokedAt: time.nullable() });
+const token = z.object({ id: z.string(), label: z.string(), allProjects: z.boolean().default(false), projectIds: z.array(z.string()), display: z.string().startsWith('sat_demo_…'), createdAt: time, lastUsedAt: time.nullable(), revokedAt: time.nullable() });
 export const runMetadataPatchSchema = run.pick({ title: true, taskId: true, harness: true, model: true, completionSummary: true, blocker: true, noPrReason: true, prReferences: true }).partial();
 export const trackerSchema: z.ZodType<TrackerState> = z.object({
   // Default preserves pre-heartbeat v1 demo edits instead of discarding saved state.
@@ -45,6 +45,6 @@ export const trackerSchema: z.ZodType<TrackerState> = z.object({
       (item.parentRunId === null || (runs.get(item.parentRunId)?.projectId === item.projectId && runs.get(item.parentRunId)?.childRunIds.includes(item.id))) &&
       item.childRunIds.every(id => runs.get(id)?.parentRunId === item.id && runs.get(id)?.projectId === item.projectId)) &&
     [...state.steps, ...state.waitingNotes].every(item => projects.has(item.projectId) && runs.get(item.sourceRunId)?.projectId === item.projectId) &&
-    state.tokens.every(item => item.projectIds.every(id => projects.has(id)));
+    state.tokens.every(item => (!item.allProjects || item.projectIds.length === 0) && item.projectIds.every(id => projects.has(id)));
 });
 export const notesSchema: z.ZodType<PrivateNote[]> = z.array(z.object({ projectId: z.string(), text: z.string(), updatedAt: time.nullable(), revision }));

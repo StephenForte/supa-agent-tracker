@@ -1,12 +1,16 @@
 export const INTEGRATION_STATUS = 'Not connected · Not tested' as const;
-export const VERIFIED_CONFIGURATION_LABEL = "Probe-verified 2026-10-15 (P1-A2); production verification pending (P1-G2)" as const;
 export const MCP_PLACEHOLDER_URL = "https://<your tracker host>/mcp";
+
+/** Null origin keeps the placeholder used by the demo build. */
+export function deploymentMcpUrl(origin: string | null): string {
+  return origin ? `${origin}/mcp` : MCP_PLACEHOLDER_URL;
+}
 
 export interface IntegrationExample {
   id: 'cursor' | 'claude-desktop' | 'grok-bot';
   name: string;
   status: typeof INTEGRATION_STATUS;
-  verifiedLabel: typeof VERIFIED_CONFIGURATION_LABEL;
+  verifiedLabel: string;
   instructions: readonly string[];
   example: string;
   docs: readonly { label: string; url: string }[];
@@ -19,9 +23,9 @@ export function integrationExamples(url = MCP_PLACEHOLDER_URL): readonly Integra
     "id": "cursor",
     "name": "Cursor",
     "status": "Not connected \u00b7 Not tested",
-    "verifiedLabel": "Probe-verified 2026-10-15 (P1-A2); production verification pending (P1-G2)",
+    "verifiedLabel": "Production-verified 2026-10-16 (P1-G2, Cursor 3.25.6)",
     "instructions": [
-      "In ~/.cursor/mcp.json, add the server URL and headers.Authorization as shown below. Merge with existing servers.",
+      "Prefer Copy Cursor config on the one-time token reveal: it pastes a complete mcpServers object with this deployment's URL and the new token. Otherwise, in ~/.cursor/mcp.json, add the server URL and headers.Authorization as shown below and merge with existing servers. Choose All my projects (including future ones) or specific projects when issuing the token.",
       "Paste the base prompt into the project\u2019s agent instructions or a Cursor rule. This placement is guidance; P1-A2 verified MCP calls, not automatic prompt loading.",
       "Cursor subagents inherited MCP tools on the parent session in P1-A2. Each still needs its own check-in and parent_run_id. Omit model when unavailable."
     ],
@@ -49,9 +53,9 @@ export function integrationExamples(url = MCP_PLACEHOLDER_URL): readonly Integra
     "id": "claude-desktop",
     "name": "Claude Desktop (macOS)",
     "status": "Not connected \u00b7 Not tested",
-    "verifiedLabel": "Probe-verified 2026-10-15 (P1-A2); production verification pending (P1-G2)",
+    "verifiedLabel": "Production-verified 2026-10-16 (P1-G2)",
     "instructions": [
-      "Open Customize \u2192 Connectors \u2192 Add custom connector. Set the remote MCP URL below, choose No sign in, and add Request header authorization with value Bearer <YOUR_TOKEN>.",
+      "Prefer Copy Claude Desktop config on the one-time token reveal: it pastes the remote MCP URL, header name authorization, and Bearer value. Otherwise open Customize \u2192 Connectors \u2192 Add custom connector, set the remote MCP URL below, choose No sign in, and add Request header authorization with value Bearer <YOUR_TOKEN>. Choose All my projects (including future ones) or specific projects when issuing the token.",
       "Request headers are a limited beta and may be missing on your account. If absent, stop setup and report the gap; OAuth fields are not bearer-token fields. Organization-shared headers do not establish individual identity.",
       "Paste the base prompt into the conversation or project instructions. This placement is guidance; P1-A2 did not verify persistent instruction loading or Cowork subagent inheritance.",
       "No hook path is known for Claude Desktop. Rely on agent heartbeats at natural pauses; scheduled Cowork tasks cannot prove the current execution is alive. Include model only from authoritative session configuration."
@@ -76,15 +80,15 @@ export function integrationExamples(url = MCP_PLACEHOLDER_URL): readonly Integra
     "id": "grok-bot",
     "name": "Grok Bot",
     "status": "Not connected \u00b7 Not tested",
-    "verifiedLabel": "Probe-verified 2026-10-15 (P1-A2); production verification pending (P1-G2)",
+    "verifiedLabel": "Production-verified 2026-10-16 (P1-G2)",
     "instructions": [
-      "Use the connector settings screen to set the MCP URL below and the Authorization header value Bearer <YOUR_TOKEN>. Never enter the token through chat-driven add-server setup or paste it into chat.",
-      "P1-A2 connected through an mcp-remote 0.15.1 bridge. Exact bridge installation and additional settings navigation were not recorded; use the existing connector settings path and report a missing field rather than inventing a command.",
+      "Prefer Copy Grok Bot config on the one-time token reveal: it pastes the MCP URL and the token for Grok's masked secret field, which keeps the token out of chat. Use Grok's own setup; do not paste the token into the chat transcript. Choose All my projects (including future ones) or specific projects when issuing the token.",
+      "Production verification on 2026-10-16 used Grok's own setup with a masked secret field and its MCP bridge (mcp-remote style, seen as 0.15.1 in P1-A2). Report a missing field rather than inventing a command.",
       "Paste the base prompt into bot instructions/settings, or provide it as a nonsecret instruction message. Persistent prompt placement was not verified in P1-A2.",
       "No hook path is known for Grok Bot. Rely on agent heartbeats at natural pauses. Routines or inbound webhooks do not prove an existing run is alive.",
       "Grok Bot presents as Cursor through mcp-remote; clientInfo is metadata only. Set harness from actual runtime knowledge and omit model when unknown. Subagent inheritance was not tested."
     ],
-    "example": "Connector settings\nMCP URL: https://<your tracker host>/mcp\nAuthorization: Bearer <YOUR_TOKEN>\nObserved bridge: mcp-remote 0.15.1",
+    "example": "Connector settings\nMCP URL: https://<your tracker host>/mcp\nMasked secret: <YOUR_TOKEN>\nObserved bridge: mcp-remote 0.15.1",
     "docs": [
       {
         "label": "Grok Bot guide",
@@ -104,7 +108,7 @@ export function integrationExamples(url = MCP_PLACEHOLDER_URL): readonly Integra
       }
     ]
   }
-].map(example => ({ ...example, id: example.id as IntegrationExample['id'], status: INTEGRATION_STATUS, verifiedLabel: VERIFIED_CONFIGURATION_LABEL, example: example.example.replaceAll(MCP_PLACEHOLDER_URL, url) }));
+].map(example => ({ ...example, id: example.id as IntegrationExample['id'], status: INTEGRATION_STATUS, example: example.example.replaceAll(MCP_PLACEHOLDER_URL, url) }));
 }
 
 export const CURSOR_HOOK_EXAMPLE = "{\n  \"version\": 1,\n  \"hooks\": {\n    \"postToolUse\": [{ \"command\": \"node --env-file=/ABSOLUTE/PRIVATE/supa-heartbeat.env /ABSOLUTE/PATH/heartbeat.mjs\", \"timeout\": 12 }],\n    \"postToolUseFailure\": [{ \"command\": \"node --env-file=/ABSOLUTE/PRIVATE/supa-heartbeat.env /ABSOLUTE/PATH/heartbeat.mjs\", \"timeout\": 12 }]\n  }\n}";

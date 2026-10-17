@@ -57,7 +57,15 @@ export function createHttpTracker(client: HttpClient, visibility?: Visibility, o
     }),
     async simulateAgentStepUpdate() { return { status: 'invalid', message: 'Agent simulation is available only in the demo.' }; },
     listTokens: () => observable.read('tokens', () => client.request<McpToken[]>('/api/tokens')),
-    createToken: input => issue('/api/tokens', { label: input.label, project_ids: input.projectIds, ...actionFields() }),
+    createToken: input => issue('/api/tokens', { label: input.label, all_projects: input.allProjects === true, project_ids: input.allProjects ? [] : input.projectIds, ...actionFields() }),
+    updateTokenScope: (id, input) => mutation(async () => {
+      const token = (await client.request<(McpToken & { revision: number })[]>('/api/tokens')).find(item => item.id === id);
+      if (!token) return { status: 'not_found' as const };
+      const result = await write<{ token: McpToken }>(client, `/api/tokens/${segment(id)}/scope`, 'POST', { all_projects: input.allProjects, project_ids: input.allProjects ? [] : input.projectIds, expected_revision: token.revision, ...actionFields() });
+      if (result.status === 'saved') return { status: 'saved' as const, value: result.value.token };
+      if (result.status === 'conflict') return { status: 'conflict' as const, current: result.current as unknown as McpToken };
+      return result;
+    }),
     revokeToken: id => mutation(async () => {
       const token = (await client.request<(McpToken & { revision: number })[]>('/api/tokens')).find(token => token.id === id);
       if (!token) return { status: 'not_found' as const };

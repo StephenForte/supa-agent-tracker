@@ -1,12 +1,18 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
-import { idempotencyKeys, mcpCredentialProjects } from '../db/schema.js';
-import { AccessError, withActor, type Access, type Database, type Transaction } from './access.js';
+import { idempotencyKeys, mcpCredentialProjects, projects } from '../db/schema.js';
+import { AccessError, credentialAllowsEveryOwnedProject, withActor, type Access, type Database, type Transaction } from './access.js';
 function scope(access: Access) { return access.kind === 'user' ? `user:${access.userId}` : `credential:${access.credentialId}`; }
 function validRequest(requestId: string, requestHash?: string) {
   if (!/^[A-Za-z0-9._:-]{1,128}$/.test(requestId) || requestHash === '') throw new AccessError('validation_error');
 }
 async function effectiveProjects(tx: Transaction, access: Access): Promise<string[] | null> {
   if (access.kind === 'user') return null;
+  // Snapshot every project authorized at this moment. All-projects is the owner's set, not a grant list,
+  // so a later narrowing fails the replay when any snapshotted project is no longer authorized.
+  if (await credentialAllowsEveryOwnedProject(tx, access)) {
+    const rows = await tx.select({ id: projects.id }).from(projects).where(eq(projects.ownerId, access.userId)).orderBy(projects.id);
+    return rows.map((row) => row.id);
+  }
   const grants = await tx.select({ id: mcpCredentialProjects.projectId }).from(mcpCredentialProjects).where(and(
     eq(mcpCredentialProjects.credentialId, access.credentialId), eq(mcpCredentialProjects.userId, access.userId),
     inArray(mcpCredentialProjects.projectId, [...access.projectIds]),
