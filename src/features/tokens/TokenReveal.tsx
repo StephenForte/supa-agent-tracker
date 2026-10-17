@@ -30,7 +30,7 @@ export function TokenReveal({ plaintext, mcpUrl, onDismiss, demo = true }: { pla
     <label htmlFor="demo-token-plaintext" className="mt-3 block text-sm">{demo ? 'Fake demo token' : 'Access token'}</label>
     <input id="demo-token-plaintext" ref={field} readOnly value={plaintext} autoComplete="off" spellCheck={false} className="mt-1 w-full max-w-full break-all rounded border border-slate-400 bg-white px-2 py-2 font-mono text-sm" />
     <div className="mt-3 flex flex-wrap gap-2">
-      <Button variant="primary" onClick={() => void copy(plaintext, 'Copied.')}>Copy</Button>
+      <Button variant="primary" onClick={() => void copy(plaintext, 'Copied.')}>{copied === 'Copied.' ? 'Copied' : 'Copy'}</Button>
       <Button onClick={onDismiss}>Dismiss</Button>
     </div>
     {snippetsFor(mcpUrl, plaintext).map(snippet => {
@@ -38,7 +38,7 @@ export function TokenReveal({ plaintext, mcpUrl, onDismiss, demo = true }: { pla
       return <div key={snippet.name} className="mt-3">
         <label htmlFor={fieldId} className="block text-sm">{snippet.name}</label>
         <textarea id={fieldId} readOnly value={snippet.text} autoComplete="off" spellCheck={false} rows={snippet.name === 'Cursor config' ? 8 : 4} className="mt-1 w-full max-w-full break-all rounded border border-slate-400 bg-white px-2 py-2 font-mono text-sm" />
-        <Button onClick={() => void copy(snippet.text, `${snippet.name} copied.`)}>{snippet.copy}</Button>
+        <Button onClick={() => void copy(snippet.text, `${snippet.name} copied.`)}>{copied === `${snippet.name} copied.` ? 'Copied' : snippet.copy}</Button>
       </div>;
     })}
     {copied && <p role="status">{copied}</p>}

@@ -102,6 +102,7 @@ describe('MCP tokens', () => {
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
     await user.click(screen.getByRole('button', { name: 'Copy' }));
     expect(await screen.findByText('Copied.')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Copied' })).toBeVisible();
     expect(writeText).toHaveBeenCalledWith(secret);
     const cursorConfig = (screen.getByRole('textbox', { name: 'Cursor config' }) as HTMLTextAreaElement).value;
     expect(JSON.parse(cursorConfig).mcpServers['supa-agent-tracker'].headers.Authorization).toBe(`Bearer ${secret}`);
@@ -154,6 +155,7 @@ describe('MCP tokens', () => {
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
     await user.click(screen.getByRole('button', { name: 'Copy' }));
     expect(await screen.findByText('Copied.')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Copied' })).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Rotate Demo coding client' }));
     const rotateDialog = await screen.findByRole('dialog', { name: 'Rotate token?' });
     await user.click(within(rotateDialog).getByRole('button', { name: 'Rotate token' }));
