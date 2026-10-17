@@ -4,6 +4,12 @@ import { actionFields, HttpError, nullable, pages, segment, write, type HttpClie
 import { createObservable, type Visibility } from './observable.js';
 export function createHttpTracker(client: HttpClient, visibility?: Visibility, onSessionChange: () => void = () => {}): TrackerDataSource {
   const observable = createObservable(visibility);
+  client.onUnauthorized(path => {
+    observable.invalidate('session');
+    // Refresh after the original 401 without emitting a second expiry signal
+    // or recursively retrying a failed session endpoint.
+    if (path !== '/api/auth/get-session') void getSession(false).catch(() => {});
+  });
   const stepProjects = new Map<string, string>();
   async function mutation<T>(operation: () => Promise<T>): Promise<T> {
     const result = await operation();
@@ -24,12 +30,18 @@ export function createHttpTracker(client: HttpClient, visibility?: Visibility, o
       throw error;
     }
   }
+  function getSession(notifyUnauthorized = true) {
+    return observable.read('session', async () => {
+      const result = await client.request<{ user: { id: string; name: string; email: string; emailVerified: boolean } } | null>('/api/auth/get-session', 'GET', undefined, notifyUnauthorized);
+      return result ? { ...result.user, demo: false } : null;
+    }, false);
+  }
   const auth: BrowserAuth = {
-    getSession: () => observable.read('session', async () => { const result = await client.request<{ user: { id: string; name: string; email: string; emailVerified: boolean } } | null>('/api/auth/get-session'); return result ? { ...result.user, demo: false } : null; }),
+    getSession,
     async submit(action, body = {}) {
-      const result = await client.request<unknown>(`/api/auth/${action}`, 'POST', body); onSessionChange(); observable.changed(); return result;
+      const result = await client.request<unknown>(`/api/auth/${action}`, 'POST', body); onSessionChange(); observable.invalidate('session'); observable.changed(); return result;
     },
-    async verify(token) { await client.request(`/api/auth/verify-email?token=${segment(token)}`); observable.changed(); },
+    async verify(token) { await client.request(`/api/auth/verify-email?token=${segment(token)}`); observable.invalidate('session'); observable.changed(); },
   };
   return {
     subscribe: observable.subscribe, getSnapshot: observable.getSnapshot, observe: observable.observe, auth,

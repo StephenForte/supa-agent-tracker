@@ -128,3 +128,13 @@ it('submits password reset, account password change, and generic forgot-password
   await act(async () => { await router.navigate('/logout'); }); await user.click(screen.getByRole('button', { name: 'Confirm log out' }));
   expect(await screen.findByRole('heading', { level: 1, name: 'Log in' })).toBeVisible();
 });
+
+it('signs out through HTTP and lands on login with a cleared session', async () => {
+  const user = userEvent.setup(); const { router, fetch } = await setup('/agents');
+  await screen.findByRole('heading', { name: 'All agents', level: 1 });
+  await user.click(screen.getByRole('link', { name: 'Log out' }));
+  await user.click(await screen.findByRole('button', { name: 'Confirm log out' }));
+  await screen.findByRole('heading', { name: 'Log in', level: 1 });
+  expect(router.state.location.pathname).toBe('/login');
+  expect(fetch.mock.calls.some(([path]) => path === '/api/auth/sign-out')).toBe(true);
+});

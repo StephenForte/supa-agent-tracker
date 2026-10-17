@@ -28,7 +28,7 @@ describe('browser authentication through HTTP and Postgres', () => {
   const secret = 'production-secret-unique-at-least-32-characters';
   const resendKey = 'production-resend-key-unique-marker';
   let address = 0;
-  const invitedEmails = new Set(['invited', 'reset', 'change', 'expire', 'logs', 'race', 'legacy', 'outage'].map(name => `${name}@example.test`));
+  const invitedEmails = new Set(['invited', 'reset', 'change', 'expire', 'logs', 'race', 'legacy', 'outage', 'poll'].map(name => `${name}@example.test`));
   const post = async (path: string, body: Record<string, unknown>, cookie?: string, ip = `192.0.10.${++address}`) => {
     const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
     if (path === '/sign-up/email' && invitedEmails.has(email)) {
@@ -100,6 +100,24 @@ describe('browser authentication through HTTP and Postgres', () => {
     const logout = await post('/sign-out', {}, cookie);
     expect(logout.statusCode).toBe(200);
     expect((await get('/api/protected', cookie)).statusCode).toBe(401);
+  });
+  it('allows 200 signed-in session reads 4 seconds apart from one IP without idle time', async () => {
+    await signup('poll@example.test'); await verify('poll@example.test');
+    const cookie = await login('poll@example.test', password, '192.0.20.1');
+    let now = Date.now(); const clock = vi.spyOn(Date, 'now').mockImplementation(() => now);
+    try {
+      for (let i = 0; i < 200; i++) {
+        now += 4000;
+        const response = await app.inject({ method: 'GET', url: '/api/auth/get-session', headers: { cookie }, remoteAddress: '192.0.20.1' });
+        expect(response.statusCode, `session read ${i + 1}`).toBe(200);
+        expect(response.json().user.email).toBe('poll@example.test');
+      }
+    } finally { clock.mockRestore(); }
+  });
+  it('keeps verification resend limited on its fourth request and the exact other auth rules', async () => {
+    for (let i = 0; i < 3; i++) expect((await post('/send-verification-email', { email: 'unknown@example.test' }, undefined, '192.0.20.2')).statusCode).toBe(200);
+    expect((await post('/send-verification-email', { email: 'unknown@example.test' }, undefined, '192.0.20.2')).statusCode).toBe(429);
+    expect(app.browserAuth!.auth.options.rateLimit).toEqual({ enabled: true, window: 60, max: 100, storage: 'memory', customRules: { '/get-session': false, '/sign-in/email': { window: 60, max: 5 } } });
   });
   it('stores library password hashes and rejects non-null unused OAuth credentials', async () => {
     const hashes = await pool.query('SELECT password_hash FROM accounts');

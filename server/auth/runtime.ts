@@ -76,7 +76,8 @@ export function createAuthRuntime(pool: pg.Pool, config: AppConfig) {
         await email.sendEmail({ to: user.email, subject: 'Verify your email', text: `Verify your email: ${link.href}` });
       },
     },
-    rateLimit: { enabled: true, window: 60, max: 100, storage: 'memory', customRules: { '/sign-in/email': { window: 60, max: 5 } } },
+    // Session reads have no password/brute-force surface and must survive continuous use.
+    rateLimit: { enabled: true, window: 60, max: 100, storage: 'memory', customRules: { '/get-session': false, '/sign-in/email': { window: 60, max: 5 } } },
     advanced: {
       // Better Auth otherwise skips Origin validation under NODE_ENV=test.
       // Keep the same callback checks active in HTTP tests and production.
