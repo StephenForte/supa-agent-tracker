@@ -2,7 +2,7 @@
 export interface Visibility { readonly visibilityState: string; addEventListener(type: 'visibilitychange', listener: () => void): void; removeEventListener(type: 'visibilitychange', listener: () => void): void }
 export function createObservable(visibility: Visibility | undefined = (globalThis as { document?: Visibility }).document) {
   const focus = (globalThis as { window?: { addEventListener(type: 'focus', listener: () => void): void; removeEventListener(type: 'focus', listener: () => void): void } }).window;
-  let revision = 0; let timer: ReturnType<typeof setTimeout> | undefined; let polling = false; let generation = 0;
+  let revision = 0; let timer: ReturnType<typeof setTimeout> | undefined; let polling = false; let refreshing = false; let refreshPending = false; let generation = 0;
   const listeners = new Set<() => void>();
   const queries = new Map<() => Promise<unknown>, { value?: string; references: number }>();
   // Event-driven reads survive ordinary data polling and writes.
@@ -12,9 +12,18 @@ export function createObservable(visibility: Visibility | undefined = (globalThi
   const notify = () => { revision++; listeners.forEach(listener => listener()); };
   const clearPolled = () => { for (const key of cache.keys()) if (!unpolled.has(key)) cache.delete(key); };
   function schedule() { if (listeners.size && visible() && timer === undefined) timer = setTimeout(() => { timer = undefined; void poll(); }, 7000); }
-  async function poll() {
-    if (polling || !listeners.size || !visible()) return;
-    polling = true; const epoch = generation; clearPolled(); let changed = false;
+  async function poll(refresh = false) {
+    if (!listeners.size || !visible()) return;
+    if (polling) {
+      // Tab return can emit visibility and focus together. Keep the first
+      // refresh's in-flight cache; queue a return only behind an ordinary poll.
+      if (refresh && !refreshing) refreshPending = true;
+      return;
+    }
+    polling = true; refreshing = refresh;
+    const epoch = generation;
+    if (refresh) cache.clear(); else clearPolled();
+    let changed = false;
     await Promise.all([...queries].map(async ([read, state]) => {
       let value: string;
       try { value = JSON.stringify(await read()); } catch (error) { value = `error:${error instanceof Error ? error.message : 'Request failed'}`; }
@@ -22,13 +31,13 @@ export function createObservable(visibility: Visibility | undefined = (globalThi
       if (value !== state.value) changed = true;
       state.value = value;
     }));
-    polling = false;
+    polling = false; refreshing = false;
     if (epoch === generation && listeners.size && visible() && changed) notify();
-    schedule();
+    if (refreshPending) { refreshPending = false; void poll(true); } else schedule();
   }
   function visibilityChanged() {
     clearTimeout(timer); timer = undefined;
-    if (visible()) { cache.clear(); void poll(); }
+    if (visible()) void poll(true);
   }
   return {
     subscribe(listener: () => void) {

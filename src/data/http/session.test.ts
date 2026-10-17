@@ -61,3 +61,44 @@ it('re-reads on a private-note 401 and never recursively retries a session 401',
   await expect(tracker.auth!.getSession()).rejects.toThrow('session has expired');
   expect(fetch).toHaveBeenCalledTimes(3);
 });
+it('coalesces visibility and focus while a return refresh is in flight without dropping its session cache', async () => {
+  vi.useFakeTimers();
+  let state = 'visible'; const listeners = new Set<() => void>();
+  const visibility = { get visibilityState() { return state; }, addEventListener(_type: string, fn: () => void) { listeners.add(fn); }, removeEventListener(_type: string, fn: () => void) { listeners.delete(fn); } };
+  let sessions = 0; let release: ((response: Response) => void) | undefined;
+  const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation(async path => {
+    if (path !== '/api/auth/get-session') return json({ items: [], nextCursor: null });
+    sessions++;
+    if (sessions === 2) return new Promise<Response>(resolve => { release = resolve; });
+    return json({ user: { id: 'user' } });
+  });
+  const { tracker } = createHttpSources({ fetch, visibility });
+  const stop = tracker.subscribe(() => {}); const read = () => tracker.auth!.getSession();
+  const off = tracker.observe!(read); const offData = tracker.observe!(() => tracker.listProjects());
+  await read(); await vi.advanceTimersByTimeAsync(0);
+  state = 'hidden'; listeners.forEach(fn => fn()); state = 'visible'; listeners.forEach(fn => fn());
+  window.dispatchEvent(new Event('focus'));
+  expect(sessions).toBe(2);
+  release!(json({ user: { id: 'returned' } })); await vi.advanceTimersByTimeAsync(0);
+  expect(await read()).toMatchObject({ id: 'returned' }); expect(sessions).toBe(2);
+  await vi.advanceTimersByTimeAsync(21000); expect(sessions).toBe(2);
+  off(); offData(); stop(); expect(vi.getTimerCount()).toBe(0);
+});
+it('queues one return refresh behind a slow ordinary data poll', async () => {
+  vi.useFakeTimers();
+  let projectReads = 0; let sessionReads = 0; let release: ((response: Response) => void) | undefined;
+  const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation(async path => {
+    if (path === '/api/auth/get-session') { sessionReads++; return json({ user: { id: 'user' } }); }
+    if (++projectReads === 2) return new Promise<Response>(resolve => { release = resolve; });
+    return json({ items: [], nextCursor: null });
+  });
+  const { tracker } = createHttpSources({ fetch }); const stop = tracker.subscribe(() => {});
+  const off = tracker.observe!(() => tracker.auth!.getSession()); const offData = tracker.observe!(() => tracker.listProjects());
+  await vi.advanceTimersByTimeAsync(7000); expect(projectReads).toBe(2); expect(sessionReads).toBe(1);
+  window.dispatchEvent(new Event('focus')); window.dispatchEvent(new Event('focus'));
+  expect(projectReads).toBe(2);
+  release!(json({ items: [], nextCursor: null })); await vi.advanceTimersByTimeAsync(0);
+  expect(projectReads).toBe(3); expect(sessionReads).toBe(2);
+  await vi.advanceTimersByTimeAsync(7000); expect(projectReads).toBe(4); expect(sessionReads).toBe(2);
+  off(); offData(); stop(); expect(vi.getTimerCount()).toBe(0);
+});
