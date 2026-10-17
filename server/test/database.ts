@@ -1,5 +1,6 @@
 import { appendFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
+import { setTimeout as delay } from 'node:timers/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import pg from 'pg';
@@ -34,19 +35,30 @@ export async function createScratchDatabase(): Promise<ScratchDatabase> {
   const admin = new pg.Pool({ connectionString: adminDatabaseUrl, max: 1 });
   try {
     await admin.query(`CREATE DATABASE "${name}"`);
-  } catch (error) {
+  } finally {
     await admin.end();
-    throw error;
   }
   return {
     name,
     connectionString: withDatabase(adminDatabaseUrl, name),
     drop: async () => {
+      // A fresh admin pool also lets callers retry cleanup after closing a leaked client.
+      const admin = new pg.Pool({ connectionString: adminDatabaseUrl, max: 1 });
       try {
-        await admin.query(
-          'SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()',
-          [name],
-        );
+        // pool.end() can resolve before its clients' sockets/backends have closed.
+        // Never terminate them: a late FATAL can become an unhandled client error.
+        const deadline = performance.now() + 5_000;
+        while (true) {
+          const { rows } = await admin.query(
+            'SELECT 1 FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()',
+            [name],
+          );
+          if (rows.length === 0) break;
+          if (performance.now() >= deadline) {
+            throw new Error(`Timed out waiting for connections to ${name} to close; close leaked clients before retrying drop()`);
+          }
+          await delay(25);
+        }
         await admin.query(`DROP DATABASE "${name}"`);
         appendFileSync(ledgerPath, `dropped ${name}\n`);
       } finally {
