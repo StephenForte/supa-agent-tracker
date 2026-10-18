@@ -179,6 +179,7 @@ Status: **Confirmed by operator (2026-10-15)**
 Render web service on the **Starter** plan (no sleep, so heartbeats and stale detection behave) plus **Render Postgres Basic**
 (backups). Operator-estimated about $13/month; the planner confirms current prices on Render and gets explicit approval
 before provisioning in P1-G. The Phase 0 static site stays until the Phase 1 service replaces it.
+Outcome (2026-10-18): Phase 1 production was verified through P1-G2 steps 4–7, and the operator retired the Phase 0 static site. Ops PR #53 removed it from render.yaml, then it was deleted in the dashboard; supa-agent-tracker.onrender.com now returns 404. The demo build mode (D-028) remains for local use and tests.
 
 ### D-021 — Transactional email provider
 Status: **Confirmed by operator (2026-10-15)**

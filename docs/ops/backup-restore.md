@@ -55,7 +55,7 @@ pg_restore --dbname="$TARGET_DATABASE_URL" --no-owner --no-privileges --format=c
 
 Run this against the database you are about to trust, then against the app pointed at it.
 
-- [ ] `schema_migrations` contains `0001_initial.sql` and `0002_auth.sql`, and no unexpected filename.
+- [ ] `schema_migrations` contains every file in `server/db/migrations/` (0001–0004 as of 2026-10-17), and no unexpected filename.
 - [ ] Row counts for every application table match the source you restored from (or, after PITR, match what you expect at that time). Tables: `users`, `sessions`, `accounts`, `auth_verifications`, `projects`, `agents`, `runs`, `run_events`, `pull_request_refs`, `tool_usage_aggregates`, `next_steps`, `waiting_notes`, `private_notes`, `audit_events`, `mcp_credentials`, `mcp_credential_projects`, `idempotency_keys`.
 - [ ] `GET /ready` on the web service returns 200 and `{ "status": "ready" }`.
 - [ ] The temporary allow-list entry is gone.
@@ -102,3 +102,17 @@ Result, 2026-10-16, Postgres.app 18.6. `schema_migrations` on both databases: `0
 | waiting_notes | 0 | 0 |
 
 Mismatch count: 0. Both scratch databases were dropped after the compare.
+
+## Production PITR drill
+
+Run 2026-10-18 by the operator in the Render dashboard, verified by the planner. Hobby workspace, so the PITR window is 3 days.
+
+1. **Restore:** supa-agent-tracker-db → Recovery → Restore Database, named `supa-agent-tracker-db-drill`, target 2026-10-17 16:55 UTC (just after the P1-G2 load test). Basic-256mb, 1 GB, PG 18. It reached Available, and as documented it copied the empty IP allowlist.
+2. **Access:** a single `/32` for the operator's IP was added to the **drill** instance only. Production's allowlist stayed empty (checked via the Render API before and after).
+3. **Verify:** a hidden-prompt script ran `psql` against the drill's external URL and printed counts only.
+   - `schema_migrations`: 0001_initial, 0002_auth, 0003_invites, 0004_token_all_projects.
+   - Load-test fingerprint, against independently known client-side counts: load runs 25 (expected 25), finished 25 (25), their run_events 625 (625), load next steps 25 (25), `load-*` idempotency keys 650 (650). **Exact match.**
+   - Row counts: users 2, accounts 2, sessions 3, invites 1, projects 3, agents 28, runs 28, run_events 637, next_steps 28, mcp_credentials 6, mcp_credential_projects 4, idempotency_keys 678. These fit 25 load runs plus 3 acceptance runs. audit_events 0 is expected, because audit rows come only from user step completion/reopen and manual close.
+4. **Teardown:** the drill instance was deleted (gone from the Render API listing), and production `/ready` returned 200 afterwards. Cost: under an hour of a second Basic-256mb instance.
+
+Result: PITR restores a consistent, migrated copy. Pointing the app at a restored instance (step 7 of the procedure) was not exercised, because the drill copy was never wired to the app.
