@@ -2,7 +2,7 @@
 
 This is the operator record for the paid web service and Postgres in `render.yaml`. Merging that file onto `main` can provision both immediately, because the Blueprint syncs from `main`. **Do not merge until you explicitly approve the cost gate below.** Nothing in this document creates a Render resource.
 
-The Phase 0 static site `supa-agent-tracker` is unchanged. Its build stays `npm ci && npm run build`, with no environment variables and no compute plan. See [Deploying the Phase 0 demo](../deploy.md).
+The Phase 0 static site `supa-agent-tracker` was retired on 2026-10-18 (removed from `render.yaml`, then deleted in the dashboard). See [Deploying the Phase 0 demo](../deploy.md).
 
 Checked against Render's docs on 2026-10-16: [Blueprint spec](https://render.com/docs/blueprint-spec), [Blueprint JSON Schema](https://render.com/schema/render.yaml.json), [pricing](https://render.com/pricing), [Postgres backups](https://render.com/docs/postgresql-backups), [creating and connecting](https://render.com/docs/postgresql-creating-connecting), [web services](https://render.com/docs/web-services), and [rollbacks](https://render.com/docs/rollbacks).
 
