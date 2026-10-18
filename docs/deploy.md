@@ -1,5 +1,7 @@
 # Deploying the Phase 0 demo
 
+> **Retired 2026-10-18.** The static site `supa-agent-tracker` was removed from `render.yaml` and then deleted in the Render dashboard (a Blueprint change never deletes a resource). Production is the Phase 1 web service in [Deploying Phase 1](ops/deploy-phase1.md). This page is kept as the record of the Phase 0 procedure. The demo build itself (`npm run build`, D-028) still exists for local use and tests.
+
 The shell is a **demo with simulated data and no backend**. Render serves the Vite production build as a static site. Nothing in this repository provisions the service, stores credentials, or talks to GitHub, Postgres, or an MCP host.
 
 Creating the Render service is a separate step, done after this configuration is on `main`, with the operator's approval. This document is that procedure. It does not mean a site is already live. Phase 1 (paid web service and Postgres) is specified in [Deploying Phase 1](ops/deploy-phase1.md) and stays unmerged until the operator approves the cost gate.
