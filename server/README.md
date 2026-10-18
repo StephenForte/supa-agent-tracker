@@ -2,7 +2,7 @@
 
 Node 24 Fastify process for Phase 1. It serves the built SPA from `dist/`, a JSON API under `/api`, and will serve MCP under `/mcp`. This task is the foundation: configuration, a Postgres pool, a SQL migration runner, health checks, and the conventions in [docs/api.md](../docs/api.md). The domain schema and access-controlled repositories are implemented; authentication is still a stub.
 
-The Phase 0 static site is still `npm run build` → `dist/`. That command does not need `DATABASE_URL` or the server compile. Render keeps publishing `dist/` until a later task changes the deploy.
+The demo build is still `npm run build` → `dist/`, and it does not need `DATABASE_URL` or the server compile. The Phase 0 static site that published it on Render was retired on 2026-10-18; production builds with `VITE_DATA_SOURCE=http` (see [Deploying Phase 1](../docs/ops/deploy-phase1.md)).
 
 ## Local Postgres
 
