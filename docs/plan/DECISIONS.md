@@ -293,3 +293,20 @@ Status: **Planner decision (2026-10-19)**, taken with the P1-H dispatch; the ope
 - run_events is not covered. It's user-visible history and needs its own decision if it grows.
 - Task: P1-H.
 
+### D-034 — Old projects and tokens get out of the way
+Status: **Confirmed by operator (2026-10-19)**.
+- Projects get a one-click Archive / Unarchive (Unarchive → `active`). There is still no delete.
+- All agents hides runs and agents of archived projects by default, with a "Show archived projects" toggle kept in the URL. A deep link to an archived project's run still opens. This replaces the earlier "archived history always shown" behaviour, which existed only as a code comment.
+- The tokens list hides revoked tokens by default ("Show revoked (N)") and sorts active tokens by last used, then created.
+- Projects sort and filter state lives in the URL, so it survives reload.
+- Task: P2-A.
+
+### D-035 — Public agents page per owner
+Status: **Confirmed by operator (2026-10-19)**: per owner, status only.
+- An owner may set a `public_handle` (3–32 chars, `[a-z0-9-]`, unique case-insensitively) and mark projects `is_public` (default false). `/public/<handle>/agents` shows that owner's public, non-archived projects only.
+- Anonymous visitors see project name, agent name, run title, execution and work state, live/stale, harness, timestamps. Nothing else: no descriptions, repositories, tags, status messages, summaries, task ids, models, PR refs, steps, notes, or anything about tokens, actors or emails.
+- The endpoint is served from an explicit field allowlist with exact-key tests. Unknown, empty and malformed handles get one identical 404. It's rate-limited per trusted client IP and uses `no-store`.
+- The page is `noindex` until the operator decides on search indexing.
+- Payload bound: the latest 200 runs by last contact per owner page (P2-B choice, accepted in review 2026-10-19). The response carries no IDs.
+- Task: P2-B.
+
