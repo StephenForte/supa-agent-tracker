@@ -310,3 +310,11 @@ Status: **Confirmed by operator (2026-10-19)**: per owner, status only.
 - Payload bound: the latest 200 runs by last contact per owner page (P2-B choice, accepted in review 2026-10-19). The response carries no IDs.
 - Task: P2-B.
 
+### D-036 — "Needs me" home screen
+Status: **Confirmed by operator (2026-10-19)**.
+- `/needs-me` lists only the owner's runs (non-archived projects) that need attention, in three groups: **Blocked** (work_status blocked; takes precedence), **Stale** (running and past the project's threshold, using the existing `stale()` rule), **Waiting for review** (finished + waiting_for_review). Each group is oldest first.
+- Actions in place: Mark done (review), Close run (stale), Open run (blocked). It's client-side over existing data and actions, with no server change.
+- It's the first main-nav item, with a count badge. The installed PWA's `start_url` becomes `/needs-me`. The browser root `/` keeps redirecting to `/projects` (planner assumption, revisitable).
+- The same task replaces P2-E's generated "S" icon and header mark with the operator-supplied icon, cropped to remove baked-in rounded corners and a generator watermark. Icon sources move out of `public/` so build scripts aren't served.
+- Task: P2-F.
+
