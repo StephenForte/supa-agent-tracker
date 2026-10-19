@@ -318,3 +318,12 @@ Status: **Confirmed by operator (2026-10-19)**.
 - The same task replaces P2-E's generated "S" icon and header mark with the operator-supplied icon, cropped to remove baked-in rounded corners and a generator watermark. Icon sources move out of `public/` so build scripts aren't served.
 - Task: P2-F.
 
+### D-037 — Opt-in email alert digest
+Status: **Confirmed by operator (2026-10-19)**: email via the existing Resend sender, batched digest. The operator doesn't currently use alerts, so they're off by default.
+- Per-user toggles (Blocked / Stale / Waiting for review), all **off** by default; verified emails only.
+- Same rules as Needs me (D-036), evaluated server-side: own non-archived projects, Blocked takes precedence.
+- An in-process job every 5 minutes (advisory-locked) sends **at most one email per user per cycle**, listing up to 20 new items plus "and N more". The insert and send happen in one transaction committed only after a successful send.
+- **Once per run per kind** (`alert_deliveries` PK (run_id, kind)). **Baseline on enable:** turning a kind on records the current matches without emailing them, so only later changes alert.
+- No web push (a possible later task). No per-project settings or quiet hours.
+- Task: P2-G.
+
