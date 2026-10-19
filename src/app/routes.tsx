@@ -2,14 +2,17 @@ import { Navigate, type RouteObject } from 'react-router';
 import { SessionGuard } from './SessionGuard';
 import { Shell } from './Shell';
 import { NotFound } from './NotFound';
+import { PublicAgentsPage } from '../pages/public/PublicAgentsPage';
 import { ProjectsPage } from '../pages/projects/ProjectsPage';
 import { ProjectFormPage } from '../pages/projects/ProjectFormPage';
 import { ProjectDetailPage } from '../pages/project-detail/ProjectDetailPage';
 import { AgentsPage } from '../pages/agents/AgentsPage';
 import { AuthPage } from '../pages/auth/AuthPage';
 import { SettingsPage } from '../pages/settings/SettingsPage';
-/** D-007 frozen route map. Keep page implementations in their owners' folders. */
-export const routes: RouteObject[] = [{ element: <Shell />, children: [
+/** D-007 route map, plus the operator's public agents page outside the session. */
+export const routes: RouteObject[] = [
+  { path: '/public/:handle/agents', element: <PublicAgentsPage /> },
+  { element: <Shell />, children: [
   { path: '/', element: <Navigate to="/projects" replace /> },
   { path: '/projects', element: <SessionGuard><ProjectsPage /></SessionGuard> },
   { path: '/projects/new', element: <SessionGuard><ProjectFormPage /></SessionGuard> },
@@ -27,4 +30,5 @@ export const routes: RouteObject[] = [{ element: <Shell />, children: [
   { path: '/reset-password', element: <AuthPage title="Reset password" /> },
   { path: '/logout', element: <AuthPage title="Log out" /> },
   { path: '*', element: <NotFound /> },
-] }];
+  ] },
+];

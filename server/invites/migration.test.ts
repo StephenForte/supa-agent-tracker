@@ -14,8 +14,18 @@ it('applies 0003 to populated 0001+0002, preserving all existing data, and rerun
     await pool.query("INSERT INTO users(id,email) VALUES ('migration-user','migration@example.test'); INSERT INTO projects(id,owner_id,name,type) VALUES ('migration-project','migration-user','Kept project','coding'); INSERT INTO agents(id,project_id,name,title,workload_type) VALUES ('migration-agent','migration-project','Agent','Kept agent','coding'); INSERT INTO runs(id,project_id,agent_id,title,workload_type) VALUES ('migration-run','migration-project','migration-agent','Kept run','coding')");
     const snapshot = async () => (await Promise.all(['users', 'projects', 'agents', 'runs'].map(table => pool.query(`SELECT to_jsonb(t) AS row FROM ${table} t`)))).map(result => result.rows);
     const before = await snapshot();
-    expect(await runMigrations(pool, migrationsDir)).toEqual({ applied: ['0003_invites.sql', '0004_token_all_projects.sql', '0005_idempotency_retention.sql'] });
-    expect(await snapshot()).toEqual(before);
+    expect(await runMigrations(pool, migrationsDir)).toEqual({ applied: ['0003_invites.sql', '0004_token_all_projects.sql', '0005_idempotency_retention.sql', '0006_public_pages.sql'] });
+    const after = await snapshot();
+    // 0006 adds users.public_handle and projects.is_public. Existing column values stay; nothing is published.
+    const comparable = (sets: { row: Record<string, unknown> }[][]) => sets.map((rows) => rows.map(({ row }) => {
+      const copy = { ...row };
+      delete copy.public_handle;
+      delete copy.is_public;
+      return copy;
+    }));
+    expect(comparable(after as { row: Record<string, unknown> }[][])).toEqual(comparable(before as { row: Record<string, unknown> }[][]));
+    expect((after[0] as { row: { public_handle: string | null } }[]).every(({ row }) => row.public_handle === null)).toBe(true);
+    expect((after[1] as { row: { is_public: boolean } }[]).every(({ row }) => row.is_public === false)).toBe(true);
     expect(await runMigrations(pool, migrationsDir)).toEqual({ applied: [] });
     await pool.query("INSERT INTO invites(id,email,token_hash,invited_by) VALUES ('migration-invite','invitee@example.test',repeat('a',64),'migration-user')");
     await expect(pool.query("UPDATE invites SET used_at=now() WHERE id='migration-invite'")).rejects.toThrow();

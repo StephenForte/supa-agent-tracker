@@ -46,6 +46,16 @@ export function createHttpTracker(client: HttpClient, visibility?: Visibility, o
   return {
     subscribe: observable.subscribe, getSnapshot: observable.getSnapshot, observe: observable.observe, auth,
     getAccount: () => observable.read('account', async () => ({ ...await client.request<Omit<Account, 'demo'>>('/api/account'), demo: false })),
+    updateAccount: (input) => mutation(async () => {
+      try {
+        const value = await client.request<Omit<Account, 'demo'>>('/api/account', 'PATCH', { publicHandle: input.publicHandle, ...actionFields() });
+        return { status: 'saved' as const, value: { ...value, demo: false as const } };
+      } catch (error) {
+        if (error instanceof HttpError && error.status === 400) return { status: 'invalid' as const, message: error.message };
+        if (error instanceof HttpError && error.status === 409) return { status: 'conflict' as const, message: error.message };
+        throw error;
+      }
+    }),
     listProjects: () => observable.read('projects', () => pages<Project>(client, '/api/projects?include_archived=true')),
     getProject: id => observable.read(`project:${id}`, () => nullable(() => client.request<Project>(`/api/projects/${segment(id)}`))),
     createProject: input => mutation(() => write<Project>(client, '/api/projects', 'POST', { ...input, ...actionFields() })),

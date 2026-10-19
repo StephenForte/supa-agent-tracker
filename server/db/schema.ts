@@ -8,10 +8,13 @@ export const users = pgTable('users', {
   displayName: text('display_name').notNull().default(''),
   timezone: text('timezone').notNull().default('UTC'),
   image: text('image'),
+  publicHandle: text('public_handle'),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
 }, (t) => [
   uniqueIndex('users_email_ci').on(sql`lower(${t.email})`),
+  uniqueIndex('users_public_handle_ci').on(sql`lower(${t.publicHandle})`),
+  check('users_public_handle_format', sql`${t.publicHandle} IS NULL OR ${t.publicHandle} ~ '^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$'`),
 ]);
 
 export const projects = pgTable('projects', {
@@ -25,6 +28,7 @@ export const projects = pgTable('projects', {
   repositoryUrl: text('repository_url'),
   prdUrl: text('prd_url'),
   tags: text('tags').array().notNull().default(sql`'{}'`),
+  isPublic: boolean('is_public').notNull().default(false),
   staleThresholdMinutes: integer('stale_threshold_minutes').notNull().default(15),
   heartbeatExpected: boolean('heartbeat_expected').notNull().default(false),
   reportingInstructions: text('reporting_instructions').notNull().default(''),

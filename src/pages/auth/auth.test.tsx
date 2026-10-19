@@ -21,7 +21,8 @@ function renderAt(path: string) {
 }
 
 function assertPasswordsStayOutOfReach() {
-  expect(document.querySelectorAll('form')).toHaveLength(0);
+  const forms = [...document.querySelectorAll('form')];
+  expect(forms.filter((form) => form.querySelector('#public-handle') === null)).toHaveLength(0);
   const passwords = document.querySelectorAll('input[type="password"]');
   expect(passwords.length).toBeGreaterThan(0);
   for (const input of passwords) {
@@ -29,6 +30,7 @@ function assertPasswordsStayOutOfReach() {
     expect(input).not.toHaveAttribute('name');
     expect((input as HTMLInputElement).value).toBe('');
     expect(input).toHaveAccessibleDescription('Disabled in demo');
+    expect(input.closest('form')).toBeNull();
   }
 }
 

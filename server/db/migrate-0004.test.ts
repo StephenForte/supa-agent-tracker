@@ -48,6 +48,10 @@ describe('0004 all_projects on populated data', () => {
     const db = createDb(pool);
     const row = await authenticateCredentialHash(db, tokenHash);
     expect(row).toMatchObject({ allProjects: false, projectIds: ['prj-a'] });
+    for (const file of ['0005_idempotency_retention.sql', '0006_public_pages.sql']) {
+      await cp(path.join(migrationsDir, file), path.join(dir, file));
+    }
+    expect((await runMigrations(pool, dir)).applied).toEqual(['0005_idempotency_retention.sql', '0006_public_pages.sql']);
     const access = { kind: 'credential' as const, userId: 'user-a', credentialId: 'cred-1', projectIds: row!.projectIds };
     expect((await listProjects(db, access)).items.map((project) => project.id)).toEqual(['prj-a']);
   });

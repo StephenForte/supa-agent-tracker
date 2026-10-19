@@ -4,6 +4,8 @@ Node 24 Fastify process for Phase 1. It serves the built SPA from `dist/`, a JSO
 
 The demo build is still `npm run build` → `dist/`, and it does not need `DATABASE_URL` or the server compile. The Phase 0 static site that published it on Render was retired on 2026-10-18; production builds with `VITE_DATA_SOURCE=http` (see [Deploying Phase 1](../docs/ops/deploy-phase1.md)).
 
+`GET /api/public/:handle/agents` is the one unauthenticated data route. It resolves the handle to that owner and returns only public, non-archived projects, with an explicit field allowlist (see [docs/api.md](../docs/api.md)). Migration `0006_public_pages` adds `users.public_handle` (null) and `projects.is_public` (false), so applying it publishes nothing until an owner opts in. The route is limited to 60 requests a minute per `request.ip` and is not exposed over MCP.
+
 ## Local Postgres
 
 The operator's Mac runs Postgres.app (PostgreSQL 18) on `localhost:5432` with trust auth for the macOS user. Do not start or reconfigure it. Create a database you own, then point `DATABASE_URL` at that database. Tests never use it: they create and drop `supa_test_<random>` databases and must fail if `DATABASE_URL` is unset.

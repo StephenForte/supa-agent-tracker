@@ -21,7 +21,7 @@ Failures use one JSON shape and a stable `code`:
 | `conflict` | 409 | `expected_revision` does not match. `error.details.current` is the current resource |
 | `idempotency_mismatch` | 409 | The same `request_id` was reused with a different body |
 | `payload_too_large` | 413 | JSON body exceeds 1 MiB (1,048,576 bytes) |
-| `rate_limited` | 429 | Authentication request limit exceeded |
+| `rate_limited` | 429 | A per-IP or per-credential request limit was exceeded |
 | `internal_error` | 500 | Unexpected failure. The message is always `Internal server error` |
 | `database_unreachable` | 503 | Readiness check could not query Postgres |
 | `migrations_pending` | 503 | Readiness check found SQL files that are not applied |
@@ -244,7 +244,7 @@ headers and bodies so URL query credentials cannot leak through logging.
 
 P1-C2. All of these routes use `requireUser`. Another user's project, agent or run is `404 not_found` with no `details` and no write. A successful body uses the field names and nesting in `src/domain/types.ts` (`Project`, `LogicalAgent`, `Run`, `RunEvent`, `PrReference`, `ToolAggregate`) so a later HTTP client can map them without renaming. `WriteResult` is not a response envelope: `2xx` is the resource, and `409 conflict` puts that resource at `error.details.current`. `GET` of a missing id is `404`, which a client can treat as the contract's `null`.
 
-`GET /api/account` returns `{ id, name, email, emailVerified }`. `name` is `users.display_name`. There is no `demo` flag.
+`GET /api/account` returns `{ id, name, email, emailVerified, publicHandle }`. `name` is `users.display_name`. `publicHandle` is null until the owner sets one. There is no `demo` flag.
 
 Collections return `{ items, nextCursor }` using the pagination rules above. An empty `cursor` or `limit` is treated as omitted. Cursors are opaque and apply only to the same filters.
 
@@ -266,7 +266,7 @@ Collections return `{ items, nextCursor }` using the pagination rules above. An 
 
 List items include `prReferences`, `tools` (`null` when the run has no tool row), `childRunIds` and `parentRunId`. They do not include `events` (D-026). Detail and mutation responses include `events` ordered by `receivedAt` then `id`, oldest first. `actorId` is the user id or the credential id stored on the event. Timestamps are UTC ISO-8601.
 
-The flat columns `stale_threshold_minutes`, `heartbeat_expected` and `reporting_instructions` map to `reportingPolicy.{ staleThresholdMinutes, heartbeatExpected, instructions }` in both directions. Run responses omit `observedClientInfo`, `observedUserAgent` and `externalExecutionId`.
+The flat columns `stale_threshold_minutes`, `heartbeat_expected` and `reporting_instructions` map to `reportingPolicy.{ staleThresholdMinutes, heartbeatExpected, instructions }` in both directions. `isPublic` maps to `projects.is_public`. Omitting it on create stores false. Run responses omit `observedClientInfo`, `observedUserAgent` and `externalExecutionId`.
 
 Every mutation takes `request_id` and runs through `withIdempotency` on the supplied transaction. The hash is SHA-256 of the parsed body with object keys sorted, so key order does not matter and a different body is `idempotency_mismatch`. A replay returns the original status and body, including a stored `409`, for 30 days. Retries after a conflict need a new `request_id`. Existing-resource mutations take `expected_revision`. A mismatch is `409 conflict` with message `Revision conflict` and `error.details.current` set to the stored resource. The resource is unchanged.
 
@@ -357,3 +357,28 @@ Only safe metadata and `link: null` enter `idempotency_keys.response`. A create 
 Registration locks the matching pending invite and runs Better Auth's user/credential writes in the same database transaction through an async-local adapter binding. Library transactions become nested savepoints. Only successful creation (or the existing-address generic result) commits consumption; errors roll back all writes. Competing uses of one invite serialize and yield one success and one generic 403. Every unusable invite yields the same error body. Existing-address registration with a fresh valid invite retains the generic `{status:true}` response.
 
 The live register screen captures `invite` in component memory, replaces the URL to remove that parameter immediately, and sends it only in the sign-up body. The admin-only `/settings/invites` tab shows links only in a dismissible reveal, with no browser storage. Demo mode hides the tab and excludes invite HTTP code from its build.
+
+## Account handle
+
+`PATCH /api/account` requires a browser session and a mutation body `{ publicHandle, request_id }`. `publicHandle` is either `null` (clear the page) or 3–32 characters from `a-z`, `0-9` and `-`, starting and ending with a letter or number. The server trims and lowercases it before storing. A handle that differs only by case is the same handle: the second account gets `409 conflict` with message `That public handle is already taken` and no other account in the body. A bad format is `400 validation_error`. The same `request_id` and body replays the original response. A different body is `409 idempotency_mismatch`. Success returns the same account object as `GET /api/account`, including `isAdmin` and `publicHandle`.
+
+## Public agents
+
+`GET /api/public/:handle/agents` is unauthenticated. It does not read a session cookie or an MCP credential, and it is not an MCP tool. `Cache-Control` is `no-store`. A missing cookie and a valid session cookie for any user return the same body.
+
+The handle is matched case-insensitively. An unknown handle, a handle whose owner has no public non-archived project, and a malformed handle (anything that is not 3–32 characters of `a-z`, `0-9` and `-`, starting and ending alphanumeric, after lowercasing) all return the same `404` body: `{ "error": { "code": "not_found", "message": "Not found" } }`. Nothing in that body distinguishes the three cases.
+
+Each IP, from `request.ip` after `TRUST_PROXY_HOPS`, may call this route 60 times per 60 seconds. The 61st response is `429` `rate_limited` with `Retry-After: 60`. A client-supplied `X-Forwarded-For` does not create a new bucket beyond the trusted hop count.
+
+The response is built field by field. These are the only keys:
+
+| Object | Keys |
+|---|---|
+| Root | `owner`, `projects` |
+| `owner` | `handle` |
+| Project | `name`, `agents` |
+| Agent | `name`, `runs` |
+| Run | `title`, `executionState`, `workStatus`, `stale`, `harness`, `startedAt`, `lastContactAt`, `finishedAt` |
+
+`stale` is `true` only when the run is `running` and `lastContactAt` is older than that project's stale threshold. The threshold itself is not in the response. `harness` and `finishedAt` are null when unset. Projects and agents are included even when they have no runs. Runs are the 200 most recently contacted across that owner's public projects, newest first. A 30-day window would still be unbounded, so the cap is a count. Private projects, archived projects, and any other owner's public projects are absent. Descriptions, repository fields, tags, messages, summaries, task ids, models, pull requests, tools, events, next steps, notes, tokens, and account identity are absent.
+
