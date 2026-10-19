@@ -307,5 +307,6 @@ Status: **Confirmed by operator (2026-10-19)**: per owner, status only.
 - Anonymous visitors see project name, agent name, run title, execution and work state, live/stale, harness, timestamps. Nothing else: no descriptions, repositories, tags, status messages, summaries, task ids, models, PR refs, steps, notes, or anything about tokens, actors or emails.
 - The endpoint is served from an explicit field allowlist with exact-key tests. Unknown, empty and malformed handles get one identical 404. It's rate-limited per trusted client IP and uses `no-store`.
 - The page is `noindex` until the operator decides on search indexing.
+- Payload bound: the latest 200 runs by last contact per owner page (P2-B choice, accepted in review 2026-10-19). The response carries no IDs.
 - Task: P2-B.
 
