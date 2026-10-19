@@ -1,0 +1,14 @@
+{
+  "name": "Supa Agent Tracker",
+  "short_name": "Supa Agents",
+  "start_url": "/projects",
+  "scope": "/",
+  "display": "standalone",
+  "theme_color": "#172c36",
+  "background_color": "#f4f6f6",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

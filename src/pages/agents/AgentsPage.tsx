@@ -85,7 +85,7 @@ export function AgentsPage() {
   return <div className="min-w-0">
     <p className="eyebrow">Cross-project</p>
     <h1>All agents</h1>
-    <p className="text-slate-600">Every agent across the projects you own. Archived projects stay hidden until you show them.</p>
+    <p className="mobile-description text-slate-600">Every agent across the projects you own. Archived projects stay hidden until you show them.</p>
     <AgentViewBar view={state.view} onSelect={selectView} showArchived={showArchived} onShowArchived={onShowArchived} />
     {body}
   </div>;

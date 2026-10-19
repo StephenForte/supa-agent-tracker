@@ -23,6 +23,7 @@ import { useNow } from '../../domain/clock';
 import { elapsed } from '../../domain/derive';
 import { formatElapsed, formatIdentity, formatTimestamp, shortId } from '../../domain/format';
 import { additionalPrCount, agentName, dateTimeInput, executionLabels, identityOptions, isConcurrent, filterRuns, liveContact, pageForRun, paginate, primaryPr, projectName, sortRuns, workLabels, type GridContext } from '../../domain/runs/grid';
+import { MobileFilters } from '../../components/ui/MobileFilters';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { CloseRunDialog } from './CloseRunDialog';
@@ -132,8 +133,9 @@ export function RunGrid(props: RunGridProps) {
     const key = field === 'harness' ? 'harnesses' : 'models';
     return <MultiFilter label={field === 'harness' ? 'Harness' : 'Model'} options={identityOptions(runs, field).map(value => ({ value: JSON.stringify(value), label: formatIdentity(value) }))} value={(filters[key] ?? []).map(value => JSON.stringify(value))} onChange={values => changeFilters({ ...filters, [key]: values.map(value => JSON.parse(value) as string | null) })} />;
   };
-  return <section className="slot !px-3 sm:!px-5" aria-label="Agent runs"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2>Agent runs</h2><p className="text-sm text-slate-600">Live work first. Each execution has its own row.</p></div><Button onClick={() => changeSort({ field: 'activity', direction: 'asc' })}>Active first</Button></div>
-    <label className="grid gap-1 text-sm">Search runs<input className="w-full rounded border border-slate-300 p-2" type="search" value={filters.query ?? ''} onChange={event => changeFilters({ ...filters, query: event.target.value })} /></label>
+  const activeFilterCount = Object.entries(filters).reduce((count, [key, value]) => count + (Array.isArray(value) ? value.length : value && !(key === 'activity' && value === 'all') ? 1 : 0), 0) + Number(sort.field !== 'activity' || sort.direction !== 'asc');
+  return <section className="run-grid slot !px-3 sm:!px-5" aria-label="Agent runs"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2>Agent runs</h2><p className="mobile-description text-sm text-slate-600">Live work first. Each execution has its own row.</p></div><Button onClick={() => changeSort({ field: 'activity', direction: 'asc' })}>Active first</Button></div>
+    <MobileFilters count={activeFilterCount}><label className="grid gap-1 text-sm">Search runs<input className="w-full rounded border border-slate-300 p-2" type="search" value={filters.query ?? ''} onChange={event => changeFilters({ ...filters, query: event.target.value })} /></label>
     <div className="my-3 flex flex-wrap items-end gap-3"><label className="grid gap-1 text-sm">Activity<select className="rounded border p-2" value={filters.activity ?? 'all'} onChange={event => changeFilters({ ...filters, activity: event.target.value as RunGridFilters['activity'] })}>{[['all', 'All activity'], ['live', 'Live running'], ['stale', 'Stale'], ['review', 'Waiting for review'], ['completed', 'Completed']].map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label className="grid gap-1 text-sm">Sort by<select className="rounded border p-2" value={sort.field} onChange={event => changeSort({ ...sort, field: event.target.value as RunGridSort['field'] })}><option value="activity">Activity (active first)</option>{visibleColumns.map(column => <option key={column.field} value={column.field}>{column.label}</option>)}</select></label><label className="grid gap-1 text-sm">Sort direction<select className="rounded border p-2" value={sort.direction} onChange={event => changeSort({ ...sort, direction: event.target.value as RunGridSort['direction'] })}><option value="asc">Ascending</option><option value="desc">Descending</option></select></label><Button onClick={() => changeFilters({})}>Clear filters</Button></div>
     <details className="my-3"><summary>More filters</summary><div id={filterId} className="grid gap-4 p-3 sm:grid-cols-2 lg:grid-cols-3">
       {showProjectColumn && <MultiFilter label="Projects" options={projects.map(project => ({ value: project.id, label: project.name }))} value={filters.projectIds ?? []} onChange={values => changeFilters({ ...filters, projectIds: values })} />}
@@ -142,7 +144,7 @@ export function RunGrid(props: RunGridProps) {
       {identityFilter('harness')}{identityFilter('model')}
       <label className="grid min-w-0 gap-1 text-sm">Started after<input className="min-w-0 max-w-full rounded border p-2" type="datetime-local" value={dateTimeInput(filters.startedAfter)} onChange={event => changeFilters({ ...filters, startedAfter: event.target.value })} /></label>
       <label className="grid min-w-0 gap-1 text-sm">Started before<input className="min-w-0 max-w-full rounded border p-2" type="datetime-local" value={dateTimeInput(filters.startedBefore)} onChange={event => changeFilters({ ...filters, startedBefore: event.target.value })} /></label>
-    </div></details>
+    </div></details></MobileFilters>
     {!runs.length ? <p>No runs yet. Reported executions will appear here.</p> : !ordered.length ? <p role="status">No runs match these filters. <button className="underline" onClick={() => changeFilters({})}>Clear all filters</button></p> : <>
     <div ref={region}>
     {desktop ? <div className="max-w-full overflow-x-auto rounded border border-slate-200" role="region" aria-label="Run grid, scroll horizontally for all columns" tabIndex={0}>
@@ -162,17 +164,26 @@ export function RunGrid(props: RunGridProps) {
       })}</tbody></table>
     </div> : <ul className="grid max-w-full gap-3" aria-label="Run cards">{page.items.map(run => {
       const pr = primaryPr(run), more = additionalPrCount(run), open = expanded.includes(run.id);
-      return <li key={run.id} data-run-id={run.id} className="max-w-full rounded border border-slate-200 p-3 text-sm">
-        <button className="text-left font-semibold underline" title={run.id} aria-expanded={open} aria-controls={`details-${run.id}`} onClick={() => toggle(run.id)}>{open ? '−' : '+'} {agentName(run, agents)}<span className="sr-only"> {shortId(run.id)}</span></button>
-        <p className="mt-1 break-words font-semibold">{run.title}</p>
-        <p className="mt-1 text-xs text-slate-600" title={run.id}>{`${run.taskId ?? '—'} · ${shortId(run.id)}`}</p>
-        {isConcurrent(run, runs) && <Badge>Concurrent</Badge>}
-        <div className="mt-2 flex flex-wrap items-center gap-2"><Badge>{projectName(run, projects)}</Badge><Badge tone={run.executionState}>{executionLabels[run.executionState]}</Badge><Badge tone={run.workStatus}>{workLabels[run.workStatus]}</Badge><Liveness run={run} context={context} /></div>
-        {pr && <p className="mt-2 break-words"><a href={pr.url} target="_blank" rel="noopener noreferrer">#{pr.number} {pr.title}</a>{more > 0 && <button className="mt-2 block underline" onClick={() => reveal(run.id, true)}>+{more} more</button>}</p>}
-        <StatusMessage message={run.message} lines={2} />
-        <CloseRunButton run={run} onClose={() => setClosing(run)} />
-        <MarkDoneButton run={run} />
-        {open && <RunDetails run={run} runs={runs} agents={agents} projects={projects} onReveal={reveal} onBack={() => changeExpanded(expanded.filter(id => id !== run.id))} />}
+      const contact = liveContact(run, context);
+      const status = `${executionLabels[run.executionState]} · ${workLabels[run.workStatus]}${contact ? ` · ${contact.state === 'stale' ? 'Stale' : 'Live'} · last contact ${contact.relative}` : ''}`;
+      return <li key={run.id} data-run-id={run.id} className="mobile-run-card max-w-full rounded border border-slate-200 text-sm">
+        <div className="run-card-summary">
+          <button className="run-card-toggle" title={run.id} aria-label={`${open ? 'Collapse' : 'Expand'} ${agentName(run, agents)} ${shortId(run.id)} · ${run.title} · ${status} · ${run.message}`} aria-expanded={open} aria-controls={`details-${run.id}`} onClick={() => toggle(run.id)}>
+            <span className="run-card-agent">{open ? '−' : '+'} {agentName(run, agents)}{run.taskId && run.taskId !== agentName(run, agents) ? ` / ${run.taskId}` : ''}</span>
+            <span className="run-card-title">{run.title}</span>
+            <span className={`run-card-status badge badge-${contact?.state === 'stale' ? 'stale' : run.workStatus}`} title={status}>{status}</span>
+            <span data-latest-status className="run-card-message truncate" title={run.message}>{run.message.trim() || 'No status message'}</span>
+          </button>
+          {pr && <a className="run-card-pr" href={pr.url} title={pr.title} aria-label={`PR #${pr.number} ${pr.title}`} target="_blank" rel="noopener noreferrer">#{pr.number}</a>}
+        </div>
+        {open && <div className="run-card-expanded">
+          <p className="text-xs text-slate-600" title={run.id}>{shortId(run.id)}</p>
+          {isConcurrent(run, runs) && <Badge>Concurrent</Badge>}
+          <Link to={`/projects/${run.projectId}`}>{projectName(run, projects)}</Link>
+          {more > 0 && <button className="block underline" onClick={() => reveal(run.id, true)}>+{more} more</button>}
+          <CloseRunButton run={run} onClose={() => setClosing(run)} />
+          <RunDetails run={run} runs={runs} agents={agents} projects={projects} onReveal={reveal} onBack={() => changeExpanded(expanded.filter(id => id !== run.id))} />
+        </div>}
       </li>;
     })}</ul>}
     </div><div className="mt-4 flex flex-wrap items-center justify-between gap-3"><p role="status">Runs {page.start}–{page.end} of {page.total} · Page {page.page + 1} of {page.pages}</p><div className="flex gap-2"><Button disabled={page.page === 0} onClick={() => setPage({ index: page.page - 1, signature, expandedKey })}>Previous</Button><Button disabled={page.page + 1 === page.pages} onClick={() => setPage({ index: page.page + 1, signature, expandedKey })}>Next</Button></div></div></>}

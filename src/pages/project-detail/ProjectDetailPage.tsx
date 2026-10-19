@@ -28,18 +28,19 @@ export function ProjectDetailPage() {
   const { project, runs, agents } = result.data;
   if (!project) return <NotFound project />;
   const counts = projectCounts(project, runs, agents, now);
-  return <div className="min-w-0">
+  return <div className="project-detail min-w-0">
+    <nav className="project-jumps" aria-label="Project sections"><a href="#project-runs">Runs</a><a href="#project-steps">Next steps</a><a href="#project-notes">Notes</a></nav>
     <header><p className="eyebrow">Project activity</p><h1>{project.name}</h1><p>{formatDescription(project.description)}</p>
       <div className="flex flex-wrap gap-2"><Badge>{projectTypeLabels[project.type]}</Badge><Badge tone={project.lifecycle}>{lifecycleLabels[project.lifecycle]}</Badge>{project.isPublic && <Badge>Public</Badge>}{project.tags.map(tag => <Badge key={tag}>{tag}</Badge>)}</div>
       {project.isPublic && <PublicAvailability ready={account.status === 'ready'} handle={account.status === 'ready' ? account.data.publicHandle : null} />}
       <ProjectActions key={project.id} project={project} />
       <p className="text-sm text-slate-600">Stale after {project.reportingPolicy.staleThresholdMinutes} minutes without contact</p>
-      <dl className="grid grid-cols-2 gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-3 lg:grid-cols-6" aria-label="Project counts">
+      <dl className="project-counts grid grid-cols-3 gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-3 lg:grid-cols-6" aria-label="Project counts">
         {projectCountLabels.map(([key, label]) => <div key={label}><dt className="text-sm text-slate-600">{label}</dt><dd className="text-2xl font-semibold">{counts[key]}</dd></div>)}
       </dl>
     </header>
-    <RunGrid key={`${project.id}:${params.get('run') ?? ''}`} runs={runs} agents={agents} projects={[project]} defaultExpandedRunIds={params.get('run') ? [params.get('run')!] : []} />
-    <div className="panel-grid"><NextStepsPanel projectId={project.id} /><PrivateNotePanel projectId={project.id} /></div>
+    <div id="project-runs"><RunGrid key={`${project.id}:${params.get('run') ?? ''}`} runs={runs} agents={agents} projects={[project]} defaultExpandedRunIds={params.get('run') ? [params.get('run')!] : []} /></div>
+    <div className="panel-grid"><div id="project-steps" className="min-w-0"><NextStepsPanel projectId={project.id} /></div><div id="project-notes" className="min-w-0"><PrivateNotePanel projectId={project.id} /></div></div>
   </div>;
 }
 
@@ -91,7 +92,7 @@ function ProjectActions({ project }: { project: Project }) {
 
   const retry = intent === 'active' ? 'Unarchive' : 'Archive project';
   return <div>
-    <div className="link-list">
+    <div className="project-actions link-list">
       <Link to={`/projects/${project.id}/edit`}>Edit project</Link>
       <Button disabled={pending || waitingForSavedProject || conflict !== null} onClick={() => void apply(project.revision, nextLifecycle)}>{pending || waitingForSavedProject ? 'Saving…' : label}</Button>
       <ProjectResources project={project} />
