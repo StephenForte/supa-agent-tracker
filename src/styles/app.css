@@ -66,14 +66,14 @@ summary { padding: .75rem; border: 1px solid #d6e0e3; border-radius: .4rem; }
   .run-grid { padding-block: .75rem; }
   .run-grid > div:first-child { margin-bottom: .5rem; }
   .mobile-run-card { min-width: 0; }
-  .run-card-summary { position: relative; }
-  .app-shell .run-card-toggle { display: flex; flex-direction: column; align-items: stretch; text-align: left; width: 100%; padding: 8px; gap: 3px; }
+  .run-card-summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; }
+  .app-shell .run-card-toggle { display: flex; flex-direction: column; align-items: stretch; text-align: left; min-width: 0; width: 100%; padding: 8px; gap: 3px; }
   .run-card-agent, .run-card-title, .run-card-status, .run-card-message { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-  .run-card-agent { padding-right: 60px; font-weight: 600; line-height: 20px; }
+  .run-card-agent { font-weight: 600; line-height: 20px; }
   .run-card-title { font-weight: 600; line-height: 20px; }
   .run-card-status { font-size: 10px; line-height: 16px; padding: 2px 4px; }
   .run-card-message { color: #526670; font-size: 12px; line-height: 18px; }
-  .run-card-pr { position: absolute; right: 4px; top: 0; padding-inline: 8px; font-size: 12px; }
+  .run-card-pr { min-width: 44px; justify-content: center; padding-inline: 8px; font-size: 12px; }
   .run-card-expanded { padding: 0 8px 8px; }
   .project-jumps { display: flex; position: sticky; top: 88px; z-index: 10; background: #f4f6f6; border-bottom: 1px solid #d6e0e3; justify-content: space-around; }
   [id^="project-"] { scroll-margin-top: 145px; }

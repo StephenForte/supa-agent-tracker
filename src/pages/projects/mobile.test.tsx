@@ -63,3 +63,11 @@ it('project page links to all three sections and keeps expanded actions reachabl
   expect(within(card).getByRole('button', { name: /close run/ })).toBeInTheDocument();
   expectMobileTapTargets(container);
 });
+it('keeps the PR hit area in a separate grid column from the expansion control', async () => {
+  show('/projects/prj_offers');
+  await screen.findByRole('heading', { level: 1, name: 'Offers workspace' });
+  const card = document.querySelector<HTMLElement>('[data-run-id="run_3"]')!;
+  expect(card.querySelector('.run-card-toggle')?.parentElement).toBe(card.querySelector('.run-card-pr')?.parentElement);
+  expect(css).toMatch(/\.run-card-summary\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto;/);
+  expect(css).not.toMatch(/\.run-card-pr\s*\{[^}]*position:\s*absolute/);
+});
