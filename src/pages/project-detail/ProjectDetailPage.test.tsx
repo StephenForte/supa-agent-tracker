@@ -55,7 +55,7 @@ it('closes a stale run, updates counts, freezes finish, audits reason and preser
   expect(screen.queryByRole('button', { name: 'Demo: close run run_4' })).toBeNull();
   expect(screen.getAllByText('Abandoned demo session')).toHaveLength(3);
   const count = screen.getByText('Stale running').closest('div')!;
-  expect(within(count).getByText('0')).toBeVisible();
+  expect(within(count).getByText('1')).toBeVisible();
   expect(screen.getByText('Manual close')).toBeVisible();
   const closed = (await sources.tracker.getRun('run_4'))!;
   expect(closed.executionState).toBe('cancelled'); expect(closed.finishedAt).not.toBeNull();

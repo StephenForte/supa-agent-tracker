@@ -45,7 +45,8 @@ export function seedTracker(now: number): TrackerState {
     run(3, 'agt_offers_2', 'finished', 'waiting_for_review', -180, -30), run(4, 'agt_dashboard_1', 'running', 'blocked', -150, -40),
     run(5, 'agt_dashboard_2', 'failed', 'failed', -220, -100), run(6, 'agt_archive_1', 'cancelled', 'cancelled', -2880, -2800),
     run(7, 'agt_weather_1', 'finished', 'completed', -4350, -4345), run(8, 'agt_weather_1', 'finished', 'completed', -2910, -2905),
-    run(9, 'agt_weather_1', 'finished', 'completed', -1470, -1465), run(10, 'agt_offers_2', 'running', 'in_progress', -20, -1)];
+    run(9, 'agt_weather_1', 'finished', 'completed', -1470, -1465), run(10, 'agt_offers_2', 'running', 'in_progress', -20, -1),
+    run(11, 'agt_dashboard_2', 'running', 'in_progress', -120, -60)];
   runs[0]!.childRunIds = ['run_10']; runs[9]!.parentRunId = 'run_1'; runs[3]!.model = null; runs[4]!.harness = null;
   runs[1]!.tools = [{ name: 'shell', source: 'shell', callCount: 0, successCount: 0, failureCount: 0, lastUsedAt: null, coverage: 'self_reported' }];
   runs[2]!.tools = [{ name: 'edit_file', source: 'native', callCount: 8, successCount: 7, failureCount: 1, lastUsedAt: at(-35), coverage: 'self_reported' }];
@@ -58,5 +59,5 @@ export function seedTracker(now: number): TrackerState {
   ].map(step => ({ ...step, createdAt: at(-90), updatedAt: at(-10), revision: 1 }));
   return { demoLiveRunIds: [...DEMO_LIVE_RUN_IDS], account: { id: 'usr_demo', name: 'Demo operator', email: 'demo@example.invalid', emailVerified: true, demo: true, publicHandle: null }, projects, agents, runs, steps,
     waitingNotes: [{ projectId: 'prj_offers', text: 'T0-11a is still implementing the second form variant.', sourceRunId: 'run_1', updatedAt: at(-2), revision: 1 }],
-    tokens: [1, 2].map(n => ({ id: `tok_${n}`, label: n === 1 ? 'Demo coding client' : 'Demo weather bot', allProjects: false, projectIds: [n === 1 ? 'prj_offers' : 'prj_weather'], display: `sat_demo_…FAKE_${n}`, createdAt: at(-1440), lastUsedAt: n === 1 ? at(-2) : null, revokedAt: null })), sequence: 10 };
+    tokens: [1, 2].map(n => ({ id: `tok_${n}`, label: n === 1 ? 'Demo coding client' : 'Demo weather bot', allProjects: false, projectIds: [n === 1 ? 'prj_offers' : 'prj_weather'], display: `sat_demo_…FAKE_${n}`, createdAt: at(-1440), lastUsedAt: n === 1 ? at(-2) : null, revokedAt: null })), sequence: 11 };
 }

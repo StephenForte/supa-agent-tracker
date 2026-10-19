@@ -13,7 +13,7 @@ p { margin: .75rem 0; line-height: 1.65; overflow-wrap: anywhere; }
 .demo-banner strong { font-weight: 700; }
 .app-header { background: white; border-bottom: 1px solid #d8e1e4; padding: 1.4rem max(1rem, calc((100vw - 1200px)/2)); display: flex; align-items: center; justify-content: space-between; gap: 2rem; }
 .brand { display: flex; align-items: center; gap: .7rem; color: var(--color-ink); font-weight: 700; font-size: 1.1rem; text-decoration: none; }
-.brand-mark { display: grid; place-items: center; width: 2rem; height: 2rem; background: var(--color-ink); color: white; border-radius: .5rem; }
+.brand-mark { object-fit: cover; flex-shrink: 0; width: 2rem; height: 2rem; background: var(--color-ink); color: white; border-radius: .5rem; }
 nav { display: flex; flex-wrap: wrap; gap: .4rem; }
 nav a { padding: .65rem .8rem; border-radius: .4rem; color: #4a5d66; text-decoration: none; font-size: .9rem; }
 nav a.active { color: #12534a; background: #e3f1ec; font-weight: 650; }
@@ -44,7 +44,15 @@ summary { padding: .75rem; border: 1px solid #d6e0e3; border-radius: .4rem; }
 /* Mobile controls: one shared hit-area rule, including inline links and checkboxes.
    Keep this unlayered and after base styles so utility padding cannot shrink it. */
 .mobile-filter-toggle, .project-jumps { display: none; }
+.settings-mobile { display: none; }
+.needs-count { margin-left: .25rem; border-radius: 1rem; padding: .1rem .3rem; background: #155c58; color: white; font-size: .7rem; }
+.needs-card { min-width: 0; overflow-wrap: anywhere; }
+.needs-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; }
+.needs-actions > span { margin-top: 0; }
+.needs-actions :is(a, button) { text-decoration: underline; }
 @media (max-width: 767px) {
+  .settings-desktop { display: none; }
+  .settings-mobile { display: inline; }
   .app-shell { --mobile-tap-target: 44px; }
   .app-shell :is(a, button, input, select, textarea, summary) { min-height: var(--mobile-tap-target); }
   .app-shell :is(a, button, summary) { display: inline-flex; align-items: center; }

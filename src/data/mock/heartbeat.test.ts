@@ -13,7 +13,7 @@ function storageAdapter(): StorageAdapter {
 async function expectScenarios(sources: ReturnType<typeof createDemoSources>, now: number) {
   const { tracker } = sources;
   const [projects, runs, agents] = await Promise.all([tracker.listProjects(), tracker.listRuns(), tracker.listAgents()]);
-  for (const [id, liveRunning, staleRunning] of [['prj_offers', 3, 0], ['prj_dashboard', 0, 1]] as const) {
+  for (const [id, liveRunning, staleRunning] of [['prj_offers', 3, 0], ['prj_dashboard', 0, 2]] as const) {
     const project = projects.find(item => item.id === id)!;
     expect(projectCounts(project, runs, agents, now)).toMatchObject({ liveRunning, staleRunning });
     expect(await tracker.listRuns(id)).toEqual(runs.filter(run => run.projectId === id));

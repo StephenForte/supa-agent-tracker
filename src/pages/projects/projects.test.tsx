@@ -32,7 +32,7 @@ describe('dashboard interactions', () => {
     expect(offers.getByRole('link', { name: 'Project PRD' })).toBeVisible();
     const dashboard = within(list[1]!);
     expect(dashboard.getByText('Live running').nextElementSibling).toHaveTextContent('0');
-    expect(dashboard.getByText('Stale running').nextElementSibling).toHaveTextContent('1');
+    expect(dashboard.getByText('Stale running').nextElementSibling).toHaveTextContent('2');
     expect(offers.getByText(/Next steps preview/)).toBeVisible();
     expect(offers.getByText(/Private note preview/)).toBeVisible();
     const external = offers.getAllByRole('link').filter(link => link.getAttribute('target') === '_blank');
