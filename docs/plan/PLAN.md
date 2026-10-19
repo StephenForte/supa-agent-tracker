@@ -201,6 +201,11 @@ Reporting: from P2 on, every brief makes the worker check in/out with Supa Agent
 
 Follow-up after both merge: a "Public" badge on project cards (ProjectCard belongs to P2-A this wave).
 
+**Backlog for P2-D (operator, 2026-10-19; brief after P2-C merges):**
+1. **Mark a run done.** Finished runs stay "Waiting for review" forever: the user run patch (`runPatchKeys`) excludes `workStatus`, and Close applies only to running runs. Add an owner action on finished runs, e.g. "Mark done" → work_status `completed`, revision-checked, idempotent, with an audit event. Auto-completing when the PR merges needs a GitHub integration; that's a separate operator decision.
+2. **Compact the run grid on mobile.** The grid is `min-w-[1100px]` with long cells (the full run UUID under the agent name, the "Close <uuid>" link text). Needs a narrow-screen layout (cards or fewer columns) and shortened IDs.
+3. **"Back to project" from run details.** The run view/deep link has no way back to its project page.
+
 ## Known traps (found in review)
 - UI time comes from `useNow()`, which always reads `systemClock`; there is no clock context. Injecting a clock into
   `createDemoSources` does not move the UI's `now`. To test elapsed/stale in rendered components, use
