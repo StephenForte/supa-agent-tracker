@@ -5,22 +5,26 @@ import { Dialog } from '../../components/ui/Dialog';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { formatTimestamp } from '../../domain/format';
 import { deploymentMcpUrl } from '../../domain/integrations/examples';
-import { formatLastUsed, tokenScopeLabel, tokenStatus } from '../../domain/tokens/display';
+import { formatLastUsed, orderedTokens, revokedTokenCount, tokenScopeLabel, tokenStatus } from '../../domain/tokens/display';
 import type { McpToken, Project } from '../../domain/types';
 import { ScopeFields, type ScopeMode } from './ScopeFields';
 import { TokenReveal } from './TokenReveal';
 type Action = { kind: 'create' } | { kind: 'rotate' | 'revoke'; id: string; label: string } | { kind: 'scope'; token: McpToken };
 export function LiveTokensPanel() {
-  const tracker = useTrackerData(); const [action, setAction] = useState<Action | null>(null); const [attempt, setAttempt] = useState(0);
+  const tracker = useTrackerData(); const [action, setAction] = useState<Action | null>(null); const [attempt, setAttempt] = useState(0); const [showRevoked, setShowRevoked] = useState(false);
   const query = useSourceQuery(tracker, useCallback(async () => {
     void attempt; const [tokens, projects] = await Promise.all([tracker.listTokens(), tracker.listProjects()]); return { tokens, projects };
   }, [tracker, attempt]));
   if (query.status === 'loading') return <p>Loading tokens…</p>;
   if (query.status === 'error') return <ErrorState message={query.error.message} onRetry={() => setAttempt(n => n + 1)} />;
   const { tokens, projects } = query.data;
+  const revoked = revokedTokenCount(tokens);
+  const visible = orderedTokens(tokens, showRevoked);
   return <div className="grid gap-4"><p>MCP tokens can cover all of your projects, including ones you create later, or a specific list. A new value is shown once.</p>
+    {revoked > 0 && <div><Button aria-pressed={showRevoked} onClick={() => setShowRevoked(value => !value)}>Show revoked ({revoked})</Button></div>}
     {!tokens.length && <p>No MCP tokens. Create a token to connect an agent.</p>}
-    {tokens.map(token => <article className="slot" key={token.id} aria-label={`${token.label} ${token.id}`}><h2>{token.label}</h2>
+    {tokens.length > 0 && !visible.length && <p>No active tokens.</p>}
+    {visible.map(token => <article className="slot" key={token.id} aria-label={`${token.label} ${token.id}`}><h2>{token.label}</h2>
       <dl><dt>Masked value</dt><dd>{token.display}</dd><dt>Scopes</dt><dd>{tokenScopeLabel(token, projects)}</dd>
       <dt>Created</dt><dd>{formatTimestamp(token.createdAt)}</dd><dt>Last used</dt><dd>{formatLastUsed(token.lastUsedAt)}</dd><dt>Status</dt><dd>{tokenStatus(token)}</dd></dl>
       {!token.revokedAt && <div className="link-list"><Button onClick={() => setAction({ kind: 'scope', token })}>Edit scope</Button><Button onClick={() => setAction({ kind: 'rotate', id: token.id, label: token.label })}>Rotate {token.label}</Button><Button onClick={() => setAction({ kind: 'revoke', id: token.id, label: token.label })}>Revoke {token.label}</Button></div>}

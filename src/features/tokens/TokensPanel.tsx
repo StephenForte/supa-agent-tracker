@@ -6,7 +6,7 @@ import { ErrorState } from '../../components/ui/ErrorState';
 import { useSourceQuery, useTrackerData } from '../../data/hooks';
 import { formatTimestamp } from '../../domain/format';
 import { MCP_PLACEHOLDER_URL } from '../../domain/integrations/examples';
-import { formatLastUsed, tokenScopeLabel, tokenStatus } from '../../domain/tokens/display';
+import { formatLastUsed, orderedTokens, revokedTokenCount, tokenScopeLabel, tokenStatus } from '../../domain/tokens/display';
 import type { McpToken } from '../../domain/types';
 import { useDemoAccount } from '../../app/useDemoAccount';
 import { LiveTokensPanel } from './LiveTokensPanel';
@@ -30,6 +30,7 @@ function DemoTokensPanel() {
   const [pending, setPending] = useState<{ kind: 'revoke' | 'rotate'; tokenId: string; label: string } | null>(null);
   const [plaintext, setPlaintext] = useState<string | null>(null);
   const [revealGeneration, setRevealGeneration] = useState(0);
+  const [showRevoked, setShowRevoked] = useState(false);
   const query = useSourceQuery(tracker, useCallback(async () => {
     void attempt;
     const [tokens, projects] = await Promise.all([tracker.listTokens(), tracker.listProjects()]);
@@ -78,12 +79,15 @@ function DemoTokensPanel() {
   if (query.status === 'loading') return <p>Loading tokens…</p>;
   if (query.status === 'error') return <ErrorState message={query.error.message} onRetry={() => setAttempt(value => value + 1)} />;
   const { tokens, projects } = query.data;
+  const revoked = revokedTokenCount(tokens);
+  const visible = orderedTokens(tokens, showRevoked);
   return <div className="flex min-w-0 flex-col gap-4">
     <p className="lede">MCP tokens in this demo are fake. A new value is shown once, then discarded.</p>
     {actionError && <p role="alert">{actionError}</p>}
     {plaintext && <TokenReveal key={revealGeneration} plaintext={plaintext} mcpUrl={MCP_PLACEHOLDER_URL} onDismiss={dismissReveal} />}
-    {tokens.length === 0 ? <EmptyState title="No MCP tokens"><p>Create a fake demo token to preview the one-time reveal.</p></EmptyState> : <ul className="m-0 flex list-none flex-col gap-3 p-0">
-      {tokens.map(token => <li key={token.id}><article aria-label={`${token.label} ${token.id}`} className="slot">
+    {revoked > 0 && <div><Button aria-pressed={showRevoked} onClick={() => setShowRevoked(value => !value)}>Show revoked ({revoked})</Button></div>}
+    {tokens.length === 0 ? <EmptyState title="No MCP tokens"><p>Create a fake demo token to preview the one-time reveal.</p></EmptyState> : visible.length === 0 ? <p>No active tokens.</p> : <ul className="m-0 flex list-none flex-col gap-3 p-0">
+      {visible.map(token => <li key={token.id}><article aria-label={`${token.label} ${token.id}`} className="slot">
         <h2 className="break-words">{token.label}</h2>
         <p className="text-sm text-slate-600">{token.id}</p>
         <dl className="grid gap-3 sm:grid-cols-2">

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { seedTracker } from '../../data/mock/seed';
 import type { Lifecycle, Project, Run } from '../types';
 import { filterRuns, stale } from '../runs/grid';
-import { activityFor, applyGridFilters, applyViewParam, initialAgentViewState, ownedScope, parseAgentView, selectAgentView, showAllRuns, viewHasNoRows, type AgentView, type AgentViewState } from './allAgents';
+import { activityFor, applyGridFilters, applyViewParam, hiddenArchivedRunsLine, initialAgentViewState, openArchivedRun, ownedScope, parseAgentView, selectAgentView, showAllRuns, viewHasNoRows, type AgentView, type AgentViewState } from './allAgents';
 
 const now = Date.parse('2026-10-15T12:00:00Z');
 const seed = seedTracker(now);
@@ -17,17 +17,41 @@ function run(id: string, projectId: string, patch: Partial<Run> = {}): Run {
 }
 
 describe('owned projects', () => {
-  it('keeps every lifecycle the owner has and drops every other account', () => {
-    const projects = [project('active', 'usr_demo', 'active'), project('archived', 'usr_demo', 'archived'), project('paused', 'usr_demo', 'paused'), project('foreign', 'usr_other', 'active'), project('foreign-archived', 'usr_other', 'archived')];
-    const runs = [run('own-active', 'active'), run('own-archived', 'archived'), run('foreign-run', 'foreign'), run('orphan', 'missing')];
-    const agents = seed.agents.map((agent, index) => ({ ...agent, id: `agent-${index}`, projectId: projects[index]?.id ?? 'missing' }));
+  const projects = [project('active', 'usr_demo', 'active'), project('archived', 'usr_demo', 'archived'), project('paused', 'usr_demo', 'paused'), project('foreign', 'usr_other', 'active'), project('foreign-archived', 'usr_other', 'archived')];
+  const runs = [run('own-active', 'active'), run('own-archived', 'archived'), run('own-archived-2', 'archived'), run('foreign-run', 'foreign'), run('orphan', 'missing')];
+  const agents = seed.agents.map((agent, index) => ({ ...agent, id: `agent-${index}`, projectId: projects[index]?.id ?? 'missing' }));
+
+  it('hides archived projects by default, includes them on request, and drops every other account', () => {
     const before = structuredClone({ projects, runs, agents });
     const scope = ownedScope('usr_demo', projects, runs, agents);
-    expect(scope.projects.map(item => item.id)).toEqual(['active', 'archived', 'paused']);
-    expect(scope.runs.map(item => item.id)).toEqual(['own-active', 'own-archived']);
-    expect(scope.agents.every(agent => ['active', 'archived', 'paused'].includes(agent.projectId))).toBe(true);
-    expect(scope.projects.some(item => item.lifecycle === 'archived')).toBe(true);
+    expect(scope.projects.map(item => item.id)).toEqual(['active', 'paused']);
+    expect(scope.runs.map(item => item.id)).toEqual(['own-active']);
+    expect(scope.agents.every(agent => agent.projectId === 'active' || agent.projectId === 'paused')).toBe(true);
+    expect(scope.hiddenArchivedRunCount).toBe(2);
+    expect(hiddenArchivedRunsLine(scope.hiddenArchivedRunCount)).toBe('2 runs from archived projects hidden');
+    expect(hiddenArchivedRunsLine(1)).toBe('1 run from archived projects hidden');
+    expect(hiddenArchivedRunsLine(0)).toBeNull();
+    const shown = ownedScope('usr_demo', projects, runs, agents, { includeArchived: true });
+    expect(shown.projects.map(item => item.id)).toEqual(['active', 'archived', 'paused']);
+    expect(shown.runs.map(item => item.id)).toEqual(['own-active', 'own-archived', 'own-archived-2']);
+    expect(shown.hiddenArchivedRunCount).toBe(0);
+    expect(shown.projects.some(item => item.lifecycle === 'archived')).toBe(true);
     expect({ projects, runs, agents }).toEqual(before);
+  });
+
+  it('opens one archived deep link and leaves the other archived runs hidden', () => {
+    const scope = ownedScope('usr_demo', projects, runs, agents);
+    const source = { accountId: 'usr_demo', projects, runs, agents };
+    const opened = openArchivedRun(scope, source, 'own-archived');
+    expect(opened.runs.map(item => item.id)).toEqual(['own-active', 'own-archived']);
+    expect(opened.projects.map(item => item.id)).toContain('archived');
+    expect(opened.agents.some(agent => agent.projectId === 'archived')).toBe(true);
+    expect(opened.hiddenArchivedRunCount).toBe(1);
+    expect(opened.notice).toBe('Showing own-archived from archived project archived.');
+    expect(openArchivedRun(scope, source, 'foreign-run').runs.map(item => item.id)).toEqual(['own-active']);
+    expect(openArchivedRun(scope, source, 'missing').notice).toBeNull();
+    const shown = ownedScope('usr_demo', projects, runs, agents, { includeArchived: true });
+    expect(openArchivedRun(shown, source, 'own-archived').notice).toBeNull();
   });
 });
 

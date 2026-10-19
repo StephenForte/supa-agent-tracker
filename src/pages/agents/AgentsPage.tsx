@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { useSourceQuery, useTrackerData } from '../../data/hooks';
+import { agentViewLabels, applyGridFilters, applyGridSort, applyViewParam, hiddenArchivedRunsLine, initialAgentViewState, openArchivedRun, ownedScope, selectAgentView, showAllRuns, viewHasNoRows, type AgentView } from '../../domain/agents/allAgents';
 import { useNow } from '../../domain/clock';
-import { agentViewLabels, applyGridFilters, applyGridSort, applyViewParam, initialAgentViewState, ownedScope, selectAgentView, showAllRuns, viewHasNoRows, type AgentView } from '../../domain/agents/allAgents';
 import { AgentViewBar, EmptyViewNotice } from '../../features/agents/AgentViewBar';
 import { RunGrid, type RunGridFilters, type RunGridSort } from '../../features/runs/RunGrid';
 
@@ -14,6 +14,7 @@ export function AgentsPage() {
   const [attempt, setAttempt] = useState(0);
   const viewParam = params.get('view');
   const runParam = params.get('run');
+  const showArchived = params.get('archived') === '1';
   const [state, setState] = useState(() => initialAgentViewState(viewParam));
   const wroteView = useRef<string | null | false>(false);
   useEffect(() => {
@@ -30,7 +31,7 @@ export function AgentsPage() {
   const result = useSourceQuery(source, useCallback(async () => {
     void attempt;
     const [account, projects, runs, agents] = await Promise.all([source.getAccount(), source.listProjects(), source.listRuns(), source.listAgents()]);
-    return ownedScope(account.id, projects, runs, agents);
+    return { account, projects, runs, agents };
   }, [source, attempt]));
 
   function writeView(view: AgentView | null) {
@@ -58,24 +59,34 @@ export function AgentsPage() {
     setState(showAllRuns());
     writeView('active');
   }
+  function onShowArchived(on: boolean) {
+    const next = new URLSearchParams(params);
+    if (on) next.set('archived', '1');
+    else next.delete('archived');
+    if (next.toString() !== params.toString()) setParams(next);
+  }
 
   let body;
   if (result.status === 'loading') body = <p role="status">Loading agents…</p>;
   else if (result.status === 'error') body = <ErrorState message={result.error.message} onRetry={() => setAttempt(value => value + 1)} />;
   else {
-    const scope = result.data;
+    const { account, projects, runs, agents } = result.data;
+    const opened = openArchivedRun(ownedScope(account.id, projects, runs, agents, { includeArchived: showArchived }), { accountId: account.id, projects, runs, agents }, runParam);
     const preset = state.view;
-    const emptyView = preset !== null && viewHasNoRows(scope.runs, preset, { projects: scope.projects, agents: scope.agents, now });
+    const emptyView = preset !== null && viewHasNoRows(opened.runs, preset, { projects: opened.projects, agents: opened.agents, now });
+    const hiddenLine = hiddenArchivedRunsLine(opened.hiddenArchivedRunCount);
     body = <>
+      {hiddenLine && <p role="status">{hiddenLine}</p>}
+      {opened.notice && <p role="status">{opened.notice}</p>}
       {emptyView && preset && <EmptyViewNotice label={agentViewLabels[preset]} onShowAll={onShowAll} />}
-      <RunGrid key={runParam ?? ''} runs={scope.runs} agents={scope.agents} projects={scope.projects} showProjectColumn sort={state.sort} onSortChange={onSortChange} filters={state.filters} onFiltersChange={onFiltersChange} defaultExpandedRunIds={runParam ? [runParam] : []} />
+      <RunGrid key={runParam ?? ''} runs={opened.runs} agents={opened.agents} projects={opened.projects} showProjectColumn sort={state.sort} onSortChange={onSortChange} filters={state.filters} onFiltersChange={onFiltersChange} defaultExpandedRunIds={runParam ? [runParam] : []} />
     </>;
   }
   return <div className="min-w-0">
     <p className="eyebrow">Cross-project</p>
     <h1>All agents</h1>
-    <p className="text-slate-600">Every agent across the projects you own, including archived history.</p>
-    <AgentViewBar view={state.view} onSelect={selectView} />
+    <p className="text-slate-600">Every agent across the projects you own. Archived projects stay hidden until you show them.</p>
+    <AgentViewBar view={state.view} onSelect={selectView} showArchived={showArchived} onShowArchived={onShowArchived} />
     {body}
   </div>;
 }

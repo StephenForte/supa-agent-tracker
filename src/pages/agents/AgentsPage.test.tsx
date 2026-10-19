@@ -50,17 +50,29 @@ function choose(label: string, value: string) {
   fireEvent.change(field);
 }
 
-it('lists owned runs active-first, including stale and archived history', async () => {
-  await shown();
+it('lists owned runs active-first, hides archived projects, and shows them from the URL', async () => {
+  const { router } = await shown();
   expect(ids().slice(0, 3)).toEqual(['run_1', 'run_10', 'run_2']);
+  expect(ids()).not.toContain('run_6');
+  expect(screen.getByText('1 run from archived projects hidden')).toBeVisible();
+  expect(screen.getByText(/Archived projects stay hidden until you show them/)).toBeVisible();
   for (const id of ['run_1', 'run_10', 'run_2']) {
     expect(within(row(id)!).getByRole('link', { name: 'Offers workspace' })).toHaveAttribute('href', '/projects/prj_offers');
   }
   expect(within(row('run_4')!).getByText('Stale')).toBeVisible();
-  expect(within(row('run_6')!).getByRole('link', { name: 'Archived prototype' })).toHaveAttribute('href', '/projects/prj_archive');
   expect(screen.getByRole('button', { name: 'Active' })).toHaveAttribute('aria-pressed', 'true');
   fireEvent.click(screen.getByText('More filters'));
-  expect([...screen.getByLabelText('Projects').querySelectorAll('option')].map(option => option.getAttribute('value'))).toContain('prj_archive');
+  const projectOptions = () => [...screen.getByLabelText('Projects').querySelectorAll('option')].map(option => option.getAttribute('value'));
+  expect(projectOptions()).not.toContain('prj_archive');
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Show archived projects' }));
+  expect(router.state.location.search).toBe('?archived=1');
+  expect(ids()).toContain('run_6');
+  expect(screen.queryByText(/from archived projects hidden/)).toBeNull();
+  expect(projectOptions()).toContain('prj_archive');
+  expect(within(row('run_6')!).getByRole('link', { name: 'Archived prototype' })).toHaveAttribute('href', '/projects/prj_archive');
+  await act(() => router.navigate('/agents?view=completed&archived=1'));
+  expect(ids()).toEqual(['run_9', 'run_8', 'run_7']);
+  expect(screen.getByRole('checkbox', { name: 'Show archived projects' })).toBeChecked();
 });
 
 it('requests every run and project with no project argument', async () => {
@@ -71,7 +83,7 @@ it('requests every run and project with no project argument', async () => {
   const router = createMemoryRouter(routes, { initialEntries: ['/agents'] });
   disposers.push(sources.dispose, () => router.dispose());
   render(<DataProvider sources={sources}><RouterProvider router={router} /></DataProvider>);
-  await screen.findByText(/Runs 1–10 of 10/);
+  await screen.findByText(/Runs 1–9 of 9/);
   expect(listRuns).toHaveBeenCalledWith();
   expect(listProjects).toHaveBeenCalledWith();
   expect(listAgents).toHaveBeenCalledWith();
@@ -87,7 +99,7 @@ it('follows view links and keeps an unknown view on the active preset', async ()
   await act(() => router.navigate('/agents?view=completed'));
   expect(ids()).toEqual(['run_9', 'run_8', 'run_7']);
   await act(() => router.navigate('/agents?view=nope'));
-  expect(ids()).toHaveLength(10);
+  expect(ids()).toHaveLength(9);
   expect(screen.getByRole('button', { name: 'Active' })).toHaveAttribute('aria-pressed', 'true');
   expect(router.state.location.search).toBe('?view=nope');
 });
@@ -170,7 +182,7 @@ it('filters weather runs to null PR fields and composes that filter with a view 
   expect(screen.queryByRole('button', { name: 'Show all' })).toBeNull();
   expect(screen.getByText(/No runs match these filters/)).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
-  expect(ids()).toHaveLength(10);
+  expect(ids()).toHaveLength(9);
   expect(screen.getByRole('button', { name: 'Active' })).toHaveAttribute('aria-pressed', 'true');
 });
 
@@ -211,11 +223,24 @@ it('hides another account’s project even when it is mixed into the list', asyn
   const router = createMemoryRouter(routes, { initialEntries: ['/agents'] });
   disposers.push(sources.dispose, () => router.dispose());
   render(<DataProvider sources={sources}><RouterProvider router={router} /></DataProvider>);
-  await screen.findByText(/Runs 1–10 of 10/);
+  await screen.findByText(/Runs 1–9 of 9/);
   expect(row('run_foreign')).toBeNull();
   expect(screen.queryByText('Foreign only title')).toBeNull();
   fireEvent.click(screen.getByText('More filters'));
   expect(screen.getByLabelText('Projects').textContent).not.toContain('Foreign private workspace');
+});
+
+it('opens an archived run from a run link while the other archived runs stay hidden', async () => {
+  const { router } = await shown('/agents?run=run_6');
+  expect(router.state.location.search).toBe('?run=run_6');
+  expect(screen.getByRole('checkbox', { name: 'Show archived projects' })).not.toBeChecked();
+  expect(screen.getByRole('button', { name: /run_6$/, expanded: true })).toBeVisible();
+  expect(screen.getByText('Showing run_6 from archived project Archived prototype.')).toBeVisible();
+  expect(ids()).toContain('run_1');
+  expect(screen.queryByText(/from archived projects hidden/)).toBeNull();
+  await act(() => router.navigate('/agents?archived=1&run=run_6'));
+  expect(screen.getByRole('button', { name: /run_6$/, expanded: true })).toBeVisible();
+  expect(screen.queryByText('Showing run_6 from archived project Archived prototype.')).toBeNull();
 });
 
 it('expands a run link and shows its parent', async () => {
@@ -250,7 +275,7 @@ it('matches execution, work, stale and PR for every seeded run on its project pa
   vi.spyOn(systemClock, 'now').mockReturnValue(now);
   vi.spyOn(systemClock, 'getSnapshot').mockReturnValue(now);
   vi.spyOn(systemClock, 'subscribe').mockImplementation(() => () => {});
-  const { router } = await shown();
+  const { router } = await shown('/agents?archived=1');
   const fields = ['Execution state', 'Work status', 'Liveness', 'PR', 'Elapsed'] as const;
   const expected = Object.fromEntries(ids().map(id => [id, Object.fromEntries(fields.map(field => [field, column(id!, field)]))]));
   expect(Object.keys(expected)).toEqual(['run_1', 'run_10', 'run_2', 'run_4', 'run_3', 'run_5', 'run_9', 'run_6', 'run_8', 'run_7']);
@@ -286,5 +311,5 @@ it('reports a read failure and retries', async () => {
   render(<DataProvider sources={sources}><RouterProvider router={router} /></DataProvider>);
   expect(await screen.findByRole('alert')).toHaveTextContent('Read failed');
   fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
-  await screen.findByText(/Runs 1–10 of 10/);
+  await screen.findByText(/Runs 1–9 of 9/);
 });

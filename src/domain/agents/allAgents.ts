@@ -78,16 +78,51 @@ export function viewHasNoRows(runs: readonly Run[], view: AgentView, context: Gr
   return runs.length > 0 && filterRuns(runs, { activity: activityFor(view) }, context, true).length === 0;
 }
 
+export interface OwnedScope {
+  projects: Project[];
+  runs: Run[];
+  agents: LogicalAgent[];
+  /** Owned runs on archived projects that are not in `runs`. */
+  hiddenArchivedRunCount: number;
+}
+
+export function hiddenArchivedRunsLine(count: number): string | null {
+  if (count < 1) return null;
+  return `${count === 1 ? '1 run' : `${count} runs`} from archived projects hidden`;
+}
+
 /**
- * Signed-in owner's projects only. Archived projects stay: their history, including
- * cancelled runs, must remain reachable from this page.
+ * Signed-in owner's projects only. Archived projects are omitted unless
+ * includeArchived is set, so their runs stay out of the default view.
+ * A deep link can add one of those runs back without turning the rest on.
  */
-export function ownedScope(accountId: string, projects: readonly Project[], runs: readonly Run[], agents: readonly LogicalAgent[]) {
+export function ownedScope(accountId: string, projects: readonly Project[], runs: readonly Run[], agents: readonly LogicalAgent[], options?: { includeArchived?: boolean }): OwnedScope {
   const owned = projects.filter(project => project.ownerId === accountId);
-  const ids = new Set(owned.map(project => project.id));
+  const archivedIds = new Set(owned.filter(project => project.lifecycle === 'archived').map(project => project.id));
+  const visible = options?.includeArchived ? owned : owned.filter(project => project.lifecycle !== 'archived');
+  const visibleIds = new Set(visible.map(project => project.id));
+  const ownedIds = new Set(owned.map(project => project.id));
+  const ownedRuns = runs.filter(run => ownedIds.has(run.projectId));
   return {
-    projects: owned,
-    runs: runs.filter(run => ids.has(run.projectId)),
-    agents: agents.filter(agent => ids.has(agent.projectId)),
+    projects: visible,
+    runs: options?.includeArchived ? ownedRuns : ownedRuns.filter(run => visibleIds.has(run.projectId)),
+    agents: agents.filter(agent => visibleIds.has(agent.projectId)),
+    hiddenArchivedRunCount: options?.includeArchived ? 0 : ownedRuns.filter(run => archivedIds.has(run.projectId)).length,
+  };
+}
+
+/** Keep a `?run=` target visible when its project is archived and the rest stay hidden. */
+export function openArchivedRun(scope: OwnedScope, source: { accountId: string; projects: readonly Project[]; runs: readonly Run[]; agents: readonly LogicalAgent[] }, runId: string | null): OwnedScope & { notice: string | null } {
+  if (!runId || scope.runs.some(run => run.id === runId)) return { ...scope, notice: null };
+  const run = source.runs.find(item => item.id === runId);
+  const project = run && source.projects.find(item => item.id === run.projectId && item.ownerId === source.accountId && item.lifecycle === 'archived');
+  if (!run || !project) return { ...scope, notice: null };
+  const knownAgents = new Set(scope.agents.map(agent => agent.id));
+  return {
+    projects: scope.projects.some(item => item.id === project.id) ? scope.projects : [...scope.projects, project],
+    runs: [...scope.runs, run],
+    agents: [...scope.agents, ...source.agents.filter(agent => agent.projectId === project.id && !knownAgents.has(agent.id))],
+    hiddenArchivedRunCount: Math.max(0, scope.hiddenArchivedRunCount - 1),
+    notice: `Showing ${run.id} from archived project ${project.name}.`,
   };
 }

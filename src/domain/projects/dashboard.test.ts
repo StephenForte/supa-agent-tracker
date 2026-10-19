@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createDemoSources } from '../../data/mock/createDemoSources';
 import { createClock } from '../clock';
-import { defaultFilters, describeFilters, filterOptions, selectProjects } from './dashboard';
+import { defaultFilters, describeFilters, filterOptions, projectSearchParams, readProjectControls, selectProjects } from './dashboard';
 import { draftInput, projectDraft, validateDraft } from './form';
 const now = Date.parse('2026-10-14T20:00:00Z');
 async function data() {
@@ -41,6 +41,16 @@ describe('project selection', () => {
     const second = { ...first, id: 'a', name: 'Zulu', createdAt: '2026-02-01T00:00:00Z', updatedAt: '2026-10-02T00:00:00Z' };
     expect(selectProjects([second, first], runs, agents, defaultFilters, 'name', now)).toEqual([first, second]);
     for (const sort of ['latest', 'created'] as const) expect(selectProjects([first, second], runs, agents, defaultFilters, sort, now)).toEqual([second, first]);
+  });
+  it('keeps sort and filters in the query and leaves defaults out of it', () => {
+    expect(readProjectControls(new URLSearchParams())).toEqual({ filters: defaultFilters, sort: 'active' });
+    expect(projectSearchParams(new URLSearchParams(), defaultFilters, 'active').toString()).toBe('');
+    const filters = { ...defaultFilters, text: 'weather', lifecycle: '', activity: 'stale' };
+    const params = projectSearchParams(new URLSearchParams('demo=empty'), filters, 'name');
+    expect(params.toString()).toBe('demo=empty&q=weather&lifecycle=all&activity=stale&sort=name');
+    expect(readProjectControls(params)).toEqual({ filters, sort: 'name' });
+    expect(projectSearchParams(params, defaultFilters, 'active').toString()).toBe('demo=empty');
+    expect(readProjectControls(new URLSearchParams('sort=nope&lifecycle=archived'))).toEqual({ filters: { ...defaultFilters, lifecycle: 'archived' }, sort: 'active' });
   });
 });
 it('normalizes optional form fields, preserves reporting preferences and rejects unsafe links and bad thresholds', () => {

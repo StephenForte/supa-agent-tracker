@@ -93,6 +93,27 @@ describe('dashboard interactions', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Read failed');
     await user.click(screen.getByRole('button', { name: 'Try again' })); await cards();
   });
+  it('keeps a non-default sort in the URL across reload and back, and shows Archived on an archived card', async () => {
+    const { user, router } = mount();
+    await cards();
+    expect(router.state.location.search).toBe('');
+    await user.selectOptions(screen.getByLabelText('Sort projects'), 'name');
+    expect(router.state.location.search).toBe('?sort=name');
+    expect(screen.getAllByRole('article')[0]).toHaveAccessibleName('Daily weather briefing');
+    await user.click(screen.getByRole('link', { name: 'Daily weather briefing' }));
+    expect(await screen.findByRole('heading', { level: 1, name: 'Daily weather briefing' })).toBeVisible();
+    await act(() => router.navigate(-1));
+    expect(router.state.location.pathname).toBe('/projects');
+    expect(router.state.location.search).toBe('?sort=name');
+    expect(await screen.findByLabelText('Sort projects')).toHaveValue('name');
+    expect(screen.getAllByRole('article')[0]).toHaveAccessibleName('Daily weather briefing');
+    await user.selectOptions(screen.getByLabelText('Lifecycle'), 'archived');
+    const archived = await screen.findByRole('article', { name: 'Archived prototype' });
+    expect(within(archived).getByText('Archived')).toBeVisible();
+    expect(router.state.location.search).toBe('?sort=name&lifecycle=archived');
+    await user.selectOptions(screen.getByLabelText('Sort projects'), 'active');
+    expect(router.state.location.search).toBe('?lifecycle=archived');
+  });
   it('shows a true empty state for an empty source', async () => {
     const sources = sourcesForTest(); vi.spyOn(sources.tracker, 'listProjects').mockResolvedValue([]);
     mount('/projects', sources);
