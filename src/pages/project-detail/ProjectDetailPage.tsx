@@ -18,6 +18,7 @@ export function ProjectDetailPage() {
   const [params] = useSearchParams();
   const source = useTrackerData();
   const now = useNow();
+  const account = useSourceQuery(source, useCallback(() => source.getAccount(), [source]));
   const result = useSourceQuery(source, useCallback(async () => {
     const [project, runs, agents] = await Promise.all([source.getProject(projectId), source.listRuns(projectId), source.listAgents(projectId)]);
     return { project, runs, agents };
@@ -29,7 +30,8 @@ export function ProjectDetailPage() {
   const counts = projectCounts(project, runs, agents, now);
   return <div className="min-w-0">
     <header><p className="eyebrow">Project activity</p><h1>{project.name}</h1><p>{formatDescription(project.description)}</p>
-      <div className="flex flex-wrap gap-2"><Badge>{projectTypeLabels[project.type]}</Badge><Badge tone={project.lifecycle}>{lifecycleLabels[project.lifecycle]}</Badge>{project.tags.map(tag => <Badge key={tag}>{tag}</Badge>)}</div>
+      <div className="flex flex-wrap gap-2"><Badge>{projectTypeLabels[project.type]}</Badge><Badge tone={project.lifecycle}>{lifecycleLabels[project.lifecycle]}</Badge>{project.isPublic && <Badge>Public</Badge>}{project.tags.map(tag => <Badge key={tag}>{tag}</Badge>)}</div>
+      {project.isPublic && <PublicAvailability ready={account.status === 'ready'} handle={account.status === 'ready' ? account.data.publicHandle : null} />}
       <ProjectActions key={project.id} project={project} />
       <p className="text-sm text-slate-600">Stale after {project.reportingPolicy.staleThresholdMinutes} minutes without contact</p>
       <dl className="grid grid-cols-2 gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-3 lg:grid-cols-6" aria-label="Project counts">
@@ -39,6 +41,13 @@ export function ProjectDetailPage() {
     <RunGrid key={`${project.id}:${params.get('run') ?? ''}`} runs={runs} agents={agents} projects={[project]} defaultExpandedRunIds={params.get('run') ? [params.get('run')!] : []} />
     <div className="panel-grid"><NextStepsPanel projectId={project.id} /><PrivateNotePanel projectId={project.id} /></div>
   </div>;
+}
+
+function PublicAvailability({ ready, handle }: { ready: boolean; handle: string | null | undefined }) {
+  if (!ready) return null;
+  const value = handle?.trim();
+  if (value) return <p><Link to={`/public/${encodeURIComponent(value)}/agents`}>View public page</Link></p>;
+  return <p>Set a public handle in <Link to="/settings">Account settings</Link> to publish it</p>;
 }
 
 function ProjectActions({ project }: { project: Project }) {

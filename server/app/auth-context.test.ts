@@ -50,4 +50,31 @@ describe('browser test seam and bearer enforcement', () => {
     expect(user.json().error.code).toBe('unauthenticated');
     await app.close();
   });
+
+  it('describes a missing or rejected bearer without echoing the token', async () => {
+    const app = Fastify({ logger: false });
+    app.post('/mcp', { preHandler: requireMcpCredential }, async () => ({ ok: true }));
+    const missingDescription = 'Supa Agent Tracker uses bearer tokens; add Authorization: Bearer <token> (Settings -> MCP tokens). OAuth sign-in is not available.';
+    const rejectedDescription = 'Token missing, revoked or mistyped; create a new one in Settings -> MCP tokens.';
+    const missing = await app.inject({ method: 'POST', url: '/mcp' });
+    expect(missing.statusCode).toBe(401);
+    const missingHeader = String(missing.headers['www-authenticate']);
+    expect(missingHeader).toContain('resource_metadata=');
+    expect(missingHeader).toContain(`error_description="${missingDescription}"`);
+    expect(missingHeader).not.toContain('error="invalid_token"');
+    expect(missing.json()).toEqual({ error: { code: 'unauthenticated', message: missingDescription } });
+
+    const sentinel = `sat_${'a'.repeat(35)}ZZZZP2C1`;
+    const malformed = await app.inject({ method: 'POST', url: '/mcp', headers: { authorization: `Bearer ${sentinel}` } });
+    expect(malformed.statusCode).toBe(401);
+    const malformedHeader = String(malformed.headers['www-authenticate']);
+    expect(malformedHeader).toContain('resource_metadata=');
+    expect(malformedHeader).toContain('error="invalid_token"');
+    expect(malformedHeader).toContain(`error_description="${rejectedDescription}"`);
+    expect(malformed.json()).toEqual({ error: { code: 'unauthenticated', message: rejectedDescription } });
+    expect(malformedHeader).not.toContain('ZZZZP2C1');
+    expect(malformed.body).not.toContain('ZZZZP2C1');
+    expect(malformed.body).not.toContain(sentinel);
+    await app.close();
+  });
 });

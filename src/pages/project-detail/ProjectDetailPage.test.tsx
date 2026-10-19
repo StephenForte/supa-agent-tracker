@@ -20,6 +20,27 @@ function setup(path: string) {
   render(<DataProvider sources={sources}><RouterProvider router={router} /></DataProvider>);
   return { sources, clock, router };
 }
+it('shows a Public badge and the public page only when a handle is set', async () => {
+  const { sources } = setup('/projects/prj_weather');
+  await screen.findByRole('heading', { level: 1, name: 'Daily weather briefing' });
+  expect(screen.queryByText('Public')).toBeNull();
+  expect(screen.queryByRole('link', { name: 'View public page' })).toBeNull();
+  expect(screen.queryByText(/Set a public handle/)).toBeNull();
+  const project = (await sources.tracker.getProject('prj_weather'))!;
+  expect(await sources.tracker.updateProject(project.id, { isPublic: true }, project.revision)).toMatchObject({ status: 'saved' });
+  const prompt = await screen.findByText(/Set a public handle/);
+  expect(prompt).toHaveTextContent('Set a public handle in Account settings to publish it');
+  expect(screen.getByText('Public')).toBeVisible();
+  expect(screen.getByRole('link', { name: 'Account settings' })).toHaveAttribute('href', '/settings');
+  expect(screen.queryByRole('link', { name: 'View public page' })).toBeNull();
+  expect(await sources.tracker.updateAccount({ publicHandle: 'ada-bot' })).toMatchObject({ status: 'saved' });
+  expect(await screen.findByRole('link', { name: 'View public page' })).toHaveAttribute('href', '/public/ada-bot/agents');
+  expect(screen.queryByText(/Set a public handle/)).toBeNull();
+  const current = (await sources.tracker.getProject('prj_weather'))!;
+  expect(await sources.tracker.updateProject(current.id, { isPublic: false }, current.revision)).toMatchObject({ status: 'saved' });
+  await waitFor(() => expect(screen.queryByText('Public')).toBeNull());
+  expect(screen.queryByRole('link', { name: 'View public page' })).toBeNull();
+});
 it('closes a stale run, updates counts, freezes finish, audits reason and preserves next steps', async () => {
   const { sources, clock } = setup('/projects/prj_dashboard?run=run_4');
   await screen.findByRole('heading', { level: 1 });

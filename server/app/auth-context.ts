@@ -60,12 +60,23 @@ export const requireUser: preHandlerAsyncHookHandler = async (request, reply) =>
   return reply.code(401).send(apiError(errorCodes.unauthenticated, 'Sign in required'));
 };
 
+// ASCII only. A non-ASCII WWW-Authenticate value throws ERR_INVALID_CHAR and Fastify drops the challenge.
+const MCP_BEARER_MISSING = 'Supa Agent Tracker uses bearer tokens; add Authorization: Bearer <token> (Settings -> MCP tokens). OAuth sign-in is not available.';
+const MCP_BEARER_REJECTED = 'Token missing, revoked or mistyped; create a new one in Settings -> MCP tokens.';
+
+/** Static challenge text. Never interpolate the presented credential. */
+function mcpAuthenticateHeader(origin: string, presented: boolean): string {
+  const description = presented ? MCP_BEARER_REJECTED : MCP_BEARER_MISSING;
+  const invalid = presented ? ', error="invalid_token"' : '';
+  return `Bearer resource_metadata="${origin}/.well-known/oauth-protected-resource"${invalid}, error_description="${description}"`;
+}
+
 export const requireMcpCredential: preHandlerAsyncHookHandler = async (request, reply) => {
   const credential = await authenticateBearer(request);
   if (!credential) {
-    const origin = credentialOrigin(request.server);
-    reply.header('WWW-Authenticate', `Bearer resource_metadata="${origin}/.well-known/oauth-protected-resource"${request.headers.authorization !== undefined ? ', error="invalid_token"' : ''}`);
-    return reply.code(401).send(apiError(errorCodes.unauthenticated, 'Bearer credential required'));
+    const presented = request.headers.authorization !== undefined;
+    reply.header('WWW-Authenticate', mcpAuthenticateHeader(credentialOrigin(request.server), presented));
+    return reply.code(401).send(apiError(errorCodes.unauthenticated, presented ? MCP_BEARER_REJECTED : MCP_BEARER_MISSING));
   }
   request.mcpCredential = credential;
 };

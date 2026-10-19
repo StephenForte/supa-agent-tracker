@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { seedTracker } from '../../data/mock/seed';
 import type { ExecutionState, Run, WorkStatus } from '../types';
-import { activityGroup, dateTimeInput, executionLabels, filterRuns, isConcurrent, paginate, sortRuns, stale, workLabels } from './grid';
+import { activityGroup, dateTimeInput, executionLabels, filterRuns, isConcurrent, liveContact, paginate, sortRuns, stale, workLabels } from './grid';
 import { elapsed } from '../derive';
 const now = Date.parse('2026-10-15T12:00:00Z');
 const seed = seedTracker(now);
@@ -65,6 +65,19 @@ describe('execution, work and liveness invariants', () => {
     expect(paginate(items, 99)).toMatchObject({ page: 2, start: 51, end: 63, total: 63 });
     expect(paginate([], 99)).toMatchObject({ page: 0, start: 0, end: 0, pages: 1 });
   });
+});
+
+it('shows live contact, stale contact, and nothing for a finished run', () => {
+  const at = (minutes: number) => new Date(now - minutes * 60_000).toISOString();
+  const recent = { ...base, executionState: 'running' as const, lastContactAt: at(2) };
+  expect(liveContact(recent, context)).toEqual({ state: 'live', relative: '2 min ago' });
+  expect(stale(recent, context)).toBe(false);
+  const aged = { ...recent, lastContactAt: at(20) };
+  expect(liveContact(aged, context)).toEqual({ state: 'stale', relative: '20 min ago' });
+  expect(stale(aged, context)).toBe(true);
+  for (const executionState of ['finished', 'failed', 'cancelled'] as const) {
+    expect(liveContact({ ...recent, executionState }, context)).toBeNull();
+  }
 });
 
 it('formats controlled UTC time filters in local time without changing their instant', () => {

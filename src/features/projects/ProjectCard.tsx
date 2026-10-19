@@ -13,7 +13,7 @@ export function ProjectCard({ project, runs, agents, now }: { project: Project; 
   const latest = latestActivity(project.id, runs);
   const detail = `/projects/${project.id}`;
   return <article aria-labelledby={`project-${project.id}`} className="min-w-0 rounded-xl border border-slate-300 bg-white p-5 [overflow-wrap:anywhere]">
-    <div className="mb-3 flex flex-wrap gap-2"><Badge tone={project.lifecycle}>{lifecycleLabels[project.lifecycle]}</Badge><Badge>{projectTypeLabels[project.type]}</Badge></div>
+    <div className="mb-3 flex flex-wrap gap-2"><Badge tone={project.lifecycle}>{lifecycleLabels[project.lifecycle]}</Badge><Badge>{projectTypeLabels[project.type]}</Badge>{project.isPublic && <Badge>Public</Badge>}</div>
     <h2 id={`project-${project.id}`}><Link to={detail}>{project.name}</Link></h2>
     <p className="text-sm text-slate-600">{formatDescription(project.description)}</p>
     {project.tags.length > 0 && <ul aria-label="Tags" className="my-3 flex flex-wrap gap-2">{project.tags.map(tag => <li key={tag} className="rounded bg-slate-100 px-2 py-1 text-xs">{tag}</li>)}</ul>}
