@@ -75,6 +75,41 @@ it('expands a deep link on first render and subsequent same-project URL changes'
   const child = document.getElementById('details-run_10')!;
   expect(within(child).getAllByRole('link', { name: 'run_1' }).length).toBeGreaterThan(0);
 });
+it('archives and unarchives from the project page, bumping the revision each time', async () => {
+  const { sources } = setup('/projects/prj_weather');
+  await screen.findByRole('heading', { level: 1, name: 'Daily weather briefing' });
+  const before = (await sources.tracker.getProject('prj_weather'))!;
+  fireEvent.click(screen.getByRole('button', { name: 'Archive project' }));
+  await waitFor(async () => expect(await sources.tracker.getProject('prj_weather')).toMatchObject({ lifecycle: 'archived', name: before.name, revision: before.revision + 1 }));
+  expect(screen.getByText('Archived')).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Unarchive' })).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Unarchive' }));
+  await waitFor(async () => expect(await sources.tracker.getProject('prj_weather')).toMatchObject({ lifecycle: 'active', revision: before.revision + 2 }));
+  expect(screen.getByRole('button', { name: 'Archive project' })).toBeVisible();
+  expect(screen.getByText('Active')).toBeVisible();
+});
+it('shows the conflict path for a stale archive and does not overwrite the other edit', async () => {
+  const { sources } = setup('/projects/prj_offers');
+  await screen.findByRole('heading', { level: 1, name: 'Offers workspace' });
+  const original = sources.tracker.updateProject.bind(sources.tracker);
+  let raced = false;
+  vi.spyOn(sources.tracker, 'updateProject').mockImplementation(async (id, patch, revision) => {
+    if (!raced) {
+      raced = true;
+      await original(id, { description: 'Changed elsewhere' }, revision);
+      return original(id, patch, revision);
+    }
+    return original(id, patch, revision);
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Archive project' }));
+  expect(await screen.findByRole('heading', { name: 'Project changed elsewhere' })).toBeVisible();
+  expect(await screen.findByText('Changed elsewhere')).toBeVisible();
+  expect(await sources.tracker.getProject('prj_offers')).toMatchObject({ lifecycle: 'active', description: 'Changed elsewhere' });
+  fireEvent.click(screen.getByRole('button', { name: /Archive project on revision/ }));
+  await waitFor(async () => expect(await sources.tracker.getProject('prj_offers')).toMatchObject({ lifecycle: 'archived', description: 'Changed elsewhere' }));
+  expect(screen.getByText('Archived')).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Unarchive' })).toBeVisible();
+});
 it('shows automation null links, all three historical runs and zero live runs', async () => {
   setup('/projects/prj_weather'); await screen.findByRole('heading', { level: 1, name: 'Daily weather briefing' });
   expect(screen.getByText('Repository: —')).toBeVisible();

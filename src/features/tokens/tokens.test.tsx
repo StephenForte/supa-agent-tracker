@@ -9,6 +9,7 @@ import { createDemoSources } from '../../data/mock/createDemoSources';
 import type { StorageAdapter } from '../../data/mock/persistence';
 import { createClock } from '../../domain/clock';
 import type { McpToken } from '../../domain/types';
+import { LiveTokensPanel } from './LiveTokensPanel';
 
 const NEEDLE = 'sat_demo_NOT_A_REAL_TOKEN';
 
@@ -178,13 +179,16 @@ describe('MCP tokens', () => {
     await user.click(within(rotateDialog).getByRole('button', { name: 'Rotate token' }));
     const secret = (await screen.findByRole('textbox', { name: 'Fake demo token' }) as HTMLInputElement).value;
     expect(secret).toMatch(/^sat_demo_NOT_A_REAL_TOKEN_/);
-    expect(within(screen.getByRole('article', { name: 'Demo coding client tok_1' })).getByText('Revoked')).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Dismiss' }));
     assertSecretGone(secret, storage);
+    expect(screen.queryByRole('article', { name: 'Demo coding client tok_1' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Show revoked (1)' }));
+    expect(within(screen.getByRole('article', { name: 'Demo coding client tok_1' })).getByText('Revoked')).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Revoke Demo weather bot' }));
     const revokeDialog = await screen.findByRole('dialog', { name: 'Revoke token?' });
     await user.click(within(revokeDialog).getByRole('button', { name: 'Revoke token' }));
     expect(await within(screen.getByRole('article', { name: 'Demo weather bot tok_2' })).findByText('Revoked')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Show revoked (2)' })).toHaveAttribute('aria-pressed', 'true');
     expect(within(screen.getByRole('article', { name: 'Demo weather bot tok_2' })).getByText('Never')).toBeVisible();
     sources.dispose();
   });
@@ -248,6 +252,26 @@ describe('MCP tokens', () => {
     expect(within(await screen.findByRole('article', { name: /Future projects/ })).getByText('Offers workspace')).toBeVisible();
     expect(screen.queryByRole('textbox', { name: 'Cursor config' })).not.toBeInTheDocument();
     sources.dispose();
+  });
+
+  it('lists active tokens by last use and hides revoked tokens until the toggle', async () => {
+    const tokens: McpToken[] = [
+      { id: 'old', label: 'Older active', allProjects: true, projectIds: [], display: 'sat_…old', createdAt: '2026-09-01T00:00:00.000Z', lastUsedAt: '2026-10-01T00:00:00.000Z', revokedAt: null },
+      { id: 'new', label: 'Recent active', allProjects: true, projectIds: [], display: 'sat_…new', createdAt: '2026-08-01T00:00:00.000Z', lastUsedAt: '2026-10-18T00:00:00.000Z', revokedAt: null },
+      { id: 'rev-a', label: 'Revoked one', allProjects: true, projectIds: [], display: 'sat_…a', createdAt: '2026-01-01T00:00:00.000Z', lastUsedAt: '2026-10-19T00:00:00.000Z', revokedAt: '2026-10-19T01:00:00.000Z' },
+      { id: 'rev-b', label: 'Revoked two', allProjects: true, projectIds: [], display: 'sat_…b', createdAt: '2026-01-02T00:00:00.000Z', lastUsedAt: null, revokedAt: '2026-10-03T00:00:00.000Z' },
+    ];
+    const tracker = { subscribe: () => () => {}, getSnapshot: () => 1, async listTokens() { return tokens; }, async listProjects() { return []; } } as unknown as TrackerDataSource;
+    const privateNotes = { subscribe: () => () => {}, getSnapshot: () => 0, get: () => Promise.reject(new Error('unused')), save: () => Promise.reject(new Error('unused')) } as PrivateNotesSource;
+    const user = userEvent.setup();
+    render(<DataProvider sources={{ tracker, privateNotes }}><LiveTokensPanel /></DataProvider>);
+    const labels = () => screen.getAllByRole('article').map(article => article.getAttribute('aria-label'));
+    expect(await screen.findByRole('article', { name: 'Recent active new' })).toBeVisible();
+    expect(labels()).toEqual(['Recent active new', 'Older active old']);
+    expect(screen.queryByText('Revoked')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Show revoked (2)' }));
+    expect(labels()).toEqual(['Recent active new', 'Older active old', 'Revoked one rev-a', 'Revoked two rev-b']);
+    expect(screen.getByRole('button', { name: 'Show revoked (2)' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('shows an empty state when the demo has no tokens', async () => {

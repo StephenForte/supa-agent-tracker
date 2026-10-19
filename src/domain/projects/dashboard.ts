@@ -40,3 +40,39 @@ export function selectProjects(projects: readonly Project[], runs: readonly Run[
     return Date.parse(latestActivity(b.id, runs)?.updatedAt ?? b.updatedAt) - Date.parse(latestActivity(a.id, runs)?.updatedAt ?? a.updatedAt) || tie;
   });
 }
+
+const projectSorts: readonly ProjectSort[] = ['latest', 'name', 'created'];
+
+/** Defaults stay off the query string: sort Active, lifecycle Archived hidden, other filters empty. */
+export function readProjectControls(params: URLSearchParams): { filters: ProjectFilters; sort: ProjectSort } {
+  const lifecycle = params.get('lifecycle');
+  const sort = params.get('sort');
+  return {
+    filters: {
+      text: params.get('q') ?? '',
+      lifecycle: lifecycle === null || lifecycle === 'unarchived' ? 'unarchived' : lifecycle === 'all' ? '' : lifecycle,
+      type: params.get('type') ?? '',
+      activity: params.get('activity') ?? '',
+      harness: params.get('harness') ?? '',
+      tag: params.get('tag') ?? '',
+    },
+    sort: projectSorts.includes(sort as ProjectSort) ? sort as ProjectSort : 'active',
+  };
+}
+
+/** Preserve unrelated params such as `demo`. Omit every control that is still at its default. */
+export function projectSearchParams(current: URLSearchParams, filters: ProjectFilters, sort: ProjectSort): URLSearchParams {
+  const next = new URLSearchParams(current);
+  const setOrDelete = (key: string, value: string) => { if (value) next.set(key, value); else next.delete(key); };
+  setOrDelete('q', filters.text);
+  if (filters.lifecycle === 'unarchived') next.delete('lifecycle');
+  else if (filters.lifecycle === '') next.set('lifecycle', 'all');
+  else next.set('lifecycle', filters.lifecycle);
+  setOrDelete('type', filters.type);
+  setOrDelete('activity', filters.activity);
+  setOrDelete('harness', filters.harness);
+  setOrDelete('tag', filters.tag);
+  if (sort === 'active') next.delete('sort');
+  else next.set('sort', sort);
+  return next;
+}

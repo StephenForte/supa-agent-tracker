@@ -16,3 +16,27 @@ export function tokenScopeLabel(token: Pick<McpToken, 'allProjects' | 'projectId
 export function formatLastUsed(lastUsedAt: string | null, timeZone?: string): string {
   return lastUsedAt === null ? 'Never' : formatTimestamp(lastUsedAt, timeZone);
 }
+
+export function revokedTokenCount(tokens: readonly McpToken[]): number {
+  return tokens.filter(token => token.revokedAt !== null).length;
+}
+
+/**
+ * Active tokens come first, most recently used first and never-used last, then newest created.
+ * Revoked tokens follow the same order after every active token, and stay out until requested.
+ */
+export function orderedTokens(tokens: readonly McpToken[], showRevoked: boolean): McpToken[] {
+  const sorted = [...tokens].sort((a, b) => {
+    const group = Number(a.revokedAt !== null) - Number(b.revokedAt !== null);
+    return group || compareRecency(a.lastUsedAt, b.lastUsedAt) || compareRecency(a.createdAt, b.createdAt) || a.id.localeCompare(b.id);
+  });
+  return showRevoked ? sorted : sorted.filter(token => token.revokedAt === null);
+}
+
+/** Newest instant first. A missing instant sorts after every present one. */
+function compareRecency(a: string | null, b: string | null): number {
+  if (a === b) return 0;
+  if (a === null) return 1;
+  if (b === null) return -1;
+  return Date.parse(b) - Date.parse(a);
+}
