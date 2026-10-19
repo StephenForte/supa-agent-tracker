@@ -33,7 +33,10 @@ export const runMetadataPatchSchema = run.pick({ title: true, taskId: true, harn
 export const trackerSchema: z.ZodType<TrackerState> = z.object({
   // Default preserves pre-heartbeat v1 demo edits instead of discarding saved state.
   demoLiveRunIds: z.array(z.enum(DEMO_LIVE_RUN_IDS)).default(() => [...DEMO_LIVE_RUN_IDS]),
-  account: z.object({ id: z.literal('usr_demo'), name: z.string(), email: z.email(), emailVerified: z.boolean(), demo: z.literal(true), publicHandle: z.string().nullable().optional() }),
+  account: z.object({
+    id: z.literal('usr_demo'), name: z.string(), email: z.email(), emailVerified: z.boolean(), demo: z.literal(true), publicHandle: z.string().nullable().optional(),
+    alerts: z.object({ blocked: z.boolean(), stale: z.boolean(), review: z.boolean() }).default({ blocked: false, stale: false, review: false }),
+  }),
   projects: z.array(project), agents: z.array(agent), runs: z.array(run.refine(value => value.executionState === 'running' ? value.finishedAt === null : value.finishedAt !== null)), steps: z.array(step), waitingNotes: z.array(waiting), tokens: z.array(token), sequence: z.number().int().nonnegative(),
 }).refine(state => {
   const projects = new Set(state.projects.map(item => item.id));

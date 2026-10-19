@@ -23,6 +23,7 @@ export function AccountSettings() {
       </dl>
     </section>
     <PublicHandleForm account={account.data} />
+    <EmailAlerts account={account.data} />
     {account.data.demo ? <><section className="slot" aria-labelledby="password-heading">
       <h2 id="password-heading">Password</h2>
       <p id="password-help">Password changes are disabled in this demo. Nothing typed into a password field is kept.</p>
@@ -78,6 +79,41 @@ function PublicHandleForm({ account }: { account: Account }) {
       </div>
     </form>
     {saved && <p className="break-all text-sm">Public URL <span>{url}</span> <Button type="button" onClick={() => { void navigator.clipboard.writeText(url).then(() => setMessage('Copied the public URL.'), () => setMessage('The URL could not be copied.')); }}>Copy</Button></p>}
+    {message && <p role="status">{message}</p>}
+  </section>;
+}
+
+function EmailAlerts({ account }: { account: Account }) {
+  const tracker = useTrackerData();
+  const [alerts, setAlerts] = useState(account.alerts ?? { blocked: false, stale: false, review: false });
+  const [message, setMessage] = useState('');
+  const [pending, setPending] = useState(false);
+  async function toggle(kind: 'blocked' | 'stale' | 'review') {
+    if (pending) return;
+    const previous = alerts;
+    const next = { ...alerts, [kind]: !alerts[kind] };
+    setPending(true);
+    setAlerts(next);
+    setMessage('');
+    try {
+      const result = await tracker.updateAccount({ alerts: next });
+      if (result.status === 'saved') setAlerts(result.value.alerts ?? next);
+      else { setAlerts(previous); setMessage(result.message); }
+    } catch {
+      setAlerts(previous);
+      setMessage('Email alerts could not be saved. Try again.');
+    } finally {
+      setPending(false);
+    }
+  }
+  return <section className="slot" aria-labelledby="email-alerts-heading">
+    <h2 id="email-alerts-heading">Email alerts</h2>
+    <p className="text-sm text-slate-600">A digest is sent at most every 5 minutes. Turning an alert on does not email items that already need you.</p>
+    <div className="grid gap-2">
+      <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={alerts.blocked} disabled={pending} onChange={() => void toggle('blocked')} />Blocked</label>
+      <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={alerts.stale} disabled={pending} onChange={() => void toggle('stale')} />Stale</label>
+      <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={alerts.review} disabled={pending} onChange={() => void toggle('review')} />Waiting for review</label>
+    </div>
     {message && <p role="status">{message}</p>}
   </section>;
 }

@@ -45,10 +45,19 @@ export function createTrackerStore({ clock, initial, persist, onReset }: Tracker
     subscribe: changes.subscribe, getSnapshot: changes.getSnapshot,
     async getAccount() { return copy(state.account); },
     async updateAccount(input) {
-      if (input.publicHandle === null) { state.account = { ...state.account, publicHandle: null }; commit(); return { status: 'saved', value: copy(state.account) }; }
-      const handle = input.publicHandle.trim().toLowerCase();
-      if (!HANDLE_PATTERN.test(handle)) return { status: 'invalid', message: 'Use 3–32 letters, numbers, or hyphens, starting and ending with a letter or number.' };
-      state.account = { ...state.account, publicHandle: handle }; commit(); return { status: 'saved', value: copy(state.account) };
+      const next = { ...state.account };
+      if (input.publicHandle !== undefined) {
+        if (input.publicHandle === null) next.publicHandle = null;
+        else {
+          const handle = input.publicHandle.trim().toLowerCase();
+          if (!HANDLE_PATTERN.test(handle)) return { status: 'invalid', message: 'Use 3–32 letters, numbers, or hyphens, starting and ending with a letter or number.' };
+          next.publicHandle = handle;
+        }
+      }
+      if (input.alerts) next.alerts = { blocked: input.alerts.blocked, stale: input.alerts.stale, review: input.alerts.review };
+      state.account = next;
+      commit();
+      return { status: 'saved', value: copy(state.account) };
     },
     async listProjects() { return copy(state.projects); },
     async getProject(id) { return copy(state.projects.find(project => project.id === id) ?? null); },

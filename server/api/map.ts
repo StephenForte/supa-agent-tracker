@@ -15,10 +15,27 @@ export interface AccountBody {
   email: string;
   emailVerified: boolean;
   publicHandle: string | null;
+  alerts: { blocked: boolean; stale: boolean; review: boolean };
 }
 
-export function toAccount(user: { id: string; displayName: string; email: string; emailVerified: boolean; publicHandle: string | null }): AccountBody {
-  return { id: user.id, name: user.displayName, email: user.email, emailVerified: user.emailVerified, publicHandle: user.publicHandle };
+export function toAccount(user: {
+  id: string;
+  displayName: string;
+  email: string;
+  emailVerified: boolean;
+  publicHandle: string | null;
+  alertBlocked: boolean;
+  alertStale: boolean;
+  alertReview: boolean;
+}): AccountBody {
+  return {
+    id: user.id,
+    name: user.displayName,
+    email: user.email,
+    emailVerified: user.emailVerified,
+    publicHandle: user.publicHandle,
+    alerts: { blocked: user.alertBlocked, stale: user.alertStale, review: user.alertReview },
+  };
 }
 
 export function toProject(row: RepoProject) {

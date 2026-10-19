@@ -9,6 +9,9 @@ export const users = pgTable('users', {
   timezone: text('timezone').notNull().default('UTC'),
   image: text('image'),
   publicHandle: text('public_handle'),
+  alertBlocked: boolean('alert_blocked').notNull().default(false),
+  alertStale: boolean('alert_stale').notNull().default(false),
+  alertReview: boolean('alert_review').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
 }, (t) => [
@@ -127,6 +130,21 @@ export const runs = pgTable('runs', {
   index('runs_project_activity').on(t.projectId, t.lastContactAt.desc()),
   index('runs_project_status').on(t.projectId, t.executionState, t.workStatus),
   index('runs_agent_started').on(t.agentId, t.startedAt.desc()),
+]);
+
+/** Dedup for opt-in digests. A baseline row and a sent row are the same primary key; source tells them apart. */
+export const alertDeliveries = pgTable('alert_deliveries', {
+  userId: text('user_id').notNull(),
+  runId: text('run_id').notNull(),
+  kind: text('kind', { enum: ['blocked', 'stale', 'review'] }).notNull(),
+  source: text('source', { enum: ['baseline', 'sent'] }).notNull(),
+  recordedAt: timestamp('recorded_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+}, (t) => [
+  primaryKey({ columns: [t.runId, t.kind] }),
+  foreignKey({ columns: [t.userId], foreignColumns: [users.id] }).onDelete('restrict'),
+  foreignKey({ columns: [t.runId], foreignColumns: [runs.id] }).onDelete('restrict'),
+  check('alert_deliveries_kind', sql`kind IN ('blocked', 'stale', 'review')`),
+  check('alert_deliveries_source', sql`source IN ('baseline', 'sent')`),
 ]);
 
 export const runEvents = pgTable('run_events', {

@@ -260,7 +260,7 @@ headers and bodies so URL query credentials cannot leak through logging.
 
 P1-C2. All of these routes use `requireUser`. Another user's project, agent or run is `404 not_found` with no `details` and no write. A successful body uses the field names and nesting in `src/domain/types.ts` (`Project`, `LogicalAgent`, `Run`, `RunEvent`, `PrReference`, `ToolAggregate`) so a later HTTP client can map them without renaming. `WriteResult` is not a response envelope: `2xx` is the resource, and `409 conflict` puts that resource at `error.details.current`. `GET` of a missing id is `404`, which a client can treat as the contract's `null`.
 
-`GET /api/account` returns `{ id, name, email, emailVerified, publicHandle }`. `name` is `users.display_name`. `publicHandle` is null until the owner sets one. There is no `demo` flag.
+`GET /api/account` returns `{ id, name, email, emailVerified, publicHandle, alerts }`. `name` is `users.display_name`. `publicHandle` is null until the owner sets one. `alerts` is `{ blocked, stale, review }`, each false until the owner opts in. There is no `demo` flag.
 
 Collections return `{ items, nextCursor }` using the pagination rules above. An empty `cursor` or `limit` is treated as omitted. Cursors are opaque and apply only to the same filters.
 
@@ -379,7 +379,9 @@ The live register screen captures `invite` in component memory, replaces the URL
 
 ## Account handle
 
-`PATCH /api/account` requires a browser session and a mutation body `{ publicHandle, request_id }`. `publicHandle` is either `null` (clear the page) or 3–32 characters from `a-z`, `0-9` and `-`, starting and ending with a letter or number. The server trims and lowercases it before storing. A handle that differs only by case is the same handle: the second account gets `409 conflict` with message `That public handle is already taken` and no other account in the body. A bad format is `400 validation_error`. The same `request_id` and body replays the original response. A different body is `409 idempotency_mismatch`. Success returns the same account object as `GET /api/account`, including `isAdmin` and `publicHandle`.
+`PATCH /api/account` requires a browser session and a mutation body with `request_id` plus at least one of `publicHandle` and `alerts`. `publicHandle` is either `null` (clear the page) or 3–32 characters from `a-z`, `0-9` and `-`, starting and ending with a letter or number. The server trims and lowercases it before storing. A handle that differs only by case is the same handle: the second account gets `409 conflict` with message `That public handle is already taken` and no other account in the body. A bad format is `400 validation_error`. Omitting `publicHandle` leaves the handle unchanged.
+
+`alerts` is `{ blocked, stale, review }` with three booleans. Omitting it leaves the saved preferences unchanged. Each kind defaults to false, so a new account is not emailed. When a kind changes from false to true, every run that currently matches that kind for this user is recorded as a baseline in the same transaction and is not emailed. Turning a kind off stops further mail for it. Turning it back on baselines the runs that match at that moment. Sending the same preferences again does not baseline runs that started matching since the last change. Only a verified email address receives mail. The same `request_id` and body replays the original response. A different body is `409 idempotency_mismatch`. Success returns the same account object as `GET /api/account`, including `isAdmin`, `publicHandle` and `alerts`.
 
 ## Public agents
 

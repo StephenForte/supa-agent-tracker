@@ -48,7 +48,10 @@ export function createHttpTracker(client: HttpClient, visibility?: Visibility, o
     getAccount: () => observable.read('account', async () => ({ ...await client.request<Omit<Account, 'demo'>>('/api/account'), demo: false })),
     updateAccount: (input) => mutation(async () => {
       try {
-        const value = await client.request<Omit<Account, 'demo'>>('/api/account', 'PATCH', { publicHandle: input.publicHandle, ...actionFields() });
+        const body: { publicHandle?: string | null; alerts?: { blocked: boolean; stale: boolean; review: boolean }; request_id?: string } = { ...actionFields() };
+        if (input.publicHandle !== undefined) body.publicHandle = input.publicHandle;
+        if (input.alerts !== undefined) body.alerts = input.alerts;
+        const value = await client.request<Omit<Account, 'demo'>>('/api/account', 'PATCH', body);
         return { status: 'saved' as const, value: { ...value, demo: false as const } };
       } catch (error) {
         if (error instanceof HttpError && error.status === 400) return { status: 'invalid' as const, message: error.message };

@@ -17,7 +17,7 @@ export interface BrowserAuth {
 export interface TrackerDataSource extends ObservableSource {
   auth?: BrowserAuth;
   getAccount(): Promise<Account>;
-  updateAccount(input: { publicHandle: string | null }): Promise<{ status: 'saved'; value: Account } | { status: 'conflict'; message: string } | { status: 'invalid'; message: string }>;
+  updateAccount(input: { publicHandle?: string | null; alerts?: { blocked: boolean; stale: boolean; review: boolean } }): Promise<{ status: 'saved'; value: Account } | { status: 'conflict'; message: string } | { status: 'invalid'; message: string }>;
   listProjects(): Promise<Project[]>;
   getProject(projectId: string): Promise<Project | null>;
   createProject(input: ProjectInput): Promise<WriteResult<Project>>;
