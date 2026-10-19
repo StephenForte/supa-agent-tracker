@@ -17,7 +17,7 @@ it('serves the manifest and original icons from a real Vite dist, preserving SPA
     expect(response.statusCode).toBe(200);
     expect(response.headers['content-type']).toContain('application/manifest+json');
     const manifest = response.json();
-    expect(manifest).toMatchObject({ name: 'Supa Agent Tracker', short_name: 'Supa Agents', start_url: '/projects', scope: '/', display: 'standalone', theme_color: '#172c36', background_color: '#f4f6f6' });
+    expect(manifest).toMatchObject({ name: 'Supa Agent Tracker', short_name: 'Supa Agents', start_url: '/needs-me', scope: '/', display: 'standalone', theme_color: '#172c36', background_color: '#f4f6f6' });
     expect(manifest.icons).toEqual([
       { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
       { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
@@ -33,9 +33,9 @@ it('serves the manifest and original icons from a real Vite dist, preserving SPA
       expect(original.readUInt32BE(16)).toBe(size);
       expect(original.readUInt32BE(20)).toBe(size);
     }
-    const svg = await app.inject('/favicon.svg');
-    expect(svg.statusCode).toBe(200);
-    expect(svg.headers['content-type']).toContain('image/svg+xml');
+    const favicon = await app.inject('/favicon-32.png');
+    expect(favicon.statusCode).toBe(200);
+    expect(favicon.headers['content-type']).toContain('image/png');
     const home = await app.inject('/projects');
     expect(home.body).toContain('<title>Supa Agent Tracker</title>');
     expect(home.body).toContain('rel="manifest"');

@@ -83,7 +83,7 @@ it('requests every run and project with no project argument', async () => {
   const router = createMemoryRouter(routes, { initialEntries: ['/agents'] });
   disposers.push(sources.dispose, () => router.dispose());
   render(<DataProvider sources={sources}><RouterProvider router={router} /></DataProvider>);
-  await screen.findByText(/Runs 1–9 of 9/);
+  await screen.findByText(/Runs 1–10 of 10/);
   expect(listRuns).toHaveBeenCalledWith();
   expect(listProjects).toHaveBeenCalledWith();
   expect(listAgents).toHaveBeenCalledWith();
@@ -99,7 +99,7 @@ it('follows view links and keeps an unknown view on the active preset', async ()
   await act(() => router.navigate('/agents?view=completed'));
   expect(ids()).toEqual(['run_9', 'run_8', 'run_7']);
   await act(() => router.navigate('/agents?view=nope'));
-  expect(ids()).toHaveLength(9);
+  expect(ids()).toHaveLength(10);
   expect(screen.getByRole('button', { name: 'Active' })).toHaveAttribute('aria-pressed', 'true');
   expect(router.state.location.search).toBe('?view=nope');
 });
@@ -107,7 +107,7 @@ it('follows view links and keeps an unknown view on the active preset', async ()
 it('lets the grid stale activity leave the presets without falling back to active', async () => {
   const { router } = await shown('/agents?view=live');
   fireEvent.change(screen.getByLabelText('Activity'), { target: { value: 'stale' } });
-  expect(ids()).toEqual(['run_4']);
+  expect(ids()).toEqual(['run_4', 'run_11']);
   for (const name of ['Active', 'Live', 'Waiting for review', 'Completed']) {
     expect(screen.getByRole('button', { name })).toHaveAttribute('aria-pressed', 'false');
   }
@@ -145,7 +145,7 @@ it('keeps stale activity under Strict Mode and still follows a later view link',
   render(<StrictMode><DataProvider sources={sources}><RouterProvider router={router} /></DataProvider></StrictMode>);
   await screen.findByText(/Runs 1–3 of 3/);
   fireEvent.change(screen.getByLabelText('Activity'), { target: { value: 'stale' } });
-  expect(ids()).toEqual(['run_4']);
+  expect(ids()).toEqual(['run_4', 'run_11']);
   await act(() => router.navigate('/agents?view=review'));
   expect(ids()).toEqual(['run_3']);
   await act(() => router.navigate('/agents?view=live'));
@@ -182,7 +182,7 @@ it('filters weather runs to null PR fields and composes that filter with a view 
   expect(screen.queryByRole('button', { name: 'Show all' })).toBeNull();
   expect(screen.getByText(/No runs match these filters/)).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
-  expect(ids()).toHaveLength(9);
+  expect(ids()).toHaveLength(10);
   expect(screen.getByRole('button', { name: 'Active' })).toHaveAttribute('aria-pressed', 'true');
 });
 
@@ -223,7 +223,7 @@ it('hides another account’s project even when it is mixed into the list', asyn
   const router = createMemoryRouter(routes, { initialEntries: ['/agents'] });
   disposers.push(sources.dispose, () => router.dispose());
   render(<DataProvider sources={sources}><RouterProvider router={router} /></DataProvider>);
-  await screen.findByText(/Runs 1–9 of 9/);
+  await screen.findByText(/Runs 1–10 of 10/);
   expect(row('run_foreign')).toBeNull();
   expect(screen.queryByText('Foreign only title')).toBeNull();
   fireEvent.click(screen.getByText('More filters'));
@@ -266,7 +266,7 @@ it('closing a stale run on this page updates the project counts and leaves its n
   await act(() => router.navigate('/projects/prj_dashboard'));
   await screen.findByRole('heading', { level: 1, name: /Supa dashboard/ });
   const count = screen.getByText('Stale running').closest('div')!;
-  expect(within(count).getByText('0')).toBeVisible();
+  expect(within(count).getByText('1')).toBeVisible();
   expect(screen.getByRole('checkbox', { name: 'Mark done: Inspect the failed sorting run and approve a retry in its harness.' })).not.toBeChecked();
 });
 
@@ -278,7 +278,7 @@ it('matches execution, work, stale and PR for every seeded run on its project pa
   const { router } = await shown('/agents?archived=1');
   const fields = ['Execution state', 'Work status', 'Liveness', 'PR', 'Elapsed'] as const;
   const expected = Object.fromEntries(ids().map(id => [id, Object.fromEntries(fields.map(field => [field, column(id!, field)]))]));
-  expect(Object.keys(expected)).toEqual(['run_1', 'run_10', 'run_2', 'run_4', 'run_3', 'run_5', 'run_9', 'run_6', 'run_8', 'run_7']);
+  expect(Object.keys(expected)).toEqual(['run_1', 'run_10', 'run_2', 'run_4', 'run_11', 'run_3', 'run_5', 'run_9', 'run_6', 'run_8', 'run_7']);
   expect(expected.run_4?.Liveness).toMatch(/^Stale last contact 40 min ago, .+/);
   expect(expected.run_1?.Liveness).toMatch(/^Live last contact just now, .+/);
   expect(expected.run_3?.Liveness).toBe('—');
@@ -313,5 +313,5 @@ it('reports a read failure and retries', async () => {
   render(<DataProvider sources={sources}><RouterProvider router={router} /></DataProvider>);
   expect(await screen.findByRole('alert')).toHaveTextContent('Read failed');
   fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
-  await screen.findByText(/Runs 1–9 of 9/);
+  await screen.findByText(/Runs 1–10 of 10/);
 });

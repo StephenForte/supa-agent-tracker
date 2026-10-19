@@ -147,7 +147,7 @@ it('renders every sort control and every filter kind as usable state changes', (
   fireEvent.change(screen.getByLabelText('Started after'), { target: { value: '2000-01-01T00:00' } });
   fireEvent.change(screen.getByLabelText('Started before'), { target: { value: '2099-01-01T00:00' } });
   expect(document.querySelectorAll('[data-run-id]')).toHaveLength(1); expect(row('run_4')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Clear filters' })); expect(document.querySelectorAll('[data-run-id]')).toHaveLength(10);
+  fireEvent.click(screen.getByRole('button', { name: 'Clear filters' })); expect(document.querySelectorAll('[data-run-id]')).toHaveLength(11);
 });
 
 it('opening additional PRs preserves every active filter and the filtered page', () => {

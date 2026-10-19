@@ -1,7 +1,7 @@
 {
   "name": "Supa Agent Tracker",
   "short_name": "Supa Agents",
-  "start_url": "/projects",
+  "start_url": "/needs-me",
   "scope": "/",
   "display": "standalone",
   "theme_color": "#172c36",

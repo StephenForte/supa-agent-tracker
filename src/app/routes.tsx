@@ -6,6 +6,7 @@ import { PublicAgentsPage } from '../pages/public/PublicAgentsPage';
 import { ProjectsPage } from '../pages/projects/ProjectsPage';
 import { ProjectFormPage } from '../pages/projects/ProjectFormPage';
 import { ProjectDetailPage } from '../pages/project-detail/ProjectDetailPage';
+import { NeedsMePage } from '../pages/needs-me/NeedsMePage';
 import { AgentsPage } from '../pages/agents/AgentsPage';
 import { AuthPage } from '../pages/auth/AuthPage';
 import { SettingsPage } from '../pages/settings/SettingsPage';
@@ -14,6 +15,7 @@ export const routes: RouteObject[] = [
   { path: '/public/:handle/agents', element: <PublicAgentsPage /> },
   { element: <Shell />, children: [
   { path: '/', element: <Navigate to="/projects" replace /> },
+  { path: '/needs-me', element: <SessionGuard><NeedsMePage /></SessionGuard> },
   { path: '/projects', element: <SessionGuard><ProjectsPage /></SessionGuard> },
   { path: '/projects/new', element: <SessionGuard><ProjectFormPage /></SessionGuard> },
   { path: '/projects/:projectId', element: <SessionGuard><ProjectDetailPage /></SessionGuard> },
