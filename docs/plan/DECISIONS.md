@@ -285,3 +285,11 @@ Status: **Confirmed by operator (2026-10-16)**, refining D-018/D-024 scope rules
   once; unattended (no one to ask) → continue the work without reporting (the protocol's never-block rule).
 - Task: P1-J.
 
+### D-033 — Idempotency key retention
+Status: **Planner decision (2026-10-19)**, taken with the P1-H dispatch; the operator approves it by dispatching P1-H.
+- `idempotency_keys` gets an `operation` column. Heartbeat keys are deleted after **24 hours**; every other key, including legacy rows with no operation, after **30 days**.
+- Why: production measured 156 keys per run-hour, 73% of them heartbeats (P1-G2 step 5, 2026-10-17). Replaying a heartbeat is harmless (D-024). Real mutations must stay replayable while an offline agent might still retry (the reporting protocol's retry rule), and a weekend fits comfortably in 30 days.
+- Pruning runs in the web process: at boot, then hourly, in bounded batches. No separate Render job (no added cost).
+- run_events is not covered. It's user-visible history and needs its own decision if it grows.
+- Task: P1-H.
+
