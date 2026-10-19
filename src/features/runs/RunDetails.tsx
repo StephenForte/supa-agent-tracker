@@ -8,7 +8,7 @@ import { executionHistory, executionLabels, projectName, workLabels, paginate } 
 import { eventActorLabel, eventKindLabels, toolSourceLabels } from '../../domain/runs/labels';
 import type { LogicalAgent, Project, Run } from '../../domain/types';
 import { MarkDoneButton } from './MarkDoneButton';
-export function RunDetails({ run, runs, agents = [], projects = [], onReveal }: { run: Run; runs: readonly Run[]; agents?: readonly LogicalAgent[]; projects?: readonly Project[]; onReveal: (id: string) => void }) {
+export function RunDetails({ run, runs, agents = [], projects = [], onReveal, onBack }: { run: Run; runs: readonly Run[]; agents?: readonly LogicalAgent[]; projects?: readonly Project[]; onReveal: (id: string) => void; onBack?: () => void }) {
   const [historyPage, setHistoryPage] = useState(0);
   const tracker = useTrackerData();
   const demo = useDemoAccount();
@@ -23,7 +23,7 @@ export function RunDetails({ run, runs, agents = [], projects = [], onReveal }: 
     return <a href={`/projects/${target?.projectId ?? run.projectId}?run=${encodeURIComponent(id)}`} title={id} onClick={event => { if (target && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) { event.preventDefault(); onReveal(id); } }}>{shortId(id)}</a>;
   };
   return <div id={`details-${run.id}`} className="grid gap-5 whitespace-normal p-4 text-sm md:grid-cols-2">
-    <p className="md:col-span-2"><Link to={`/projects/${run.projectId}`}>← {projectName(run, projects)}</Link></p>
+    <p className="md:col-span-2"><Link to={`/projects/${run.projectId}`} onClick={() => onBack?.()}>← {projectName(run, projects)}</Link></p>
     <section><h3 className="font-semibold">Run handoff</h3><MarkDoneButton run={run} /><dl className="grid gap-2 break-words">
       <div><dt>Latest message</dt><dd>{formatNullable(run.message)}</dd></div>
       <div><dt>Completion summary</dt><dd>{formatNullable(run.completionSummary)}</dd></div>

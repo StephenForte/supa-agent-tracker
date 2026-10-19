@@ -149,6 +149,17 @@ it('shows the conflict path for a stale archive and does not overwrite the other
   expect(screen.getByText('Archived')).toBeVisible();
   expect(screen.getByRole('button', { name: 'Unarchive' })).toBeVisible();
 });
+it('closes a run opened from the row, even when the project URL does not change', async () => {
+  const { router } = setup('/projects/prj_offers');
+  await screen.findByRole('heading', { level: 1, name: 'Offers workspace' });
+  fireEvent.click(screen.getByRole('button', { name: /run_3/, expanded: false }));
+  expect(await screen.findByText('Run handoff')).toBeVisible();
+  expect(router.state.location.search).toBe('');
+  fireEvent.click(screen.getByRole('link', { name: '← Offers workspace' }));
+  await waitFor(() => expect(screen.queryByText('Run handoff')).toBeNull());
+  expect(router.state.location.pathname).toBe('/projects/prj_offers');
+  expect(router.state.location.search).toBe('');
+});
 it('links back to the project and closes the open run', async () => {
   const { router } = setup('/projects/prj_offers?run=run_3');
   await screen.findByRole('heading', { level: 1, name: 'Offers workspace' });
