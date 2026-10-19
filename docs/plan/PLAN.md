@@ -189,6 +189,17 @@ Wave-3 inputs from the P1-B1 review: `findCredentialByHash` takes `UserAccess`, 
 bearer bootstrap (hash → `CredentialAccess`) in server/repo/credentials.ts; every repo call, reads included, takes
 `FOR UPDATE` on the project row (serializes per project). P1-G's 25-concurrent-run load check must measure this.
 
+## Phase 2 (started 2026-10-19)
+
+Reporting: from P2 on, every brief makes the worker check in/out with Supa Agent Tracker (dispatch-worker skill, R1–R5 and the TRACKING line). Workers find the project by matching the repo `StephenForte/supa-agent-tracker` through list_projects.
+
+| Wave | Task | Owns | Depends on | Model | Status |
+|---|---|---|---|---|---|
+| P2-1 | **P2-A Cleanup** (D-034): archive button, All agents hides archived (URL toggle), hide revoked tokens + sort, sticky project sort/filters | src/pages/project-detail, ProjectCard, src/pages/agents, src/domain/agents, src/features/agents, RunGrid, src/features/tokens, src/domain/tokens, src/pages/projects, ProjectFilters, src/domain/projects | — | Sonnet | Briefed 2026-10-19 ([brief](briefs/P2-A.md)); branch p2-a-cleanup |
+| P2-1 | **P2-B Public agents page per owner** (D-035): users.public_handle, projects.is_public, migration 0006, PATCH /api/account, GET /api/public/:handle/agents (allowlist), /public/:handle/agents page | 0006, server/public, src/pages/public, src/data/public, ProjectForm, settings account, routes.tsx, types/contracts/http/mock fields | — (parallel with P2-A) | Opus | Briefed 2026-10-19 ([brief](briefs/P2-B.md)); branch p2-b-public-agents, migration 0006 |
+
+Follow-up after both merge: a "Public" badge on project cards (ProjectCard belongs to P2-A this wave).
+
 ## Known traps (found in review)
 - UI time comes from `useNow()`, which always reads `systemClock`; there is no clock context. Injecting a clock into
   `createDemoSources` does not move the UI's `now`. To test elapsed/stale in rendered components, use
@@ -305,3 +316,4 @@ bearer bootstrap (hash → `CredentialAccess`) in server/repo/credentials.ts; ev
 - 2026-10-19 · P1-H briefed (Opus, alone). D-033: heartbeat keys 24 h, all others 30 days (legacy NULL-operation rows included), with an in-process hourly batched prune. Pre-assigned: migration 0005_idempotency_retention, branch p1-h-idempotency-retention. Trap named: never delete a key inside its window (a deleted check_in key plus a retry is a silent duplicate run), and never infer the class from request_id or response shape.
 - 2026-10-19 · **P1-H reviewed → approved (PR #55).** Planner gate: 59 files / 422 tests, all builds. The delete predicate matches D-033 exactly (NULL/unknown → 30 d only); partial indexes per class; timer after migrate+listen, unref'd, stopped before pool.end. Mutations: NULL-as-heartbeat → red; other window 24 h → red; heartbeat 30 d → red; `<>` for IS DISTINCT FROM → red. The registry dropping the tool name survives all 159 server tests but fails safe (heartbeat keys kept 30 d). Browser step-completion and private-note writes store NULL (30-day class, safe; disclosed). ~~Expect the first prune log ≈1 s after deploy, heartbeat≈475+.~~ (planner error, corrected below)
 - 2026-10-19 · P1-H merged (4880323). Main CI 39291372632 green; deploy dep-dbb4sdjrjlhs7381psqg live 17:08Z; /ready 200. First prune 17:07:58Z: `heartbeat=0 other=0`. **Planner error:** I had predicted ≈475 heartbeat deletions, but every pre-0005 row is operation NULL, so by D-033 it's in the 30-day class; the 2026-10-17 load keys expire around 2026-11-16. Behaviour is correct; corrected on PR #55. From now on, new heartbeat keys are tagged and pruned after 24 h. **Phase 1 plan complete:** all P1 tasks merged and P1-G2 accepted.
+- 2026-10-19 · Phase 2 wave 1 planned. Operator requests: workers report to the tracker (dispatch-worker skill updated: Reporting R1–R5, H4b check_out, TRACKING line); cleanup of old projects and tokens (D-034 → P2-A, Sonnet); a public per-owner agents page, status only (D-035 → P2-B, Opus, migration 0006). P2-A and P2-B run in parallel with disjoint files. Finding while mapping: project sort already existed but reset on reload; archiving existed only in the Edit form.
