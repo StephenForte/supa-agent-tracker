@@ -40,3 +40,46 @@ summary { padding: .75rem; border: 1px solid #d6e0e3; border-radius: .4rem; }
 .skip-link:focus { top: 1rem; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 @media (max-width: 700px) { .app-header { align-items: flex-start; flex-direction: column; gap: 1rem; padding-block: 1.1rem; } nav { gap: .15rem; } nav a { padding: .6rem; } .demo-detail { display: none; } .demo-banner { gap: .5rem; } .panel-grid { grid-template-columns: 1fr; gap: 0; } main { padding-top: 1.75rem; } }
+
+/* Mobile controls: one shared hit-area rule, including inline links and checkboxes.
+   Keep this unlayered and after base styles so utility padding cannot shrink it. */
+.mobile-filter-toggle, .project-jumps { display: none; }
+@media (max-width: 767px) {
+  .app-shell { --mobile-tap-target: 44px; }
+  .app-shell :is(a, button, input, select, textarea, summary) { min-height: var(--mobile-tap-target); }
+  .app-shell :is(a, button, summary) { display: inline-flex; align-items: center; }
+  .app-shell input:is([type="checkbox"], [type="radio"]) { width: 44px; height: 44px; flex-shrink: 0; }
+  .app-header { position: sticky; top: 0; z-index: 20; flex-direction: column; align-items: stretch; gap: 0; padding: 0 1rem; }
+  .app-header .brand { font-size: 1rem; gap: .5rem; }
+  .app-header nav { flex-wrap: nowrap; justify-content: space-between; gap: 0; }
+  .app-header nav a { padding: 0 .35rem; font-size: .8rem; white-space: nowrap; }
+  .demo-banner { padding-block: .15rem; }
+  .demo-detail { display: none; }
+  main { padding-top: .75rem; width: 100%; }
+  .eyebrow { margin-block: .25rem; }
+  h1 { margin-block: .5rem; }
+  .mobile-description { display: none; }
+  .mobile-filter-toggle { display: inline-flex; margin-bottom: .75rem; }
+  .filter-content:not(.is-open) { display: none; }
+  .agent-view-row { flex-wrap: nowrap; overflow-x: auto; width: 100%; padding: 4px; }
+  .agent-view-row button { flex-shrink: 0; white-space: nowrap; }
+  .run-grid { padding-block: .75rem; }
+  .run-grid > div:first-child { margin-bottom: .5rem; }
+  .mobile-run-card { min-width: 0; }
+  .run-card-summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; }
+  .app-shell .run-card-toggle { display: flex; flex-direction: column; align-items: stretch; text-align: left; min-width: 0; width: 100%; padding: 8px; gap: 3px; }
+  .run-card-agent, .run-card-title, .run-card-status, .run-card-message { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .run-card-agent { font-weight: 600; line-height: 20px; }
+  .run-card-title { font-weight: 600; line-height: 20px; }
+  .run-card-status { font-size: 10px; line-height: 16px; padding: 2px 4px; }
+  .run-card-message { color: #526670; font-size: 12px; line-height: 18px; }
+  .run-card-pr { min-width: 44px; justify-content: center; padding-inline: 8px; font-size: 12px; }
+  .run-card-expanded { padding: 0 8px 8px; }
+  .project-jumps { display: flex; position: sticky; top: 88px; z-index: 10; background: #f4f6f6; border-bottom: 1px solid #d6e0e3; justify-content: space-around; }
+  [id^="project-"] { scroll-margin-top: 145px; }
+  .project-counts { padding: .75rem; gap: .5rem; }
+  .project-counts dt { font-size: 11px; }
+  .project-counts dd { font-size: 1.25rem; }
+  .project-actions { gap: .25rem .75rem; margin-block: .5rem; align-items: center; }
+  .panel-grid { grid-template-columns: 1fr; gap: 0; }
+}

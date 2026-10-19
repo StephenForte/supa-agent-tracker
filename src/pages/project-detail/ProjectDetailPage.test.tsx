@@ -193,7 +193,7 @@ it('marks a finished run done from mobile cards', async () => {
     const card = cards.querySelector<HTMLElement>('[data-run-id="run_3"]')!;
     expect(card.textContent).toContain('run_3');
     const status = card.querySelector('[data-latest-status]');
-    expect(status).toHaveClass('line-clamp-2');
+    expect(status).toHaveClass('truncate');
     expect(status).toHaveTextContent(before.message);
     fireEvent.click(within(card).getAllByRole('button', { name: 'Demo: mark done run_3' })[0]!);
     await waitFor(async () => expect(await sources.tracker.getRun('run_3')).toMatchObject({ workStatus: 'completed', executionState: 'finished', revision: before.revision + 1, events: before.events }));

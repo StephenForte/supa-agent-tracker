@@ -259,10 +259,15 @@ it('renders cards below the md breakpoint with a short id, status and working ma
     expect(document.querySelector('.min-w-\\[1100px\\]')).toBeNull();
     const cards = screen.getByRole('list', { name: 'Run cards' });
     expect(cards.className).not.toMatch(/min-w-/);
-    expect(within(cards).getByText('T0-11b · 58a9a065')).toHaveAttribute('title', id);
+    expect(cards.querySelector('.run-card-title')).toHaveTextContent(run.title);
+    expect(cards.querySelector('.run-card-status')).toHaveTextContent('Finished · Waiting for review');
+    expect(within(cards).queryByText('58a9a065')).toBeNull();
+    expect(within(cards).queryByRole('button', { name: 'Demo: mark done 58a9a065' })).toBeNull();
     const status = within(cards).getByText(message);
-    expect(status).toHaveClass('line-clamp-2');
+    expect(status).toHaveClass('truncate');
     expect(status).toHaveAttribute('title', message);
+    await userEvent.click(within(cards).getByRole('button', { expanded: false }));
+    expect(within(cards).getByText('58a9a065')).toHaveAttribute('title', id);
     await userEvent.click(within(cards).getByRole('button', { name: 'Demo: mark done 58a9a065' }));
     expect(mark).toHaveBeenCalledWith(id);
   } finally { restore(); sources.dispose(); }
