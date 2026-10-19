@@ -15,6 +15,7 @@ export function seedTracker(now: number): TrackerState {
     prdUrl: linked ? `https://github.com/example-org/${id.slice(4)}/blob/main/docs/PRD.md` : null,
     tags: type === 'coding' ? ['product', 'phase-0'] : ['daily'],
     reportingPolicy: { staleThresholdMinutes: 15, heartbeatExpected: type === 'coding', instructions: 'Report execution state and work status separately. Self-report tool coverage honestly.' },
+    isPublic: false,
     createdAt: at(-10_080), updatedAt: at(-60), revision: 1,
   });
   const projects = [project('prj_offers', 'Offers workspace', 'coding', 'active'),
@@ -55,7 +56,7 @@ export function seedTracker(now: number): TrackerState {
     { id: 'step_2', projectId: 'prj_offers', position: 2, instruction: 'Confirm the preview opens on a narrow screen.', sourceRunId: 'run_1', done: true, completionChangedBy: 'usr_demo', completionChangedAt: at(-10) },
     { id: 'step_3', projectId: 'prj_dashboard', position: 1, instruction: 'Inspect the failed sorting run and approve a retry in its harness.', sourceRunId: 'run_5', done: false, completionChangedBy: null, completionChangedAt: null },
   ].map(step => ({ ...step, createdAt: at(-90), updatedAt: at(-10), revision: 1 }));
-  return { demoLiveRunIds: [...DEMO_LIVE_RUN_IDS], account: { id: 'usr_demo', name: 'Demo operator', email: 'demo@example.invalid', emailVerified: true, demo: true }, projects, agents, runs, steps,
+  return { demoLiveRunIds: [...DEMO_LIVE_RUN_IDS], account: { id: 'usr_demo', name: 'Demo operator', email: 'demo@example.invalid', emailVerified: true, demo: true, publicHandle: null }, projects, agents, runs, steps,
     waitingNotes: [{ projectId: 'prj_offers', text: 'T0-11a is still implementing the second form variant.', sourceRunId: 'run_1', updatedAt: at(-2), revision: 1 }],
     tokens: [1, 2].map(n => ({ id: `tok_${n}`, label: n === 1 ? 'Demo coding client' : 'Demo weather bot', allProjects: false, projectIds: [n === 1 ? 'prj_offers' : 'prj_weather'], display: `sat_demo_…FAKE_${n}`, createdAt: at(-1440), lastUsedAt: n === 1 ? at(-2) : null, revokedAt: null })), sequence: 10 };
 }

@@ -25,9 +25,11 @@ import {
   toRunListItem,
   toRunPatch,
 } from './map.js';
+import { setPublicHandle } from '../public/account.js';
 import {
   closeRunSchema,
   createProjectSchema,
+  patchAccountSchema,
   patchProjectSchema,
   patchRunSchema,
   projectListQuerySchema,
@@ -42,10 +44,24 @@ interface SavedResponse {
 export async function registerUserApiRoutes(app: FastifyInstance, deps: { pool: pg.Pool }): Promise<void> {
   const db = createDb(deps.pool);
   const guard = { preHandler: requireUser };
+  const accountBody = (account: ReturnType<typeof toAccount>) => ({ ...account, isAdmin: isAdmin(account, authRuntime(app)!.settings) });
 
   app.get('/api/account', guard, (request, reply) => handle(reply, async () => {
     const account = toAccount(await readAccount(db, accessOf(request)));
-    return reply.send({ ...account, isAdmin: isAdmin(account, authRuntime(app)!.settings) });
+    return reply.send(accountBody(account));
+  }));
+
+  app.patch('/api/account', guard, (request, reply) => handle(reply, async () => {
+    const body = parse(patchAccountSchema, request.body, reply);
+    if (!body) return;
+    const access = accessOf(request);
+    return commit(db, reply, access, body.request_id, 'account_update', body, async (tx) => {
+      const updated = await setPublicHandle(tx, access, body.publicHandle);
+      if (updated.status === 'taken') {
+        return { statusCode: 409, payload: apiError(errorCodes.conflict, 'That public handle is already taken') };
+      }
+      return { statusCode: 200, payload: accountBody(toAccount(updated.user)) };
+    });
   }));
 
   app.get('/api/projects', guard, (request, reply) => handle(reply, async () => {

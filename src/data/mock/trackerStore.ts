@@ -4,6 +4,7 @@ import type { Clock } from '../../domain/clock';
 import { seedTracker, type TrackerState } from './seed';
 import { observable } from './observable';
 import { projectInputSchema, runMetadataPatchSchema } from './schema';
+const HANDLE_PATTERN = /^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$/;
 export interface TrackerStoreOptions { clock: Clock; initial?: TrackerState; persist(state: TrackerState): void; onReset(now: number): void }
 export function createTrackerStore({ clock, initial, persist, onReset }: TrackerStoreOptions) {
   let state = structuredClone(initial ?? seedTracker(clock.now()));
@@ -43,12 +44,18 @@ export function createTrackerStore({ clock, initial, persist, onReset }: Tracker
   const source: TrackerDataSource = {
     subscribe: changes.subscribe, getSnapshot: changes.getSnapshot,
     async getAccount() { return copy(state.account); },
+    async updateAccount(input) {
+      if (input.publicHandle === null) { state.account = { ...state.account, publicHandle: null }; commit(); return { status: 'saved', value: copy(state.account) }; }
+      const handle = input.publicHandle.trim().toLowerCase();
+      if (!HANDLE_PATTERN.test(handle)) return { status: 'invalid', message: 'Use 3–32 letters, numbers, or hyphens, starting and ending with a letter or number.' };
+      state.account = { ...state.account, publicHandle: handle }; commit(); return { status: 'saved', value: copy(state.account) };
+    },
     async listProjects() { return copy(state.projects); },
     async getProject(id) { return copy(state.projects.find(project => project.id === id) ?? null); },
     async createProject(input) {
       const parsed = projectInputSchema.safeParse(input);
       if (!parsed.success) return { status: 'invalid', message: 'A name, valid metadata, HTTP(S) links and positive stale threshold are required.' };
-      const project: Project = { ...parsed.data, id: `prj_demo_${++state.sequence}`, ownerId: state.account.id, revision: 1, createdAt: timestamp(), updatedAt: timestamp() };
+      const project: Project = { ...parsed.data, isPublic: parsed.data.isPublic ?? false, id: `prj_demo_${++state.sequence}`, ownerId: state.account.id, revision: 1, createdAt: timestamp(), updatedAt: timestamp() };
       state.projects.push(project); commit(); return { status: 'saved', value: copy(project) };
     },
     async updateProject(id, patch, expectedRevision) {
@@ -61,7 +68,8 @@ export function createTrackerStore({ clock, initial, persist, onReset }: Tracker
         repositoryName: patch.repositoryName === undefined ? project.repositoryName : patch.repositoryName,
         repositoryUrl: patch.repositoryUrl === undefined ? project.repositoryUrl : patch.repositoryUrl,
         prdUrl: patch.prdUrl === undefined ? project.prdUrl : patch.prdUrl,
-        tags: patch.tags ?? project.tags, reportingPolicy: patch.reportingPolicy ?? project.reportingPolicy };
+        tags: patch.tags ?? project.tags, reportingPolicy: patch.reportingPolicy ?? project.reportingPolicy,
+        isPublic: patch.isPublic === undefined ? project.isPublic === true : patch.isPublic };
       const parsed = projectInputSchema.safeParse(input);
       if (!parsed.success) return { status: 'invalid', message: 'Invalid project metadata or reporting policy.' };
       Object.assign(project, parsed.data, { revision: project.revision + 1, updatedAt: timestamp() });

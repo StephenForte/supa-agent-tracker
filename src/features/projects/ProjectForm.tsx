@@ -11,6 +11,7 @@ export function ProjectForm({ project }: { project?: Project }) {
   const source = useTrackerData();
   const navigate = useNavigate();
   const [draft, setDraft] = useState(() => projectDraft(project));
+  const [isPublic, setIsPublic] = useState(project?.isPublic === true);
   // This revision belongs to the draft's base, not a later subscription refresh.
   const [revision, setRevision] = useState(project?.revision ?? 0);
   const [conflict, setConflict] = useState<Project | null>(null);
@@ -26,7 +27,7 @@ export function ProjectForm({ project }: { project?: Project }) {
     if (Object.keys(nextErrors).length) { setMessage('Check the highlighted fields.'); return; }
     setSaving(true);
     try {
-      const input = draftInput(draft);
+      const input = { ...draftInput(draft), isPublic };
       const result = project ? await source.updateProject(project.id, input, expectedRevision) : await source.createProject(input);
       if (result.status === 'saved') { void navigate(`/projects/${result.value.id}`); return; }
       if (result.status === 'conflict') { setConflict(result.current); setRevision(result.current.revision); }
@@ -41,7 +42,7 @@ export function ProjectForm({ project }: { project?: Project }) {
     {message && <p role="alert" className="text-status-failed">{message}</p>}
     {conflict && <section role="alert" className="rounded-lg border border-status-stale bg-amber-50 p-4 [overflow-wrap:anywhere]"><h2>Project changed elsewhere</h2><p>Your draft is preserved below. Review the current saved values before applying your draft on revision {conflict.revision}. Applying replaces these fields with your draft.</p>
       <dl className="space-y-2 text-sm">{Object.entries(projectDraft(conflict)).map(([key, value]) => <div key={key}><dt className="font-semibold">{{ name: 'Name', description: 'Description', type: 'Project type', lifecycle: 'Lifecycle', repositoryName: 'Repository name', repositoryUrl: 'Repository URL', prdUrl: 'PRD URL', tags: 'Tags', staleThresholdMinutes: 'Stale threshold minutes', heartbeatExpected: 'Heartbeat expected', instructions: 'Reporting instructions' }[key]}</dt><dd className="whitespace-pre-wrap">{typeof value === 'boolean' ? value ? 'Yes' : 'No' : value || '—'}</dd></div>)}</dl>
-      <p className="text-xs">Updated {formatTimestamp(conflict.updatedAt)}</p><Button disabled={saving} onClick={() => void save(conflict.revision)}>Apply my draft on revision {conflict.revision}</Button>
+      <p className="text-xs">Updated {formatTimestamp(conflict.updatedAt)}</p><p className="text-sm">Public project: {conflict.isPublic ? 'Yes' : 'No'}</p><Button disabled={saving} onClick={() => void save(conflict.revision)}>Apply my draft on revision {conflict.revision}</Button>
     </section>}
     <fieldset disabled={saving} className="min-w-0 space-y-5">
       <legend className="mb-4 font-semibold">Project details</legend>
@@ -54,6 +55,11 @@ export function ProjectForm({ project }: { project?: Project }) {
       {field('staleThresholdMinutes', 'Stale threshold minutes (required)', 'number')}
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={draft.heartbeatExpected} onChange={event => change('heartbeatExpected', event.target.checked)} />Heartbeat expected</label>
       <label className="block text-sm font-medium" htmlFor="instructions">Reporting instructions<textarea id="instructions" className={control} rows={4} value={draft.instructions} onChange={event => change('instructions', event.target.value)} /></label>
+    </fieldset>
+    <fieldset disabled={saving} className="min-w-0 space-y-3 border-t border-slate-200 pt-4">
+      <legend className="font-semibold">Public page</legend>
+      <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={isPublic} onChange={event => setIsPublic(event.target.checked)} />Public project</label>
+      <p className="text-sm text-slate-600">Visitors will see this project's name, its agent names, and run status only.</p>
     </fieldset>
     <div className="flex flex-wrap items-center gap-4"><Button type="submit" variant="primary" disabled={saving || !!conflict}>{saving ? 'Saving…' : project ? 'Save changes' : 'Create project'}</Button>{!saving && <Link to={cancelTo}>Cancel</Link>}</div>
   </form>;

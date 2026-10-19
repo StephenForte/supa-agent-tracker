@@ -14,10 +14,11 @@ export interface AccountBody {
   name: string;
   email: string;
   emailVerified: boolean;
+  publicHandle: string | null;
 }
 
-export function toAccount(user: { id: string; displayName: string; email: string; emailVerified: boolean }): AccountBody {
-  return { id: user.id, name: user.displayName, email: user.email, emailVerified: user.emailVerified };
+export function toAccount(user: { id: string; displayName: string; email: string; emailVerified: boolean; publicHandle: string | null }): AccountBody {
+  return { id: user.id, name: user.displayName, email: user.email, emailVerified: user.emailVerified, publicHandle: user.publicHandle };
 }
 
 export function toProject(row: RepoProject) {
@@ -32,6 +33,7 @@ export function toProject(row: RepoProject) {
     repositoryUrl: row.repositoryUrl,
     prdUrl: row.prdUrl,
     tags: row.tags,
+    isPublic: row.isPublic,
     reportingPolicy: {
       staleThresholdMinutes: row.staleThresholdMinutes,
       heartbeatExpected: row.heartbeatExpected,
@@ -64,6 +66,7 @@ export function toRepoProjectInput(input: CreateProjectBody): RepoProjectInput {
     repositoryUrl: input.repositoryUrl,
     prdUrl: input.prdUrl,
     tags: input.tags,
+    isPublic: input.isPublic ?? false,
     staleThresholdMinutes: input.reportingPolicy.staleThresholdMinutes,
     heartbeatExpected: input.reportingPolicy.heartbeatExpected,
     reportingInstructions: input.reportingPolicy.instructions,
@@ -80,6 +83,7 @@ export function toRepoProjectPatch(input: PatchProjectBody): Partial<RepoProject
   if (input.repositoryUrl !== undefined) patch.repositoryUrl = input.repositoryUrl;
   if (input.prdUrl !== undefined) patch.prdUrl = input.prdUrl;
   if (input.tags !== undefined) patch.tags = input.tags;
+  if (input.isPublic !== undefined) patch.isPublic = input.isPublic;
   if (input.reportingPolicy !== undefined) {
     patch.staleThresholdMinutes = input.reportingPolicy.staleThresholdMinutes;
     patch.heartbeatExpected = input.reportingPolicy.heartbeatExpected;

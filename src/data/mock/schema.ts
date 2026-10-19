@@ -12,6 +12,7 @@ export const projectInputSchema = z.object({
   name: z.string().trim().min(1), description: z.string(), type: workload, lifecycle: z.enum(['active', 'paused', 'completed', 'archived']),
   repositoryName: nullableText, repositoryUrl: link, prdUrl: link, tags: z.array(z.string()),
   reportingPolicy: z.object({ staleThresholdMinutes: z.number().positive(), heartbeatExpected: z.boolean(), instructions: z.string() }),
+  isPublic: z.boolean().optional(),
 });
 const project = projectInputSchema.extend({ id: z.string(), ownerId: z.string(), createdAt: time, updatedAt: time, revision });
 const agent = z.object({ id: z.string(), projectId: z.string(), name: z.string(), title: z.string(), workloadType: workload, createdAt: time });
@@ -32,7 +33,7 @@ export const runMetadataPatchSchema = run.pick({ title: true, taskId: true, harn
 export const trackerSchema: z.ZodType<TrackerState> = z.object({
   // Default preserves pre-heartbeat v1 demo edits instead of discarding saved state.
   demoLiveRunIds: z.array(z.enum(DEMO_LIVE_RUN_IDS)).default(() => [...DEMO_LIVE_RUN_IDS]),
-  account: z.object({ id: z.literal('usr_demo'), name: z.string(), email: z.email(), emailVerified: z.boolean(), demo: z.literal(true) }),
+  account: z.object({ id: z.literal('usr_demo'), name: z.string(), email: z.email(), emailVerified: z.boolean(), demo: z.literal(true), publicHandle: z.string().nullable().optional() }),
   projects: z.array(project), agents: z.array(agent), runs: z.array(run.refine(value => value.executionState === 'running' ? value.finishedAt === null : value.finishedAt !== null)), steps: z.array(step), waitingNotes: z.array(waiting), tokens: z.array(token), sequence: z.number().int().nonnegative(),
 }).refine(state => {
   const projects = new Set(state.projects.map(item => item.id));

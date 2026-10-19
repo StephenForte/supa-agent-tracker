@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { REQUEST_ID_PATTERN } from '../app/conventions.js';
+import { PUBLIC_HANDLE_PATTERN } from '../public/handle.js';
 
 /** Bounds chosen for P1-C2 and recorded in docs/api.md. They are not a schema migration. */
 export const limits = {
@@ -50,6 +51,7 @@ const projectShape = {
   prdUrl: nullableHttpUrl,
   tags: z.array(z.string().trim().min(1).max(limits.tagLength)).max(limits.tagCount),
   reportingPolicy: reportingPolicySchema,
+  isPublic: z.boolean().optional(),
 };
 
 export const createProjectSchema = z.strictObject({
@@ -57,7 +59,7 @@ export const createProjectSchema = z.strictObject({
   request_id: requestIdSchema,
 });
 
-const projectPatchKeys = ['name', 'description', 'type', 'lifecycle', 'repositoryName', 'repositoryUrl', 'prdUrl', 'tags', 'reportingPolicy'] as const;
+const projectPatchKeys = ['name', 'description', 'type', 'lifecycle', 'repositoryName', 'repositoryUrl', 'prdUrl', 'tags', 'reportingPolicy', 'isPublic'] as const;
 
 export const patchProjectSchema = z.strictObject({
   name: projectShape.name.optional(),
@@ -69,6 +71,7 @@ export const patchProjectSchema = z.strictObject({
   prdUrl: projectShape.prdUrl.optional(),
   tags: projectShape.tags.optional(),
   reportingPolicy: projectShape.reportingPolicy.optional(),
+  isPublic: projectShape.isPublic,
   request_id: requestIdSchema,
   expected_revision: revisionSchema,
 }).refine((value) => projectPatchKeys.some((key) => value[key] !== undefined));
@@ -96,6 +99,13 @@ export const patchRunSchema = z.strictObject({
   expected_revision: revisionSchema,
 }).refine((value) => runPatchKeys.some((key) => value[key] !== undefined));
 
+const publicHandleSchema = z.string().trim().toLowerCase().regex(PUBLIC_HANDLE_PATTERN);
+
+export const patchAccountSchema = z.strictObject({
+  publicHandle: z.union([z.null(), publicHandleSchema]),
+  request_id: requestIdSchema,
+});
+
 export const closeRunSchema = z.strictObject({
   outcome: z.enum(['failed', 'cancelled']),
   reason: z.string().trim().min(1).max(limits.closeReason),
@@ -119,6 +129,7 @@ export const scopedListQuerySchema = z.strictObject({
   project_id: z.string().min(1).max(128).optional(),
 });
 
+export type PatchAccountBody = z.infer<typeof patchAccountSchema>;
 export type CreateProjectBody = z.infer<typeof createProjectSchema>;
 export type PatchProjectBody = z.infer<typeof patchProjectSchema>;
 export type PatchRunBody = z.infer<typeof patchRunSchema>;

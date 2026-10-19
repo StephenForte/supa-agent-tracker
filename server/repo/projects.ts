@@ -4,12 +4,12 @@ import { pageItems, parsePageQuery, PaginationError, type Page } from '../app/pa
 import { checkRevision, credentialAllowsEveryOwnedProject, requireUser, withActor, withProject, type Access, type Database, type UserAccess, type WriteResult } from './access.js';
 
 export type Project = typeof projects.$inferSelect;
-export type ProjectInput = Pick<typeof projects.$inferInsert, 'name' | 'description' | 'type' | 'lifecycle' | 'repositoryName' | 'repositoryUrl' | 'prdUrl' | 'tags' | 'staleThresholdMinutes' | 'heartbeatExpected' | 'reportingInstructions'>;
+export type ProjectInput = Pick<typeof projects.$inferInsert, 'name' | 'description' | 'type' | 'lifecycle' | 'repositoryName' | 'repositoryUrl' | 'prdUrl' | 'tags' | 'isPublic' | 'staleThresholdMinutes' | 'heartbeatExpected' | 'reportingInstructions'>;
 
 function projectValues(input: Partial<ProjectInput>) {
   return { name: input.name, description: input.description, type: input.type, lifecycle: input.lifecycle,
     repositoryName: input.repositoryName, repositoryUrl: input.repositoryUrl, prdUrl: input.prdUrl,
-    tags: input.tags, staleThresholdMinutes: input.staleThresholdMinutes,
+    tags: input.tags, isPublic: input.isPublic, staleThresholdMinutes: input.staleThresholdMinutes,
     heartbeatExpected: input.heartbeatExpected, reportingInstructions: input.reportingInstructions };
 }
 

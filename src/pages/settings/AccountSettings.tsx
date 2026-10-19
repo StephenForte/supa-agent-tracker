@@ -1,7 +1,8 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, type FormEvent } from 'react';
 import { Button } from '../../components/ui/Button';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { useSourceQuery, useTrackerData } from '../../data/hooks';
+import type { Account } from '../../domain/types';
 import { LiveAccountControls } from './LiveAccountControls';
 import { DisabledPasswordField } from '../auth/DisabledPasswordField';
 
@@ -21,6 +22,7 @@ export function AccountSettings() {
         <div><dt className="text-sm text-slate-600">Email status</dt><dd>{account.data.emailVerified ? 'Verified' : 'Not verified'}</dd></div>
       </dl>
     </section>
+    <PublicHandleForm account={account.data} />
     {account.data.demo ? <><section className="slot" aria-labelledby="password-heading">
       <h2 id="password-heading">Password</h2>
       <p id="password-help">Password changes are disabled in this demo. Nothing typed into a password field is kept.</p>
@@ -35,4 +37,47 @@ export function AccountSettings() {
       <Button disabled aria-describedby="sessions-help">Revoke other sessions</Button>
     </section></> : <LiveAccountControls />}
   </div>;
+}
+
+function PublicHandleForm({ account }: { account: Account }) {
+  const tracker = useTrackerData();
+  const [handle, setHandle] = useState(account.publicHandle ?? '');
+  const [saved, setSaved] = useState(account.publicHandle ?? null);
+  const [message, setMessage] = useState('');
+  const [pending, setPending] = useState(false);
+  const url = saved ? `${window.location.origin}/public/${saved}/agents` : '';
+  async function save(next: string | null) {
+    if (pending) return;
+    setPending(true);
+    setMessage('');
+    try {
+      const result = await tracker.updateAccount({ publicHandle: next });
+      if (result.status === 'saved') {
+        const value = result.value.publicHandle ?? null;
+        setSaved(value);
+        setHandle(value ?? '');
+        setMessage(value ? 'Public handle saved.' : 'Public handle cleared.');
+      } else setMessage(result.message);
+    } catch {
+      setMessage('The handle could not be saved. Try again.');
+    } finally {
+      setPending(false);
+    }
+  }
+  function submit(event: FormEvent) { event.preventDefault(); void save(handle.trim() ? handle : null); }
+  return <section className="slot" aria-labelledby="public-handle-heading">
+    <h2 id="public-handle-heading">Public page handle</h2>
+    <p className="text-sm text-slate-600">Letters, numbers, and hyphens, 3–32 characters. Visitors see project names, agent names, and run status only.</p>
+    <form onSubmit={event => void submit(event)} className="grid max-w-xl gap-3">
+      <label className="text-sm font-medium" htmlFor="public-handle">Public page handle
+        <input id="public-handle" className="mt-1 w-full rounded border border-slate-400 bg-white p-2" value={handle} onChange={event => setHandle(event.target.value)} autoComplete="off" spellCheck={false} />
+      </label>
+      <div className="flex flex-wrap gap-3">
+        <Button type="submit" variant="primary" disabled={pending}>Save handle</Button>
+        <Button type="button" disabled={pending || !saved} onClick={() => void save(null)}>Clear handle</Button>
+      </div>
+    </form>
+    {saved && <p className="break-all text-sm">Public URL <span>{url}</span> <Button type="button" onClick={() => { void navigator.clipboard.writeText(url).then(() => setMessage('Copied the public URL.'), () => setMessage('The URL could not be copied.')); }}>Copy</Button></p>}
+    {message && <p role="status">{message}</p>}
+  </section>;
 }
