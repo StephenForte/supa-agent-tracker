@@ -88,6 +88,24 @@ it('archives and unarchives from the project page, bumping the revision each tim
   expect(screen.getByRole('button', { name: 'Archive project' })).toBeVisible();
   expect(screen.getByText('Active')).toBeVisible();
 });
+it('does not resubmit the previous revision while the page still shows the project from before the save', async () => {
+  const { sources } = setup('/projects/prj_weather');
+  await screen.findByRole('heading', { level: 1, name: 'Daily weather briefing' });
+  const before = (await sources.tracker.getProject('prj_weather'))!;
+  let releaseRefresh!: () => void;
+  const refreshGate = new Promise<void>(resolve => { releaseRefresh = resolve; });
+  const readProject = sources.tracker.getProject.bind(sources.tracker);
+  vi.spyOn(sources.tracker, 'getProject').mockImplementation(id => refreshGate.then(() => readProject(id)));
+  const update = vi.spyOn(sources.tracker, 'updateProject');
+  fireEvent.click(screen.getByRole('button', { name: 'Archive project' }));
+  await waitFor(async () => expect(await readProject('prj_weather')).toMatchObject({ lifecycle: 'archived', revision: before.revision + 1 }));
+  const saving = screen.getByRole('button', { name: 'Saving…' });
+  expect(saving).toBeDisabled();
+  fireEvent.click(saving);
+  expect(update).toHaveBeenCalledTimes(1);
+  releaseRefresh();
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Unarchive' })).toBeEnabled());
+});
 it('shows the conflict path for a stale archive and does not overwrite the other edit', async () => {
   const { sources } = setup('/projects/prj_offers');
   await screen.findByRole('heading', { level: 1, name: 'Offers workspace' });

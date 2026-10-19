@@ -47,12 +47,16 @@ function ProjectActions({ project }: { project: Project }) {
   const [conflict, setConflict] = useState<Project | null>(null);
   const [intent, setIntent] = useState<'archived' | 'active' | null>(null);
   const [error, setError] = useState('');
+  // The query keeps the previous project until its refresh resolves. Hold the button so a second click cannot resubmit that revision.
+  const [heldRevision, setHeldRevision] = useState<number | null>(null);
+  if (heldRevision !== null && project.revision > heldRevision) setHeldRevision(null);
+  const waitingForSavedProject = heldRevision !== null && project.revision <= heldRevision;
   const archived = project.lifecycle === 'archived';
   const nextLifecycle = archived ? 'active' : 'archived';
   const label = archived ? 'Unarchive' : 'Archive project';
 
   async function apply(expectedRevision: number, lifecycle: 'archived' | 'active') {
-    if (pending) return;
+    if (pending || (heldRevision !== null && expectedRevision <= heldRevision)) return;
     setPending(true);
     setError('');
     try {
@@ -60,6 +64,7 @@ function ProjectActions({ project }: { project: Project }) {
       if (result.status === 'saved') {
         setConflict(null);
         setIntent(null);
+        setHeldRevision(expectedRevision);
         return;
       }
       if (result.status === 'conflict') {
@@ -79,7 +84,7 @@ function ProjectActions({ project }: { project: Project }) {
   return <div>
     <div className="link-list">
       <Link to={`/projects/${project.id}/edit`}>Edit project</Link>
-      <Button disabled={pending || conflict !== null} onClick={() => void apply(project.revision, nextLifecycle)}>{pending ? 'Saving…' : label}</Button>
+      <Button disabled={pending || waitingForSavedProject || conflict !== null} onClick={() => void apply(project.revision, nextLifecycle)}>{pending || waitingForSavedProject ? 'Saving…' : label}</Button>
       <ProjectResources project={project} />
     </div>
     {error && <p role="alert">{error}</p>}
