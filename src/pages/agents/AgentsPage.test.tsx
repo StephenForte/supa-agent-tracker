@@ -279,7 +279,9 @@ it('matches execution, work, stale and PR for every seeded run on its project pa
   const fields = ['Execution state', 'Work status', 'Liveness', 'PR', 'Elapsed'] as const;
   const expected = Object.fromEntries(ids().map(id => [id, Object.fromEntries(fields.map(field => [field, column(id!, field)]))]));
   expect(Object.keys(expected)).toEqual(['run_1', 'run_10', 'run_2', 'run_4', 'run_3', 'run_5', 'run_9', 'run_6', 'run_8', 'run_7']);
-  expect(expected.run_4?.Liveness).toBe('Stale');
+  expect(expected.run_4?.Liveness).toMatch(/^Stale last contact 40 min ago, .+/);
+  expect(expected.run_1?.Liveness).toMatch(/^Live last contact just now, .+/);
+  expect(expected.run_3?.Liveness).toBe('—');
   const seen = new Set<string>();
   for (const projectId of ['prj_offers', 'prj_dashboard', 'prj_weather', 'prj_archive']) {
     await act(() => router.navigate(`/projects/${projectId}`));

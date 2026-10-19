@@ -19,6 +19,17 @@ export function prdPresentation(project: { prdUrl: string | null }): { href: str
 export function formatTimestamp(value: string | null, timeZone?: string): string {
   return value === null ? '—' : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short', timeZone }).format(new Date(value));
 }
+/** Last-contact phrase for the run grid. A ticking clock (useNow) keeps it current. */
+export function formatRelativeContact(value: string, now: number): string {
+  const elapsedMs = now - Date.parse(value);
+  if (!Number.isFinite(elapsedMs) || elapsedMs < 60_000) return 'just now';
+  const minutes = Math.floor(elapsedMs / 60_000);
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} ${days === 1 ? 'day' : 'days'} ago`;
+}
 export function formatElapsed(milliseconds: number): string {
   const seconds = Math.floor(milliseconds / 1000);
   const hours = Math.floor(seconds / 3600);

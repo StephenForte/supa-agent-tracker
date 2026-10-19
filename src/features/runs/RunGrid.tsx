@@ -22,7 +22,7 @@ import { Link } from 'react-router';
 import { useNow } from '../../domain/clock';
 import { elapsed } from '../../domain/derive';
 import { formatElapsed, formatIdentity, formatTimestamp } from '../../domain/format';
-import { additionalPrCount, agentName, dateTimeInput, executionLabels, identityOptions, isConcurrent, filterRuns, pageForRun, paginate, primaryPr, projectName, sortRuns, stale, workLabels } from '../../domain/runs/grid';
+import { additionalPrCount, agentName, dateTimeInput, executionLabels, identityOptions, isConcurrent, filterRuns, liveContact, pageForRun, paginate, primaryPr, projectName, sortRuns, workLabels, type GridContext } from '../../domain/runs/grid';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { CloseRunDialog } from './CloseRunDialog';
@@ -33,6 +33,16 @@ const columns: { field: RunGridSort['field']; label: string }[] = [
   { field: 'startedAt', label: 'Started' }, { field: 'elapsed', label: 'Elapsed' }, { field: 'finishedAt', label: 'Finished' },
   { field: 'harness', label: 'Harness' }, { field: 'model', label: 'Model' },
 ];
+function Liveness({ run, context }: { run: Run; context: GridContext }) {
+  const contact = liveContact(run, context);
+  if (!contact) return '—';
+  const exact = formatTimestamp(run.lastContactAt);
+  return <>
+    <Badge tone={contact.state === 'stale' ? 'stale' : 'running'}>{contact.state === 'stale' ? 'Stale' : 'Live'}</Badge>
+    {' '}
+    <time className="whitespace-nowrap" dateTime={run.lastContactAt} title={exact}>last contact {contact.relative}<span className="sr-only">, {exact}</span></time>
+  </>;
+}
 function MultiFilter({ label, options, value, onChange }: { label: string; options: { value: string; label: string }[]; value: string[]; onChange: (values: string[]) => void }) {
   return <label className="grid gap-1 text-sm">{label}<select multiple className="max-w-full rounded border border-slate-300 bg-white p-2" value={value} onChange={event => onChange(Array.from(event.target.selectedOptions, option => option.value))}>{options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>;
 }
@@ -116,7 +126,7 @@ export function RunGrid(props: RunGridProps) {
           <td className="max-w-64 p-3 break-words">{run.title}</td>
           {showProjectColumn && <td className="max-w-48 p-3 break-words"><Link to={`/projects/${run.projectId}`}>{projectName(run, projects)}</Link></td>}
           <td className="p-3"><Badge tone={run.executionState}>{executionLabels[run.executionState]}</Badge>{run.executionState === 'running' && <button className="mt-3 block text-left text-xs underline" onClick={() => setClosing(run)}>{demo ? 'Demo: close' : 'Close'} {run.id}</button>}</td>
-          <td className="p-3"><Badge tone={run.workStatus}>{workLabels[run.workStatus]}</Badge></td><td className="p-3">{stale(run, context) ? <Badge tone="stale">Stale</Badge> : '—'}</td>
+          <td className="p-3"><Badge tone={run.workStatus}>{workLabels[run.workStatus]}</Badge></td><td className="p-3"><Liveness run={run} context={context} /></td>
           <td className="max-w-60 p-3 break-words">{pr ? <><a href={pr.url} target="_blank" rel="noopener noreferrer">#{pr.number} {pr.title}</a>{more > 0 && <button className="mt-2 block underline" onClick={() => reveal(run.id, true)}>+{more} more</button>}</> : '—'}</td>
           <td className="p-3">{formatTimestamp(run.startedAt)}</td><td className="whitespace-nowrap p-3">{formatElapsed(elapsed(run, now))}</td><td className="p-3">{formatTimestamp(run.finishedAt)}</td><td className="p-3">{formatIdentity(run.harness)}</td><td className="p-3">{formatIdentity(run.model)}</td>
         </tr>{open && <tr className="border-t border-slate-200 bg-slate-50"><td colSpan={visibleColumns.length + 2}><RunDetails run={run} runs={runs} agents={agents} onReveal={reveal} /></td></tr>}</Fragment>;

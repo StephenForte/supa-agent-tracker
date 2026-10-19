@@ -128,14 +128,30 @@ An all-projects token's project ids are the owner's projects at that request, no
 Repositories recheck revocation and either the stored grants or the all-projects owner binding for all tool reads/writes. A token
 revoked, rotated, or narrowed during a session fails closed on its next HTTP request.
 
-Missing, malformed, unknown and revoked credentials receive HTTP 401:
+Missing, malformed, unknown and revoked credentials receive HTTP 401.
+`resource_metadata` stays on every challenge, and `error="invalid_token"` stays
+when an Authorization header was presented, so a future OAuth client can still
+discover the protected resource (D-018). OAuth sign-in is not implemented.
+
+When no Authorization header was sent:
 
 ```http
-WWW-Authenticate: Bearer resource_metadata="https://YOUR_ORIGIN/.well-known/oauth-protected-resource"
+WWW-Authenticate: Bearer resource_metadata="https://YOUR_ORIGIN/.well-known/oauth-protected-resource", error_description="Supa Agent Tracker uses bearer tokens; add Authorization: Bearer <token> (Settings -> MCP tokens). OAuth sign-in is not available."
 ```
 
-When an Authorization header was presented, the challenge additionally includes
-`, error="invalid_token"`. The JSON body is the standard `unauthenticated` API error.
+When a header was presented and rejected, the challenge also includes
+`, error="invalid_token"` and this description:
+
+```http
+error_description="Token missing, revoked or mistyped; create a new one in Settings -> MCP tokens."
+```
+
+The JSON body is the standard `unauthenticated` API error, and its `message`
+repeats that same description. The description is static ASCII: it never includes
+any part of the presented token. A non-ASCII character in `WWW-Authenticate` is
+rejected by Node and the challenge is dropped. `GET /.well-known/oauth-protected-resource`
+is unchanged.
+
 `GET /.well-known/oauth-protected-resource` returns RFC 9728 metadata with
 `resource: "<PUBLIC_URL origin>/mcp"`, `resource_name: "Supa Agent Tracker"` and
 `bearer_methods_supported: ["header"]`. No OAuth authorization server is advertised

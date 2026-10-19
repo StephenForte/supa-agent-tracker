@@ -97,6 +97,35 @@ it('moves to a controlled expansion on another page and distinguishes reported e
   view.rerender(<MemoryRouter><RunGrid {...props} runs={many} expandedRunIds={[]} /></MemoryRouter>);
   expect(screen.getByText('Runs 51–63 of 63 · Page 3 of 3')).toBeVisible();
 });
+it('shows Live or Stale with last contact, and a dash once the run has ended', async () => {
+  const fixed = Date.parse('2026-10-15T12:00:00.000Z');
+  let now = fixed;
+  let tick = () => {};
+  vi.spyOn(systemClock, 'getSnapshot').mockImplementation(() => now);
+  vi.spyOn(systemClock, 'subscribe').mockImplementation(listener => { tick = listener; return () => {}; });
+  const project = { ...seed.projects[0]!, reportingPolicy: { ...seed.projects[0]!.reportingPolicy, staleThresholdMinutes: 15 } };
+  const contacted = (id: string, minutes: number, executionState: 'running' | 'finished') => ({
+    ...seed.runs[0]!, id, projectId: project.id, executionState, lastContactAt: new Date(fixed - minutes * 60_000).toISOString(),
+    finishedAt: executionState === 'running' ? null : new Date(fixed).toISOString(),
+  });
+  try {
+    show({ runs: [contacted('live_run', 2, 'running'), contacted('stale_run', 20, 'running'), contacted('done_run', 2, 'finished')], projects: [project], agents: [] });
+    const cell = (id: string) => within(row(id)).getAllByRole('cell')[4]!;
+    expect(cell('live_run')).toHaveTextContent('Live');
+    expect(cell('live_run')).toHaveTextContent('last contact 2 min ago');
+    expect(cell('live_run').querySelector('time')).toHaveAttribute('datetime', contacted('live_run', 2, 'running').lastContactAt);
+    expect(cell('live_run').querySelector('time')).toHaveAttribute('title');
+    expect(cell('stale_run')).toHaveTextContent('Stale');
+    expect(cell('stale_run')).toHaveTextContent('last contact 20 min ago');
+    expect(cell('done_run')).toHaveTextContent('—');
+    expect(cell('done_run')).not.toHaveTextContent('Live');
+    expect(cell('done_run')).not.toHaveTextContent('ago');
+    await act(async () => { now += 60_000; tick(); });
+    expect(cell('live_run')).toHaveTextContent('last contact 3 min ago');
+  } finally {
+    vi.restoreAllMocks();
+  }
+});
 it('renders every sort control and every filter kind as usable state changes', () => {
   show({ showProjectColumn: true });
   const sort = screen.getByLabelText('Sort by') as HTMLSelectElement;

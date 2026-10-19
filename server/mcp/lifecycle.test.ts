@@ -194,13 +194,34 @@ describe('MCP and tokens over real Postgres and the SDK HTTP client', () => {
     expect((await edit('revoke', rotated.token.id, 1, 'revoke')).statusCode).toBe(200);
     const revoked = await app.inject({ url: '/mcp', headers: { authorization: `Bearer ${rotated.plaintext}` } }); expect(revoked.statusCode).toBe(401);
     expect(revoked.headers['www-authenticate']).toContain('error="invalid_token"');
+    expect(revoked.headers['www-authenticate']).toContain('Token missing, revoked or mistyped; create a new one in Settings -> MCP tokens.');
+    expect(String(revoked.headers['www-authenticate'])).not.toContain(rotated.plaintext.slice(-8));
+    expect(revoked.body).not.toContain(rotated.plaintext.slice(-8));
+  });
+  it('keeps a valid bearer at 200 and protected-resource metadata byte-identical', async () => {
+    const issued = await issue('p2c-valid');
+    const healthy = await app.inject({
+      method: 'POST', url: '/mcp',
+      headers: { authorization: `Bearer ${issued.plaintext}`, 'content-type': 'application/json', accept: 'application/json, text/event-stream' },
+      payload: { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'p2c', version: '1' } } },
+    });
+    expect(healthy.statusCode).toBe(200);
+    const metadata = await app.inject('/.well-known/oauth-protected-resource');
+    expect(metadata.statusCode).toBe(200);
+    expect(metadata.body).toBe('{"resource":"https://tracker.example/mcp","bearer_methods_supported":["header"],"resource_name":"Supa Agent Tracker"}');
+    const suffix = `sat_${'c'.repeat(35)}QQQQ9P2C`;
+    const queried = await app.inject(`/mcp?access_token=${suffix}`);
+    expect(queried.statusCode).toBe(401);
+    expect(String(queried.headers['www-authenticate'])).not.toContain('QQQQ9P2C');
+    expect(queried.body).not.toContain('QQQQ9P2C');
   });
   it('rejects browser Origins, query credentials, malformed or missing bearers before dispatch', async () => {
     for (const origin of ['https://evil.example', 'null', '']) {
       expect((await app.inject({ url: '/mcp', headers: { origin } })).statusCode).toBe(403);
     }
     const missing = await app.inject('/mcp'); expect(missing.statusCode).toBe(401);
-    expect(missing.headers['www-authenticate']).toBe('Bearer resource_metadata="https://tracker.example/.well-known/oauth-protected-resource"');
+    expect(missing.headers['www-authenticate']).toBe('Bearer resource_metadata="https://tracker.example/.well-known/oauth-protected-resource", error_description="Supa Agent Tracker uses bearer tokens; add Authorization: Bearer <token> (Settings -> MCP tokens). OAuth sign-in is not available."');
+    expect(missing.headers['www-authenticate']).not.toContain('error="invalid_token"');
     for (const authorization of ['Bearer invalid', 'Basic invalid', 'Bearer stub:mcp-owner']) {
       const result = await app.inject({ url: '/mcp', headers: { authorization } }); expect(result.statusCode).toBe(401); expect(result.headers['www-authenticate']).toContain('error="invalid_token"');
     }

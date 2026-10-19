@@ -1,6 +1,6 @@
 import type { LogicalAgent, Project, Run, ExecutionState, WorkStatus } from '../types';
 import { elapsed, isStale } from '../derive';
-import { formatIdentity } from '../format';
+import { formatIdentity, formatRelativeContact } from '../format';
 import type { RunGridFilters, RunGridSort } from '../../features/runs/RunGrid';
 export const executionLabels: Record<ExecutionState, string> = { running: 'Running', finished: 'Finished', failed: 'Failed', cancelled: 'Cancelled' };
 export const workLabels: Record<WorkStatus, string> = { in_progress: 'In progress', blocked: 'Blocked', waiting_for_review: 'Waiting for review', completed: 'Completed', failed: 'Failed', cancelled: 'Cancelled' };
@@ -10,6 +10,11 @@ export const projectName = (run: Run, projects: readonly Project[]) => projects.
 export function stale(run: Run, context: GridContext) {
   const project = context.projects.find(project => project.id === run.projectId);
   return project ? isStale(run, project, context.now) : false;
+}
+/** Display only. Ended runs stay blank. Does not change stale(), sorting, or filters. */
+export function liveContact(run: Run, context: GridContext): { state: 'live' | 'stale'; relative: string } | null {
+  if (run.executionState !== 'running') return null;
+  return { state: stale(run, context) ? 'stale' : 'live', relative: formatRelativeContact(run.lastContactAt, context.now) };
 }
 /** Execution takes precedence: ended review work can never enter either running group. */
 export function activityGroup(run: Run, context: GridContext): number {
