@@ -1,5 +1,6 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
+import { MemoryRouter } from 'react-router';
 import { DataProvider } from '../../data/hooks';
 import { createDemoSources } from '../../data/mock/createDemoSources';
 import { DemoAccountContext } from '../../app/useDemoAccount';
@@ -14,9 +15,9 @@ it('keeps the expanded HTTP timeline when a refreshed list replaces the run obje
   const tracker = { ...sources.tracker, getRun };
   const listRun = { ...detail, events: [] };
   function View({ revision }: { revision: number }) {
-    return <DataProvider sources={{ ...sources, tracker }}><DemoAccountContext.Provider value={false}>
+    return <MemoryRouter><DataProvider sources={{ ...sources, tracker }}><DemoAccountContext.Provider value={false}>
       <RunDetails run={{ ...listRun, revision }} runs={[listRun]} onReveal={() => {}} />
-    </DemoAccountContext.Provider></DataProvider>;
+    </DemoAccountContext.Provider></DataProvider></MemoryRouter>;
   }
   const view = render(<View revision={1} />);
   expect(await screen.findByText('Persistent timeline event')).toBeVisible();

@@ -45,15 +45,15 @@ it('closes a stale run, updates counts, freezes finish, audits reason and preser
   const { sources, clock } = setup('/projects/prj_dashboard?run=run_4');
   await screen.findByRole('heading', { level: 1 });
   const stepsBefore = await sources.tracker.listNextSteps('prj_dashboard');
-  const trigger = screen.getByRole('button', { name: 'Demo: close run_4' });
+  const trigger = screen.getByRole('button', { name: 'Demo: close run run_4' });
   trigger.focus(); fireEvent.click(trigger);
   const dialog = screen.getByRole('dialog');
   expect(within(dialog).getByRole('button', { name: 'Confirm demo close' })).toBeDisabled();
   fireEvent.change(within(dialog).getByLabelText('Reason (required)'), { target: { value: 'Abandoned demo session' } });
   fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm demo close' }));
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-  expect(screen.queryByRole('button', { name: 'Demo: close run_4' })).toBeNull();
-  expect(screen.getAllByText('Abandoned demo session')).toHaveLength(2);
+  expect(screen.queryByRole('button', { name: 'Demo: close run run_4' })).toBeNull();
+  expect(screen.getAllByText('Abandoned demo session')).toHaveLength(3);
   const count = screen.getByText('Stale running').closest('div')!;
   expect(within(count).getByText('0')).toBeVisible();
   expect(screen.getByText('Manual close')).toBeVisible();
@@ -67,7 +67,7 @@ it('closes a stale run, updates counts, freezes finish, audits reason and preser
 it('supports Failed outcome, surfaces write errors and keeps the reason for retry', async () => {
   const { sources } = setup('/projects/prj_dashboard'); await screen.findByRole('heading', { level: 1 });
   const close = vi.spyOn(sources.tracker, 'closeRun').mockRejectedValueOnce(new Error('offline'));
-  fireEvent.click(screen.getByRole('button', { name: 'Demo: close run_4' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Demo: close run run_4' }));
   fireEvent.change(screen.getByLabelText('Outcome'), { target: { value: 'failed' } });
   fireEvent.change(screen.getByLabelText('Reason (required)'), { target: { value: 'Unrecoverable error' } });
   fireEvent.click(screen.getByRole('button', { name: 'Confirm demo close' }));
@@ -80,7 +80,7 @@ it('supports Failed outcome, surfaces write errors and keeps the reason for retr
 it('Escape cancellation restores focus without mutation', async () => {
   const { sources } = setup('/projects/prj_dashboard'); await screen.findByRole('heading', { level: 1 });
   const close = vi.spyOn(sources.tracker, 'closeRun');
-  const trigger = screen.getByRole('button', { name: 'Demo: close run_4' }); trigger.focus();
+  const trigger = screen.getByRole('button', { name: 'Demo: close run run_4' }); trigger.focus();
   const user = userEvent.setup(); await user.keyboard('{Enter}');
   fireEvent(screen.getByRole('dialog'), new Event('cancel', { bubbles: false, cancelable: true }));
   expect(screen.queryByRole('dialog')).toBeNull(); expect(trigger).toHaveFocus(); expect(close).not.toHaveBeenCalled();
@@ -148,6 +148,57 @@ it('shows the conflict path for a stale archive and does not overwrite the other
   await waitFor(async () => expect(await sources.tracker.getProject('prj_offers')).toMatchObject({ lifecycle: 'archived', description: 'Changed elsewhere' }));
   expect(screen.getByText('Archived')).toBeVisible();
   expect(screen.getByRole('button', { name: 'Unarchive' })).toBeVisible();
+});
+it('closes a run opened from the row, even when the project URL does not change', async () => {
+  const { router } = setup('/projects/prj_offers');
+  await screen.findByRole('heading', { level: 1, name: 'Offers workspace' });
+  fireEvent.click(screen.getByRole('button', { name: /run_3/, expanded: false }));
+  expect(await screen.findByText('Run handoff')).toBeVisible();
+  expect(router.state.location.search).toBe('');
+  fireEvent.click(screen.getByRole('link', { name: '← Offers workspace' }));
+  await waitFor(() => expect(screen.queryByText('Run handoff')).toBeNull());
+  expect(router.state.location.pathname).toBe('/projects/prj_offers');
+  expect(router.state.location.search).toBe('');
+});
+it('links back to the project and closes the open run', async () => {
+  const { router } = setup('/projects/prj_offers?run=run_3');
+  await screen.findByRole('heading', { level: 1, name: 'Offers workspace' });
+  const back = await screen.findByRole('link', { name: '← Offers workspace' });
+  expect(back).toHaveAttribute('href', '/projects/prj_offers');
+  fireEvent.click(back);
+  await waitFor(() => expect(router.state.location.pathname).toBe('/projects/prj_offers'));
+  expect(router.state.location.search).toBe('');
+  await waitFor(() => expect(screen.queryByText('Run handoff')).toBeNull());
+});
+it('marks a finished run done from mobile cards', async () => {
+  const previous = window.matchMedia;
+  window.matchMedia = ((query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener() {},
+    removeEventListener() {},
+    dispatchEvent: () => false,
+    addListener() {},
+    removeListener() {},
+  })) as typeof window.matchMedia;
+  try {
+    const { sources } = setup('/projects/prj_offers?run=run_3');
+    const before = (await sources.tracker.getRun('run_3'))!;
+    await screen.findByRole('heading', { level: 1, name: 'Offers workspace' });
+    expect(screen.queryByRole('table', { name: /Run executions/ })).toBeNull();
+    expect(document.querySelector('.min-w-\\[1100px\\]')).toBeNull();
+    const cards = screen.getByRole('list', { name: 'Run cards' });
+    expect(cards.className).not.toMatch(/min-w-/);
+    const card = cards.querySelector<HTMLElement>('[data-run-id="run_3"]')!;
+    expect(card.textContent).toContain('run_3');
+    const status = card.querySelector('[data-latest-status]');
+    expect(status).toHaveClass('line-clamp-2');
+    expect(status).toHaveTextContent(before.message);
+    fireEvent.click(within(card).getAllByRole('button', { name: 'Demo: mark done run_3' })[0]!);
+    await waitFor(async () => expect(await sources.tracker.getRun('run_3')).toMatchObject({ workStatus: 'completed', executionState: 'finished', revision: before.revision + 1, events: before.events }));
+    await waitFor(() => expect(document.querySelector('[data-run-id="run_3"]')?.textContent).not.toMatch(/mark done/i));
+  } finally { window.matchMedia = previous; }
 });
 it('shows automation null links, all three historical runs and zero live runs', async () => {
   setup('/projects/prj_weather'); await screen.findByRole('heading', { level: 1, name: 'Daily weather briefing' });

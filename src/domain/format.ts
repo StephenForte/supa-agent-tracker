@@ -1,5 +1,7 @@
 import type { Lifecycle, ProjectType, ToolAggregate } from './types';
 export const formatNullable = (value: string | number | null | undefined): string => value == null ? '—' : String(value);
+/** Visible run id. The full id stays on a title or tooltip. */
+export const shortId = (id: string): string => id.slice(0, 8);
 export const formatIdentity = (value: string | null | undefined): string => value?.trim() || 'Unknown';
 /** D-013 display words for project type and lifecycle. Forms, cards and detail share these. */
 export const projectTypeLabels: Record<ProjectType, string> = { coding: 'Coding', automation: 'Automation' };

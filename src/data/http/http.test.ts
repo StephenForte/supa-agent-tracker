@@ -81,6 +81,22 @@ describe('HTTP contract adapters', () => {
     expect(await tracker.simulateAgentStepUpdate('s', '', 'r', 1)).toMatchObject({ status: 'invalid' });
     await expect(tracker.resetDemo()).rejects.toThrow('unavailable');
   });
+  it('posts mark-done with the run revision and skips a missing run', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation(async (path, init) => {
+      if (String(path).endsWith('/missing')) return json({ error: { message: 'Not found' } }, 404);
+      if (init?.method === 'POST') return json({ id: 'run', revision: 8, workStatus: 'completed' });
+      return json({ id: 'run', revision: 7 });
+    });
+    const { tracker } = createHttpSources({ fetch });
+    expect(await tracker.markRunDone('missing')).toEqual({ status: 'not_found' });
+    expect(fetch.mock.calls.some(call => call[1]?.method === 'POST')).toBe(false);
+    expect(await tracker.markRunDone('run')).toMatchObject({ status: 'saved', value: { workStatus: 'completed' } });
+    const post = fetch.mock.calls.find(call => call[1]?.method === 'POST')!;
+    expect(post[0]).toBe('/api/runs/run/mark-done');
+    const body = JSON.parse(String(post[1]?.body)) as { expected_revision: number; request_id: string };
+    expect(body.expected_revision).toBe(7);
+    expect(body.request_id).toEqual(expect.any(String));
+  });
   it('invalidates cached next steps on conflict so conflict reconciliation reads the current revision', async () => {
     let revision = 1;
     const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation(async (_path, init) => {

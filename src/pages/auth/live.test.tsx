@@ -48,7 +48,7 @@ it('hides every demo surface on project detail while fetching the expanded timel
   expect(screen.queryByRole('button', { name: 'Reset demo' })).not.toBeInTheDocument();
   expect(screen.queryByText(/In this demo it is browser-only/)).not.toBeInTheDocument();
   expect(fetch.mock.calls.filter(([path]) => String(path).startsWith('/api/runs/')).map(([path]) => path)).toEqual(['/api/runs/run_3']);
-  await userEvent.click(screen.getByRole('button', { name: /Close run_4/ }));
+  await userEvent.click(screen.getByRole('button', { name: /Close run run_4/ }));
   expect(await screen.findByRole('dialog', { name: 'Manually close run_4' })).toBeVisible();
   expect(screen.queryByText(/Simulated data only/)).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Confirm close' })).toBeVisible();

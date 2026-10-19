@@ -1,12 +1,14 @@
 import { useCallback, useState } from 'react';
+import { Link } from 'react-router';
 import { useDemoAccount } from '../../app/useDemoAccount';
 import { Button } from '../../components/ui/Button';
 import { useSourceQuery, useTrackerData } from '../../data/hooks';
-import { formatNullable, formatTimestamp, formatToolTelemetry } from '../../domain/format';
-import { executionHistory, executionLabels, workLabels, paginate } from '../../domain/runs/grid';
+import { formatNullable, formatTimestamp, formatToolTelemetry, shortId } from '../../domain/format';
+import { executionHistory, executionLabels, projectName, workLabels, paginate } from '../../domain/runs/grid';
 import { eventActorLabel, eventKindLabels, toolSourceLabels } from '../../domain/runs/labels';
-import type { LogicalAgent, Run } from '../../domain/types';
-export function RunDetails({ run, runs, agents = [], onReveal }: { run: Run; runs: readonly Run[]; agents?: readonly LogicalAgent[]; onReveal: (id: string) => void }) {
+import type { LogicalAgent, Project, Run } from '../../domain/types';
+import { MarkDoneButton } from './MarkDoneButton';
+export function RunDetails({ run, runs, agents = [], projects = [], onReveal, onBack }: { run: Run; runs: readonly Run[]; agents?: readonly LogicalAgent[]; projects?: readonly Project[]; onReveal: (id: string) => void; onBack?: () => void }) {
   const [historyPage, setHistoryPage] = useState(0);
   const tracker = useTrackerData();
   const demo = useDemoAccount();
@@ -18,10 +20,11 @@ export function RunDetails({ run, runs, agents = [], onReveal }: { run: Run; run
   const history = paginate(executionHistory(run, runs), historyPage, 5);
   const runLink = (id: string) => {
     const target = runs.find(other => other.id === id);
-    return <a href={`/projects/${target?.projectId ?? run.projectId}?run=${encodeURIComponent(id)}`} onClick={event => { if (target && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) { event.preventDefault(); onReveal(id); } }}>{id}</a>;
+    return <a href={`/projects/${target?.projectId ?? run.projectId}?run=${encodeURIComponent(id)}`} title={id} onClick={event => { if (target && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) { event.preventDefault(); onReveal(id); } }}>{shortId(id)}</a>;
   };
   return <div id={`details-${run.id}`} className="grid gap-5 whitespace-normal p-4 text-sm md:grid-cols-2">
-    <section><h3 className="font-semibold">Run handoff</h3><dl className="grid gap-2 break-words">
+    <p className="md:col-span-2"><Link to={`/projects/${run.projectId}`} onClick={() => onBack?.()}>← {projectName(run, projects)}</Link></p>
+    <section><h3 className="font-semibold">Run handoff</h3><MarkDoneButton run={run} /><dl className="grid gap-2 break-words">
       <div><dt>Latest message</dt><dd>{formatNullable(run.message)}</dd></div>
       <div><dt>Completion summary</dt><dd>{formatNullable(run.completionSummary)}</dd></div>
       <div><dt>Blocker</dt><dd>{formatNullable(run.blocker)}</dd></div>

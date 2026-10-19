@@ -3,6 +3,7 @@ import { useDemoAccount } from '../../app/useDemoAccount';
 import { Dialog } from '../../components/ui/Dialog';
 import { Button } from '../../components/ui/Button';
 import { useTrackerData } from '../../data/hooks';
+import { shortId } from '../../domain/format';
 import type { Run } from '../../domain/types';
 export function CloseRunDialog({ run, onClose }: { run: Run; onClose: () => void }) {
   const source = useTrackerData();
@@ -22,7 +23,7 @@ export function CloseRunDialog({ run, onClose }: { run: Run; onClose: () => void
     } catch { setError('Unable to close this run. Please try again.'); }
     finally { setPending(false); }
   }
-  return <Dialog open title={`${demo ? 'Demo: manually' : 'Manually'} close ${run.id}`} onClose={onClose}>
+  return <Dialog open title={`${demo ? 'Demo: manually' : 'Manually'} close ${shortId(run.id)}`} onClose={onClose}>
     <p>{demo && 'Simulated data only. '}Closing ends this execution and records your reason in its timeline. Next steps remain open.</p>
     <form onSubmit={event => { void submit(event); }} className="grid gap-4">
       <label>Outcome<select className="block w-full rounded border p-2" value={outcome} onChange={event => setOutcome(event.target.value as typeof outcome)}><option value="cancelled">Cancelled</option><option value="failed">Failed</option></select></label>

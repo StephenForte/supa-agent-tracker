@@ -12,7 +12,7 @@ import { createDb } from '../db/client.js';
 import { AccessError, type Transaction, type UserAccess } from '../repo/access.js';
 import { withIdempotency } from '../repo/idempotency-keys.js';
 import { createProject, getProject, listProjects, updateProject } from '../repo/projects.js';
-import { getRun, updateRun } from '../repo/runs.js';
+import { getRun, markRunDone, updateRun } from '../repo/runs.js';
 import { findOwnedRun, listUserAgents, listUserRuns, readAccount } from '../repo/views.js';
 import {
   detailFromGetRun,
@@ -28,6 +28,7 @@ import {
 import { setPublicHandle } from '../public/account.js';
 import {
   closeRunSchema,
+  markRunDoneSchema,
   createProjectSchema,
   patchAccountSchema,
   patchProjectSchema,
@@ -150,6 +151,25 @@ export async function registerUserApiRoutes(app: FastifyInstance, deps: { pool: 
       if (current.executionState !== 'running') return conflict('Run has already ended', detailFromGetRun(current));
       const result = await updateRun(tx, access, owned.projectId, runId, body.expected_revision, toClosePatch(body));
       if (result.status === 'conflict') return conflict('Revision conflict', detailFromGetRun(await getRun(tx, access, owned.projectId, runId)));
+      return { statusCode: 200, payload: detailFromGetRun(await getRun(tx, access, owned.projectId, runId)) };
+    });
+  }));
+
+  app.post<{ Params: { runId: string } }>('/api/runs/:runId/mark-done', guard, (request, reply) => handle(reply, async () => {
+    const body = parse(markRunDoneSchema, request.body, reply);
+    if (!body) return;
+    const access = accessOf(request);
+    const runId = request.params.runId;
+    return commit(db, reply, access, body.request_id, 'run_mark_done', body, async (tx) => {
+      const owned = await findOwnedRun(tx, access, runId);
+      const current = await getRun(tx, access, owned.projectId, runId);
+      if (current.revision !== body.expected_revision) return conflict('Revision conflict', detailFromGetRun(current));
+      if (current.executionState !== 'finished') return conflict('Only finished runs can be marked done', detailFromGetRun(current));
+      if (current.workStatus === 'completed') return conflict('Run is already completed', detailFromGetRun(current));
+      const result = await markRunDone(tx, access, owned.projectId, runId, body.expected_revision);
+      if (result.status === 'conflict') return conflict('Revision conflict', detailFromGetRun(await getRun(tx, access, owned.projectId, runId)));
+      if (result.status === 'not_finished') return conflict('Only finished runs can be marked done', detailFromGetRun(await getRun(tx, access, owned.projectId, runId)));
+      if (result.status === 'already_completed') return conflict('Run is already completed', detailFromGetRun(await getRun(tx, access, owned.projectId, runId)));
       return { statusCode: 200, payload: detailFromGetRun(await getRun(tx, access, owned.projectId, runId)) };
     });
   }));
