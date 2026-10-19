@@ -251,12 +251,16 @@ export const idempotencyKeys = pgTable('idempotency_keys', {
   requestHash: text('request_hash').notNull(),
   response: jsonb('response').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  /** MCP tool name or REST action. NULL is the legacy 30-day class, never a heartbeat. */
+  operation: text('operation'),
 }, (t) => [
   primaryKey({ columns: [t.scope, t.requestId] }),
   foreignKey({ columns: [t.userId], foreignColumns: [users.id] }).onDelete('restrict'),
   foreignKey({ columns: [t.credentialId, t.userId], foreignColumns: [mcpCredentials.id, mcpCredentials.userId] }).onDelete('restrict'),
   check('idempotency_scope_snapshot', sql`(credential_id IS NULL) = (credential_project_ids IS NULL)`),
   check('idempotency_scope_matches_actor', sql`(credential_id IS NULL AND scope = 'user:' || user_id) OR (credential_id IS NOT NULL AND scope = 'credential:' || credential_id)`),
+  index('idempotency_keys_heartbeat_created_at').on(t.createdAt).where(sql`${t.operation} = 'heartbeat'`),
+  index('idempotency_keys_other_created_at').on(t.createdAt).where(sql`${t.operation} is distinct from 'heartbeat'`),
 ]);
 
 

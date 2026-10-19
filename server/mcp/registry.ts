@@ -23,7 +23,7 @@ export function createToolRegistrar(server: McpServer, deps: ToolDependencies): 
         let response: unknown;
         if (mutate) {
           const result = await withIdempotency(deps.db, ctx.access, (input as { request_id: string }).request_id,
-            requestHash({ tool: name, input: raw }), (tx: Transaction) => operation(input, tx, ctx));
+            requestHash({ tool: name, input: raw }), (tx: Transaction) => operation(input, tx, ctx), name);
           if (result.status === 'idempotency_mismatch') throw new ProtocolError(result.status);
           response = result.response;
         } else response = await operation(input, deps.db, ctx);

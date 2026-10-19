@@ -40,7 +40,7 @@ export type IdempotencyResult = { status: 'stored' | 'replayed'; response: unkno
 /** Serializes the request within its actor scope. The callback's domain writes and saved response
  * commit together. It must use the supplied transaction, never the outer database handle.
  */
-export async function withIdempotency(db: Database, access: Access, requestId: string, requestHash: string, operation: (tx: Transaction) => Promise<unknown>): Promise<IdempotencyResult> {
+export async function withIdempotency(db: Database, access: Access, requestId: string, requestHash: string, operation: (tx: Transaction) => Promise<unknown>, operationName?: string): Promise<IdempotencyResult> {
   validRequest(requestId, requestHash);
   return withActor(db, access, async (tx) => {
     const actorScope = scope(access);
@@ -51,7 +51,8 @@ export async function withIdempotency(db: Database, access: Access, requestId: s
     if (current) return current.requestHash === requestHash ? { status: 'replayed', response: current.response } : { status: 'idempotency_mismatch' };
     const response = await operation(tx);
     await tx.insert(idempotencyKeys).values({ scope: actorScope, requestId, userId: access.userId,
-      credentialId: access.kind === 'credential' ? access.credentialId : null, credentialProjectIds: projectIds, requestHash, response });
+      credentialId: access.kind === 'credential' ? access.credentialId : null, credentialProjectIds: projectIds, requestHash, response,
+      operation: operationName ?? null });
     return { status: 'stored', response };
   });
 }

@@ -51,7 +51,7 @@ export async function registerTokenRoutes(app: FastifyInstance, db: AppDatabase)
           const row = await createCredential(tx, access, { label, projectIds, allProjects, tokenHash: hashToken(plaintext), displaySuffix: plaintext.slice(-4) });
           // Only safe metadata enters idempotency_keys.response. Copy-once even on retries.
           return { token: tokenView(row), plaintext: null };
-        });
+        }, `token_${action}`);
         if (result.status === 'idempotency_mismatch') throw new ProtocolError(result.status);
         return action === 'revoke' ? result.response : { ...(result.response as object), plaintext: result.status === 'stored' ? plaintext : null };
       } catch (error) { const body = failure(error); return reply.code(httpStatus(body.error.code)).send(body); }
@@ -73,7 +73,7 @@ export async function registerTokenRoutes(app: FastifyInstance, db: AppDatabase)
         });
         if (saved.status === 'conflict') throw new ProtocolError('conflict', tokenView(saved.current));
         return { token: tokenView(saved.value) };
-      });
+      }, 'token_scope');
       if (result.status === 'idempotency_mismatch') throw new ProtocolError(result.status);
       return result.response;
     } catch (error) { const body = failure(error); return reply.code(httpStatus(body.error.code)).send(body); }
