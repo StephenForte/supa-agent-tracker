@@ -10,6 +10,9 @@ export interface AccountRow {
   email: string;
   emailVerified: boolean;
   publicHandle: string | null;
+  alertBlocked: boolean;
+  alertStale: boolean;
+  alertReview: boolean;
 }
 
 export type HandleUpdate = { status: 'saved'; user: AccountRow } | { status: 'taken' };
@@ -20,6 +23,9 @@ const accountColumns = {
   email: users.email,
   emailVerified: users.emailVerified,
   publicHandle: users.publicHandle,
+  alertBlocked: users.alertBlocked,
+  alertStale: users.alertStale,
+  alertReview: users.alertReview,
 };
 
 /** Sets or clears this user's handle. A handle owned by someone else is `taken` and writes nothing. */

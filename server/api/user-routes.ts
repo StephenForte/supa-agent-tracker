@@ -25,6 +25,7 @@ import {
   toRunListItem,
   toRunPatch,
 } from './map.js';
+import { applyAlertPreferences } from '../alerts/preferences.js';
 import { setPublicHandle } from '../public/account.js';
 import {
   closeRunSchema,
@@ -57,11 +58,14 @@ export async function registerUserApiRoutes(app: FastifyInstance, deps: { pool: 
     if (!body) return;
     const access = accessOf(request);
     return commit(db, reply, access, body.request_id, 'account_update', body, async (tx) => {
-      const updated = await setPublicHandle(tx, access, body.publicHandle);
-      if (updated.status === 'taken') {
-        return { statusCode: 409, payload: apiError(errorCodes.conflict, 'That public handle is already taken') };
+      if (body.publicHandle !== undefined) {
+        const updated = await setPublicHandle(tx, access, body.publicHandle);
+        if (updated.status === 'taken') {
+          return { statusCode: 409, payload: apiError(errorCodes.conflict, 'That public handle is already taken') };
+        }
       }
-      return { statusCode: 200, payload: accountBody(toAccount(updated.user)) };
+      if (body.alerts) await applyAlertPreferences(tx, access.userId, body.alerts, new Date());
+      return { statusCode: 200, payload: accountBody(toAccount(await readAccount(tx, access))) };
     });
   }));
 

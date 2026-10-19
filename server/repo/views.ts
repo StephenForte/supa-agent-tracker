@@ -24,6 +24,9 @@ export async function readAccount(db: Database, access: UserAccess) {
       email: users.email,
       emailVerified: users.emailVerified,
       publicHandle: users.publicHandle,
+      alertBlocked: users.alertBlocked,
+      alertStale: users.alertStale,
+      alertReview: users.alertReview,
     }).from(users).where(eq(users.id, access.userId));
     if (!user) throw new AccessError('not_found');
     return user;

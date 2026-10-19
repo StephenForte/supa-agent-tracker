@@ -347,6 +347,18 @@ web routes. Those screens remain the Phase 0 demo until P1-E wires their token t
 `GET /api/auth/verify-email` or `POST /api/auth/reset-password`; the server API works
 independently. No web bundle or deployment configuration is changed here.
 
+## Email alerts (P2-G)
+
+Opt-in digests use the same `EmailSender` as authentication mail. `EMAIL_PROVIDER=console` captures messages in tests and logs them in development; it does not call Resend. Production delivery still requires Resend. The job never logs addresses, run titles or provider bodies. A failed send increments `failures` and is not logged with its message. A cycle that throws logs `alert digest failed code=` plus a SQLSTATE only.
+
+`startAlertDigest` runs once about a minute after the process starts listening, then every five minutes. Both timers are unref'd and `stop()` clears them on shutdown. Each cycle takes `pg_try_advisory_lock` on a dedicated connection, so a second process skips the cycle instead of sending the same digest. The lock is released before the connection returns to the pool.
+
+A cycle considers verified users with at least one of `alert_blocked`, `alert_stale` or `alert_review` set. Matches use the Needs me rules, in SQL: blocked (`work_status = blocked`) wins over stale and review; stale is a running run whose `last_contact_at` is strictly older than that project's `stale_threshold_minutes`; review is `execution_state = finished` and `work_status = waiting_for_review`. The query requires `projects.owner_id` to be that user and skips archived projects. A run with no `alert_deliveries` row for `(run_id, kind)` is new. The primary key is `(run_id, kind)`, so a run is emailed at most once per kind even if it leaves that state and comes back.
+
+Rows are inserted with `source = sent` and the message is sent in the same transaction. Commit happens only after the send returns. A throw rolls the rows back and the next cycle retries. One email lists every new item for that user, capped at 20 lines plus "and N more"; the rows for the omitted lines are still recorded. The summary line is `alert digest users=<n> emails=<n> items=<n> failures=<n>`.
+
+Turning a kind on writes `source = baseline` for every run that matches that kind at that moment, in the same transaction as the preference update. Those runs are not emailed. Turning the kind off sends nothing further for it. Turning it on again baselines whatever matches then.
+
 ## Web app
 
 The default `npm run build` selects `VITE_DATA_SOURCE=demo` and produces the self-contained static demo without HTTP sources. To run live locally, set the server environment described above (including DATABASE_URL, PUBLIC_URL=http://localhost:5173, BETTER_AUTH_SECRET and ADMIN_EMAIL), run `npm run db:migrate`, then `npm run dev:server`. In a second terminal run `VITE_DATA_SOURCE=http npm run dev`. The live Vite proxy forwards same-origin `/api` requests to http://localhost:3000; keep PUBLIC_URL equal to the browser origin for cookie writes.

@@ -101,10 +101,17 @@ export const patchRunSchema = z.strictObject({
 
 const publicHandleSchema = z.string().trim().toLowerCase().regex(PUBLIC_HANDLE_PATTERN);
 
-export const patchAccountSchema = z.strictObject({
-  publicHandle: z.union([z.null(), publicHandleSchema]),
-  request_id: requestIdSchema,
+export const alertPreferencesSchema = z.strictObject({
+  blocked: z.boolean(),
+  stale: z.boolean(),
+  review: z.boolean(),
 });
+
+export const patchAccountSchema = z.strictObject({
+  publicHandle: z.union([z.null(), publicHandleSchema]).optional(),
+  alerts: alertPreferencesSchema.optional(),
+  request_id: requestIdSchema,
+}).refine((value) => value.publicHandle !== undefined || value.alerts !== undefined);
 
 export const closeRunSchema = z.strictObject({
   outcome: z.enum(['failed', 'cancelled']),
