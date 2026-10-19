@@ -63,7 +63,7 @@ export async function registerUserApiRoutes(app: FastifyInstance, deps: { pool: 
     const body = parse(createProjectSchema, request.body, reply);
     if (!body) return;
     const access = accessOf(request);
-    return commit(db, reply, access, body.request_id, body, async (tx) => {
+    return commit(db, reply, access, body.request_id, 'project_create', body, async (tx) => {
       const row = await createProject(tx, access, toRepoProjectInput(body));
       return { statusCode: 201, payload: toProject(row) };
     });
@@ -79,7 +79,7 @@ export async function registerUserApiRoutes(app: FastifyInstance, deps: { pool: 
     if (!body) return;
     const access = accessOf(request);
     const projectId = request.params.projectId;
-    return commit(db, reply, access, body.request_id, body, async (tx) => {
+    return commit(db, reply, access, body.request_id, 'project_update', body, async (tx) => {
       const result = await updateProject(tx, access, projectId, body.expected_revision, toRepoProjectPatch(body));
       if (result.status === 'conflict') return conflict('Revision conflict', toProject(result.current));
       return { statusCode: 200, payload: toProject(result.value) };
@@ -112,7 +112,7 @@ export async function registerUserApiRoutes(app: FastifyInstance, deps: { pool: 
     if (!body) return;
     const access = accessOf(request);
     const runId = request.params.runId;
-    return commit(db, reply, access, body.request_id, body, async (tx) => {
+    return commit(db, reply, access, body.request_id, 'run_update', body, async (tx) => {
       const owned = await findOwnedRun(tx, access, runId);
       const { patch, prReferences } = toRunPatch(body);
       const result = await updateRun(tx, access, owned.projectId, runId, body.expected_revision, patch, { prReferences });
@@ -126,7 +126,7 @@ export async function registerUserApiRoutes(app: FastifyInstance, deps: { pool: 
     if (!body) return;
     const access = accessOf(request);
     const runId = request.params.runId;
-    return commit(db, reply, access, body.request_id, body, async (tx) => {
+    return commit(db, reply, access, body.request_id, 'run_close', body, async (tx) => {
       const owned = await findOwnedRun(tx, access, runId);
       const current = await getRun(tx, access, owned.projectId, runId);
       if (current.revision !== body.expected_revision) return conflict('Revision conflict', detailFromGetRun(current));
@@ -157,10 +157,11 @@ async function commit(
   reply: FastifyReply,
   access: UserAccess,
   requestId: string,
+  operationName: string,
   body: unknown,
   operation: (tx: Transaction) => Promise<SavedResponse>,
 ) {
-  const result = await withIdempotency(db, access, requestId, requestHash(body), operation);
+  const result = await withIdempotency(db, access, requestId, requestHash(body), operation, operationName);
   return sendSaved(reply, result);
 }
 

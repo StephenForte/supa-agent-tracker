@@ -61,7 +61,7 @@ export async function registerInviteRoutes(app: FastifyInstance, deps: RouteDeps
             if (row.usedAt) throw new ProtocolError('conflict', inviteView(row));
             const [saved] = await tx.update(invites).set({ revokedAt: row.revokedAt ?? sql`now()` }).where(and(eq(invites.id, row.id), isNull(invites.usedAt))).returning();
             return { invite: inviteView(saved!) };
-          });
+          }, action === 'create' ? 'invite_create' : 'invite_revoke');
         if (result.status === 'idempotency_mismatch') throw new ProtocolError(result.status);
         if (action === 'revoke') return result.response;
         let emailSent = false;

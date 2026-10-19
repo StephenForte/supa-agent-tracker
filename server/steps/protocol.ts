@@ -49,9 +49,9 @@ export function sendServiceError(reply: FastifyReply, error: unknown): FastifyRe
 }
 
 /** Runs the domain write on the idempotency transaction. A conflict throws so the key is not stored and no row changes. */
-export async function runMutation<T>(reply: FastifyReply, db: Database, access: Access, requestId: string, hash: string, operation: (tx: Transaction) => Promise<T>): Promise<unknown> {
+export async function runMutation<T>(reply: FastifyReply, db: Database, access: Access, requestId: string, hash: string, operation: (tx: Transaction) => Promise<T>, operationName?: string): Promise<unknown> {
   try {
-    const result = await withIdempotency(db, access, requestId, hash, async (tx) => jsonSafe(await operation(tx)));
+    const result = await withIdempotency(db, access, requestId, hash, async (tx) => jsonSafe(await operation(tx)), operationName);
     if (result.status === 'idempotency_mismatch') {
       return reply.code(409).send(apiError(errorCodes.idempotency_mismatch, 'request_id was reused with a different body'));
     }

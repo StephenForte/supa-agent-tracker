@@ -67,9 +67,9 @@ async function assertOwnCheckIn(tx: Transaction, access: CredentialAccess, proje
   if (!event) throw new AccessError('forbidden');
 }
 
-async function mutate<T>(db: Database, access: CredentialAccess, requestId: string, hash: string, operation: (tx: Transaction) => Promise<T>): Promise<AgentMutation<T>> {
+async function mutate<T>(db: Database, access: CredentialAccess, requestId: string, hash: string, operationName: string, operation: (tx: Transaction) => Promise<T>): Promise<AgentMutation<T>> {
   try {
-    const result = await withIdempotency(db, access, requestId, hash, async (tx) => ({ status: 'saved' as const, value: jsonSafe(await operation(tx)) }));
+    const result = await withIdempotency(db, access, requestId, hash, async (tx) => ({ status: 'saved' as const, value: jsonSafe(await operation(tx)) }), operationName);
     if (result.status === 'idempotency_mismatch') return { status: 'idempotency_mismatch' };
     return result.response as AgentSaved<T>;
   } catch (error) {
@@ -87,7 +87,7 @@ export async function listNextStepsForAgent(db: Database, access: CredentialAcce
 export async function createNextStep(db: Database, access: CredentialAccess, input: unknown): Promise<AgentMutation<stepRepo.NextStep>> {
   requireCredential(access);
   const parsed = parseInput(createNextStepInput, input);
-  return mutate(db, access, parsed.request_id, requestHash({ operation: 'create_next_step', ...parsed }), async (tx) => {
+  return mutate(db, access, parsed.request_id, requestHash({ operation: 'create_next_step', ...parsed }), 'create_next_step', async (tx) => {
     const existing = await stepRepo.listNextSteps(tx, access, parsed.project_id);
     await assertOwnCheckIn(tx, access, parsed.project_id, parsed.source_run_id);
     const nextPosition = parsed.position ?? existing.steps.reduce((max, step) => Math.max(max, step.position), -1) + 1;
@@ -102,7 +102,7 @@ export async function createNextStep(db: Database, access: CredentialAccess, inp
 export async function updateNextStep(db: Database, access: CredentialAccess, input: unknown): Promise<AgentMutation<stepRepo.NextStep>> {
   requireCredential(access);
   const parsed = parseInput(updateNextStepInput, input);
-  return mutate(db, access, parsed.request_id, requestHash({ operation: 'update_next_step', ...parsed }), async (tx) => {
+  return mutate(db, access, parsed.request_id, requestHash({ operation: 'update_next_step', ...parsed }), 'update_next_step', async (tx) => {
     await stepRepo.listNextSteps(tx, access, parsed.project_id);
     await assertOwnCheckIn(tx, access, parsed.project_id, parsed.source_run_id);
     const patch: { instruction?: string; position?: number } = {};
@@ -117,7 +117,7 @@ export async function updateNextStep(db: Database, access: CredentialAccess, inp
 export async function reorderNextSteps(db: Database, access: CredentialAccess, input: unknown): Promise<AgentMutation<stepRepo.NextStep[]>> {
   requireCredential(access);
   const parsed = parseInput(reorderNextStepsInput, input);
-  return mutate(db, access, parsed.request_id, requestHash({ operation: 'reorder_next_steps', ...parsed }), async (tx) => {
+  return mutate(db, access, parsed.request_id, requestHash({ operation: 'reorder_next_steps', ...parsed }), 'reorder_next_steps', async (tx) => {
     const written = await stepRepo.reorderNextSteps(tx, access, parsed.project_id, parsed.order.map((item) => ({
       stepId: item.step_id,
       expectedRevision: item.expected_revision,
@@ -130,7 +130,7 @@ export async function reorderNextSteps(db: Database, access: CredentialAccess, i
 export async function setWaitingNote(db: Database, access: CredentialAccess, input: unknown): Promise<AgentMutation<stepRepo.WaitingNote>> {
   requireCredential(access);
   const parsed = parseInput(setWaitingNoteInput, input);
-  return mutate(db, access, parsed.request_id, requestHash({ operation: 'set_waiting_note', ...parsed }), async (tx) => {
+  return mutate(db, access, parsed.request_id, requestHash({ operation: 'set_waiting_note', ...parsed }), 'set_waiting_note', async (tx) => {
     await stepRepo.listNextSteps(tx, access, parsed.project_id);
     await assertOwnCheckIn(tx, access, parsed.project_id, parsed.source_run_id);
     const written = await stepRepo.setWaitingNote(tx, access, parsed.project_id, parsed.expected_revision, {

@@ -49,6 +49,7 @@ Defined here for the API and MCP tasks. They implement it; this task does not st
 - Repeating a `request_id` with a different body returns `idempotency_mismatch` and does not apply either body.
 - A mutation of an existing resource includes `expected_revision`. On mismatch the response is `conflict` and `error.details.current` is the resource as stored, including its revision. The client retries with that revision.
 - Authorization comes from the session or credential, never from a client-supplied owner id.
+- A stored response is replayed for 30 days. Heartbeat responses are replayed for 24 hours. After that window the same `request_id` runs as a new mutation.
 
 `server/app/conventions.ts` exports `mutationFields` (`request_id`, `expected_revision`) and `server/app/errors.ts` exports `conflictBody` / `sendConflict`.
 
@@ -196,7 +197,7 @@ edits also return the current service value there. Ungranted projects return
 `not_found`; authorship failures return `forbidden`; invalid inputs return
 `validation_error`. Private notes appear in no step-tool result or error.
 
-Retries with the same `request_id` and body return the original result. Reusing
+Retries with the same `request_id` and body return the original result for 30 days (24 hours for heartbeats). Reusing
 that ID with a different body returns `idempotency_mismatch`. Step mutations use
 only the service's idempotency layer, with the registrar's mutation wrapper disabled.
 
@@ -210,7 +211,8 @@ P1-D2 update: those tools are now registered as documented above.
 
 Every mutation uses actor-scoped `request_id` (1–128 characters `[A-Za-z0-9._:-]`)
 and atomic repository idempotency. Canonical hashes include the tool/REST action and
-resource identity. Same request/body replays the result without new rows; a different
+resource identity. Same request/body replays the result without new rows for 30 days
+(24 hours for `heartbeat`); a different
 body is `idempotency_mismatch`. Failed operations roll back and are retryable. Saved
 scope is rechecked on replay. `update_status` and `check_out` require a positive safe
 integer `expected_revision`; heartbeat and tool aggregates intentionally do not.
@@ -266,7 +268,7 @@ List items include `prReferences`, `tools` (`null` when the run has no tool row)
 
 The flat columns `stale_threshold_minutes`, `heartbeat_expected` and `reporting_instructions` map to `reportingPolicy.{ staleThresholdMinutes, heartbeatExpected, instructions }` in both directions. Run responses omit `observedClientInfo`, `observedUserAgent` and `externalExecutionId`.
 
-Every mutation takes `request_id` and runs through `withIdempotency` on the supplied transaction. The hash is SHA-256 of the parsed body with object keys sorted, so key order does not matter and a different body is `idempotency_mismatch`. A replay returns the original status and body, including a stored `409`. Retries after a conflict need a new `request_id`. Existing-resource mutations take `expected_revision`. A mismatch is `409 conflict` with message `Revision conflict` and `error.details.current` set to the stored resource. The resource is unchanged.
+Every mutation takes `request_id` and runs through `withIdempotency` on the supplied transaction. The hash is SHA-256 of the parsed body with object keys sorted, so key order does not matter and a different body is `idempotency_mismatch`. A replay returns the original status and body, including a stored `409`, for 30 days. Retries after a conflict need a new `request_id`. Existing-resource mutations take `expected_revision`. A mismatch is `409 conflict` with message `Revision conflict` and `error.details.current` set to the stored resource. The resource is unchanged.
 
 `PATCH /api/runs/:runId` corrects metadata only (`title`, `taskId`, `harness`, `model`, `completionSummary`, `blocker`, `noPrReason`, `prReferences`). It cannot set execution state or work status. It does not advance `lastContactAt`. The repository still appends one `status` event for the correction. Pull-request references are upserted by repository name and number; omitted references stay. At most one primary reference remains.
 

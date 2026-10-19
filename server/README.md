@@ -172,7 +172,12 @@ response's saved effective scope (a conservative check because the JSON is opaqu
 Removed grants and narrowed caller scope reject stale responses, even if the token
 is still active. Different hashes return `idempotency_mismatch` without
 running the callback. Pass hashes of a canonical request body from the protocol
-layer. No TTL or deletion is implemented.
+layer. Replay is guaranteed only inside the retention window. A key whose
+operation is `heartbeat` is deleted 24 hours after `created_at`. Every other
+key, including a legacy row whose operation is NULL, is deleted after 30 days.
+The web process prunes once shortly after boot and then hourly, in batches of
+5,000 rows. A retry after the window runs the mutation again. The windows are
+constants, not environment settings.
 
 Project lists hide archived projects by default and use non-stale running work
 first, then latest run update descending (project update if there are no runs), followed
@@ -280,7 +285,7 @@ P1-D2 tools: `list_next_steps`, `create_next_step`, `update_next_step`, plus a r
 
 **Completion.** User completion goes through `setStepCompletion` and is not a column `updateNextStep` can patch. An agent edit after the user checks a step, or reopens it, leaves `done`, `completionChangedBy`, and `completionChangedAt` as the user wrote them.
 
-**Idempotency.** Each mutation hashes a canonical form of its parsed input, including the operation name, and calls `withIdempotency` with the callback's `tx`. The same `request_id` and body returns the stored result and does not insert a second step. A different body returns `idempotency_mismatch` without running the write. A conflict throws out of the callback, so the key is not stored and the rows stay as they were.
+**Idempotency.** Each mutation hashes a canonical form of its parsed input, including the operation name, and calls `withIdempotency` with the callback's `tx`. The same `request_id` and body returns the stored result and does not insert a second step. A different body returns `idempotency_mismatch` without running the write. A conflict throws out of the callback, so the key is not stored and the rows stay as they were. That stored result is kept for 30 days (24 hours when the recorded operation is `heartbeat`).
 ## Auth (P1-B2)
 
 Better Auth **1.7.7** (released 2026-09-30, pinned exactly) supplies password
