@@ -99,6 +99,14 @@ export function createTrackerStore({ clock, initial, persist, onReset }: Tracker
       run.events.push({ id: `evt_demo_${++state.sequence}`, runId: id, kind: 'manual_close', receivedAt: now, occurredAt: null, actorId: state.account.id, message: reason.trim(), executionState: outcome, workStatus: outcome });
       commit(); return { status: 'saved', value: copy(run) };
     },
+    async markRunDone(id) {
+      const run = state.runs.find(item => item.id === id);
+      if (!run) return { status: 'not_found' };
+      if (run.executionState !== 'finished') return { status: 'invalid', message: 'Only finished runs can be marked done.' };
+      if (run.workStatus === 'completed') return { status: 'conflict', current: copy(run) };
+      Object.assign(run, { workStatus: 'completed', revision: run.revision + 1, updatedAt: timestamp() });
+      commit(); return { status: 'saved', value: copy(run) };
+    },
     async listNextSteps(id) { return copy({ steps: state.steps.filter(step => step.projectId === id).sort((a, b) => a.position - b.position), waitingNote: state.waitingNotes.find(note => note.projectId === id) ?? null }); },
     async setNextStepDone(id, done, expectedRevision) {
       const step = state.steps.find(item => item.id === id);

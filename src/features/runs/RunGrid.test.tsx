@@ -2,8 +2,10 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router';
+import { DataProvider } from '../../data/hooks';
 import { systemClock } from '../../domain/clock';
 import { RunGrid } from './RunGrid';
+import { createDemoSources } from '../../data/mock/createDemoSources';
 import { seedTracker } from '../../data/mock/seed';
 const seed = seedTracker(Date.now());
 const props = { runs: seed.runs, projects: seed.projects, agents: seed.agents };
@@ -58,7 +60,7 @@ it('paginates full histories, reveals linked targets off page and renders projec
   show({ runs: many, showProjectColumn: true, defaultExpandedRunIds: ['generated_00'] });
   expect(screen.getByText('Runs 1–25 of 63 · Page 1 of 3')).toBeVisible();
   expect(within(row('generated_00')).getByRole('link', { name: 'Offers workspace' })).toHaveAttribute('href', '/projects/prj_offers');
-  fireEvent.click(screen.getAllByRole('link', { name: 'generated_62' })[0]!);
+  fireEvent.click(screen.getAllByTitle('generated_62')[0]!);
   expect(row('generated_62')).toBeInTheDocument();
   expect(within(row('generated_62')).getByRole('button', { expanded: true })).toBeVisible();
   expect(screen.getByText('Runs 51–63 of 63 · Page 3 of 3')).toBeVisible();
@@ -211,4 +213,65 @@ it('expanding extra PRs under controlled filters never requests clearing them', 
   show({ filters: { activity: 'review' }, expandedRunIds: [], onFiltersChange, onExpandedRunIdsChange });
   fireEvent.click(screen.getByRole('button', { name: '+1 more' }));
   expect(onFiltersChange).not.toHaveBeenCalled(); expect(onExpandedRunIdsChange).toHaveBeenCalledWith(['run_3']);
+});
+function viewport(desktop: boolean) {
+  const previous = window.matchMedia;
+  window.matchMedia = ((query: string) => ({
+    matches: query.includes('min-width: 768px') ? desktop : !desktop,
+    media: query,
+    onchange: null,
+    addEventListener() {},
+    removeEventListener() {},
+    dispatchEvent: () => false,
+    addListener() {},
+    removeListener() {},
+  })) as typeof window.matchMedia;
+  return () => { window.matchMedia = previous; };
+}
+it('keeps the desktop table, shortens ids, and shows one line of status', () => {
+  const restore = viewport(true);
+  try {
+    const id = '58a9a065-e32f-4f28-8696-27aaab8025ac';
+    const spoken = { ...seed.runs.find(run => run.id === 'run_3')!, id, message: 'PR #57: all 3 bot comments resolved; CI green' };
+    const quiet = { ...spoken, id: 'quiet-run-id-value', message: '   ' };
+    show({ runs: [spoken, quiet], projects: seed.projects, agents: seed.agents });
+    expect(screen.getByRole('table')).toHaveClass('min-w-[1100px]');
+    expect(screen.queryByRole('list', { name: 'Run cards' })).toBeNull();
+    const status = within(row(id)).getByText(spoken.message);
+    expect(status).toHaveAttribute('title', spoken.message);
+    expect(status).toHaveClass('truncate');
+    expect(within(row(id)).getByText(`T0-11b · 58a9a065`)).toHaveAttribute('title', id);
+    expect(row(quiet.id).querySelector('[data-latest-status]')).toBeNull();
+    fireEvent.click(within(row(id)).getByRole('button', { expanded: false }));
+    expect(screen.getByRole('link', { name: '← Offers workspace' })).toHaveAttribute('href', '/projects/prj_offers');
+  } finally { restore(); }
+});
+it('renders cards below the md breakpoint with a short id, status and working mark done', async () => {
+  const restore = viewport(false);
+  const sources = createDemoSources();
+  try {
+    const id = '58a9a065-e32f-4f28-8696-27aaab8025ac';
+    const message = 'PR #57: all 3 bot comments resolved; CI green';
+    const run = { ...(await sources.tracker.getRun('run_3'))!, id, message };
+    const mark = vi.spyOn(sources.tracker, 'markRunDone').mockResolvedValue({ status: 'saved', value: { ...run, workStatus: 'completed', revision: run.revision + 1 } });
+    render(<MemoryRouter><DataProvider sources={sources}><RunGrid runs={[run]} projects={seed.projects} agents={seed.agents} /></DataProvider></MemoryRouter>);
+    expect(screen.queryByRole('table', { name: /Run executions/ })).toBeNull();
+    expect(document.querySelector('.min-w-\\[1100px\\]')).toBeNull();
+    const cards = screen.getByRole('list', { name: 'Run cards' });
+    expect(cards.className).not.toMatch(/min-w-/);
+    expect(within(cards).getByText('T0-11b · 58a9a065')).toHaveAttribute('title', id);
+    const status = within(cards).getByText(message);
+    expect(status).toHaveClass('line-clamp-2');
+    expect(status).toHaveAttribute('title', message);
+    await userEvent.click(within(cards).getByRole('button', { name: 'Demo: mark done 58a9a065' }));
+    expect(mark).toHaveBeenCalledWith(id);
+  } finally { restore(); sources.dispose(); }
+});
+it('shows the existing conflict path when mark done is rejected', async () => {
+  const sources = createDemoSources();
+  vi.spyOn(sources.tracker, 'markRunDone').mockResolvedValue({ status: 'conflict', current: (await sources.tracker.getRun('run_3'))! });
+  render(<MemoryRouter><DataProvider sources={sources}><RunGrid {...props} /></DataProvider></MemoryRouter>);
+  await userEvent.click(within(row('run_3')).getByRole('button', { name: 'Demo: mark done run_3' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('This run changed or is no longer available. Please refresh and try again.');
+  sources.dispose();
 });

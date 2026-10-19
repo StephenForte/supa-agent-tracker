@@ -113,6 +113,11 @@ export const closeRunSchema = z.strictObject({
   request_id: requestIdSchema,
 });
 
+export const markRunDoneSchema = z.strictObject({
+  expected_revision: revisionSchema,
+  request_id: requestIdSchema,
+});
+
 // Empty cursor and limit are omitted. parsePageQuery treats them as the first page and the default limit.
 const pageShape = {
   cursor: z.string().max(512).optional(),
@@ -134,3 +139,4 @@ export type CreateProjectBody = z.infer<typeof createProjectSchema>;
 export type PatchProjectBody = z.infer<typeof patchProjectSchema>;
 export type PatchRunBody = z.infer<typeof patchRunSchema>;
 export type CloseRunBody = z.infer<typeof closeRunSchema>;
+export type MarkRunDoneBody = z.infer<typeof markRunDoneSchema>;

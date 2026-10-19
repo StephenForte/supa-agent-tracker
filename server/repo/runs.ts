@@ -1,7 +1,7 @@
 import { and, desc, eq, lt } from 'drizzle-orm';
 import { runs, runEvents, pullRequestRefs, toolUsageAggregates, auditEvents, agents } from '../db/schema.js';
 import { pageItems, parsePageQuery, PaginationError } from '../app/pagination.js';
-import { AccessError, actorColumns, checkRevision, withProject, type Access, type Database, type Transaction, type WriteResult } from './access.js';
+import { AccessError, actorColumns, checkRevision, requireUser, withProject, type Access, type Database, type Transaction, type UserAccess, type WriteResult } from './access.js';
 
 export type Run = typeof runs.$inferSelect;
 export type RunInput = Pick<typeof runs.$inferInsert, 'agentId' | 'taskId' | 'title' | 'workloadType' | 'harness' | 'model' | 'parentRunId' | 'externalExecutionId' | 'observedClientInfo' | 'observedUserAgent'>;
@@ -80,6 +80,22 @@ export async function updateRun(db: Database, access: Access, projectId: string,
       await tx.insert(auditEvents).values({ userId: access.userId, projectId, ...actorColumns(access), action: 'manual_close', target: runId, details: { executionState: state, revision: value!.revision } });
     }
     await event(tx, access, value!, eventInput);
+    return { status: 'saved', value: value! };
+  });
+}
+
+/** Owner-only. Sets work_status to completed on a finished run and audits the previous status. No run_events row. */
+export async function markRunDone(db: Database, access: UserAccess, projectId: string, runId: string, expectedRevision: number): Promise<WriteResult<Run> | { status: 'not_finished' | 'already_completed'; current: Run }> {
+  requireUser(access);
+  checkRevision(expectedRevision);
+  return withProject(db, access, projectId, async (tx) => {
+    const current = await readRun(tx, projectId, runId);
+    if (current.revision !== expectedRevision) return { status: 'conflict', current };
+    if (current.executionState !== 'finished') return { status: 'not_finished', current };
+    if (current.workStatus === 'completed') return { status: 'already_completed', current };
+    const [value] = await tx.update(runs).set({ workStatus: 'completed', updatedAt: new Date(), revision: expectedRevision + 1 })
+      .where(and(eq(runs.id, runId), eq(runs.projectId, projectId))).returning();
+    await tx.insert(auditEvents).values({ userId: access.userId, projectId, ...actorColumns(access), action: 'run_marked_done', target: runId, details: { previousWorkStatus: current.workStatus } });
     return { status: 'saved', value: value! };
   });
 }

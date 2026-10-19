@@ -21,12 +21,40 @@ import { Fragment, useEffect, useId, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { useNow } from '../../domain/clock';
 import { elapsed } from '../../domain/derive';
-import { formatElapsed, formatIdentity, formatTimestamp } from '../../domain/format';
+import { formatElapsed, formatIdentity, formatTimestamp, shortId } from '../../domain/format';
 import { additionalPrCount, agentName, dateTimeInput, executionLabels, identityOptions, isConcurrent, filterRuns, liveContact, pageForRun, paginate, primaryPr, projectName, sortRuns, workLabels, type GridContext } from '../../domain/runs/grid';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { CloseRunDialog } from './CloseRunDialog';
+import { MarkDoneButton } from './MarkDoneButton';
 import { RunDetails } from './RunDetails';
+const DESKTOP_QUERY = '(min-width: 768px)';
+function desktopNow() {
+  return typeof window.matchMedia === 'function' ? window.matchMedia(DESKTOP_QUERY).matches : window.innerWidth >= 768;
+}
+function useDesktopLayout() {
+  const [desktop, setDesktop] = useState(desktopNow);
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return;
+    const media = window.matchMedia(DESKTOP_QUERY);
+    const update = () => setDesktop(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
+  return desktop;
+}
+function StatusMessage({ message, lines }: { message: string; lines: 1 | 2 }) {
+  const text = message.trim();
+  if (!text) return null;
+  return <p data-latest-status className={lines === 1 ? 'mt-1 truncate text-xs text-slate-600' : 'mt-2 line-clamp-2 text-xs text-slate-600'} title={text}>{text}</p>;
+}
+function CloseRunButton({ run, onClose }: { run: Run; onClose: () => void }) {
+  const demo = useDemoAccount();
+  if (run.executionState !== 'running') return null;
+  const label = demo ? 'Demo: close run' : 'Close run';
+  return <button type="button" className="mt-3 block text-left text-xs underline" title={run.id} aria-label={`${label} ${shortId(run.id)}`} onClick={onClose}>{label}</button>;
+}
 const columns: { field: RunGridSort['field']; label: string }[] = [
   { field: 'agent', label: 'Agent / task' }, { field: 'title', label: 'Title' }, { field: 'project', label: 'Project' },
   { field: 'executionState', label: 'Execution state' }, { field: 'workStatus', label: 'Work status' },
@@ -47,7 +75,7 @@ function MultiFilter({ label, options, value, onChange }: { label: string; optio
   return <label className="grid gap-1 text-sm">{label}<select multiple className="max-w-full rounded border border-slate-300 bg-white p-2" value={value} onChange={event => onChange(Array.from(event.target.selectedOptions, option => option.value))}>{options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>;
 }
 export function RunGrid(props: RunGridProps) {
-  const demo = useDemoAccount();
+  const desktop = useDesktopLayout();
   const { runs, projects = [], agents = [], showProjectColumn = false } = props;
   const now = useNow();
   const context = { projects, agents, now };
@@ -116,21 +144,37 @@ export function RunGrid(props: RunGridProps) {
       <label className="grid min-w-0 gap-1 text-sm">Started before<input className="min-w-0 max-w-full rounded border p-2" type="datetime-local" value={dateTimeInput(filters.startedBefore)} onChange={event => changeFilters({ ...filters, startedBefore: event.target.value })} /></label>
     </div></details>
     {!runs.length ? <p>No runs yet. Reported executions will appear here.</p> : !ordered.length ? <p role="status">No runs match these filters. <button className="underline" onClick={() => changeFilters({})}>Clear all filters</button></p> : <>
-    <div ref={region} className="max-w-full overflow-x-auto rounded border border-slate-200" role="region" aria-label="Run grid, scroll horizontally for all columns" tabIndex={0}>
+    <div ref={region}>
+    {desktop ? <div className="max-w-full overflow-x-auto rounded border border-slate-200" role="region" aria-label="Run grid, scroll horizontally for all columns" tabIndex={0}>
       <table className="w-full min-w-[1100px] text-left text-sm"><caption className="sr-only">Run executions with separate execution state, work status and liveness</caption><thead className="bg-slate-50"><tr>
         {visibleColumns.map(column => <Fragment key={column.field}><th className="p-3" aria-sort={sort.field === column.field ? sort.direction === 'asc' ? 'ascending' : 'descending' : 'none'}><button className="rounded text-left font-semibold" onClick={() => changeSort({ field: column.field, direction: sort.field === column.field && sort.direction === 'asc' ? 'desc' : 'asc' })}>{column.label}{sort.field === column.field ? sort.direction === 'asc' ? ' ↑' : ' ↓' : ''}</button></th>{column.field === 'workStatus' && <><th className="p-3">Liveness</th><th className="p-3">PR</th></>}</Fragment>)}
       </tr></thead><tbody>{page.items.map(run => {
         const pr = primaryPr(run), more = additionalPrCount(run), open = expanded.includes(run.id);
         return <Fragment key={run.id}><tr data-run-id={run.id} className="border-t border-slate-200 align-top">
-          <td className="p-3"><button className="text-left font-semibold underline" aria-expanded={open} aria-controls={`details-${run.id}`} onClick={() => toggle(run.id)}>{open ? '−' : '+'} {agentName(run, agents)}<span className="sr-only"> {run.id}</span></button><div className="mt-1 text-xs text-slate-600">{run.taskId ?? '—'} · {run.id}</div>{isConcurrent(run, runs) && <Badge>Concurrent</Badge>}</td>
-          <td className="max-w-64 p-3 break-words">{run.title}</td>
+          <td className="p-3"><button className="text-left font-semibold underline" title={run.id} aria-expanded={open} aria-controls={`details-${run.id}`} onClick={() => toggle(run.id)}>{open ? '−' : '+'} {agentName(run, agents)}<span className="sr-only"> {shortId(run.id)}</span></button><div className="mt-1 text-xs text-slate-600" title={run.id}>{`${run.taskId ?? '—'} · ${shortId(run.id)}`}</div>{isConcurrent(run, runs) && <Badge>Concurrent</Badge>}</td>
+          <td className="max-w-64 p-3 break-words">{run.title}<StatusMessage message={run.message} lines={1} /></td>
           {showProjectColumn && <td className="max-w-48 p-3 break-words"><Link to={`/projects/${run.projectId}`}>{projectName(run, projects)}</Link></td>}
-          <td className="p-3"><Badge tone={run.executionState}>{executionLabels[run.executionState]}</Badge>{run.executionState === 'running' && <button className="mt-3 block text-left text-xs underline" onClick={() => setClosing(run)}>{demo ? 'Demo: close' : 'Close'} {run.id}</button>}</td>
-          <td className="p-3"><Badge tone={run.workStatus}>{workLabels[run.workStatus]}</Badge></td><td className="p-3"><Liveness run={run} context={context} /></td>
+          <td className="p-3"><Badge tone={run.executionState}>{executionLabels[run.executionState]}</Badge><CloseRunButton run={run} onClose={() => setClosing(run)} /></td>
+          <td className="p-3"><Badge tone={run.workStatus}>{workLabels[run.workStatus]}</Badge><MarkDoneButton run={run} /></td><td className="p-3"><Liveness run={run} context={context} /></td>
           <td className="max-w-60 p-3 break-words">{pr ? <><a href={pr.url} target="_blank" rel="noopener noreferrer">#{pr.number} {pr.title}</a>{more > 0 && <button className="mt-2 block underline" onClick={() => reveal(run.id, true)}>+{more} more</button>}</> : '—'}</td>
           <td className="p-3">{formatTimestamp(run.startedAt)}</td><td className="whitespace-nowrap p-3">{formatElapsed(elapsed(run, now))}</td><td className="p-3">{formatTimestamp(run.finishedAt)}</td><td className="p-3">{formatIdentity(run.harness)}</td><td className="p-3">{formatIdentity(run.model)}</td>
-        </tr>{open && <tr className="border-t border-slate-200 bg-slate-50"><td colSpan={visibleColumns.length + 2}><RunDetails run={run} runs={runs} agents={agents} onReveal={reveal} /></td></tr>}</Fragment>;
+        </tr>{open && <tr className="border-t border-slate-200 bg-slate-50"><td colSpan={visibleColumns.length + 2}><RunDetails run={run} runs={runs} agents={agents} projects={projects} onReveal={reveal} /></td></tr>}</Fragment>;
       })}</tbody></table>
+    </div> : <ul className="grid max-w-full gap-3" aria-label="Run cards">{page.items.map(run => {
+      const pr = primaryPr(run), more = additionalPrCount(run), open = expanded.includes(run.id);
+      return <li key={run.id} data-run-id={run.id} className="max-w-full rounded border border-slate-200 p-3 text-sm">
+        <button className="text-left font-semibold underline" title={run.id} aria-expanded={open} aria-controls={`details-${run.id}`} onClick={() => toggle(run.id)}>{open ? '−' : '+'} {agentName(run, agents)}<span className="sr-only"> {shortId(run.id)}</span></button>
+        <p className="mt-1 break-words font-semibold">{run.title}</p>
+        <p className="mt-1 text-xs text-slate-600" title={run.id}>{`${run.taskId ?? '—'} · ${shortId(run.id)}`}</p>
+        {isConcurrent(run, runs) && <Badge>Concurrent</Badge>}
+        <div className="mt-2 flex flex-wrap items-center gap-2"><Badge>{projectName(run, projects)}</Badge><Badge tone={run.executionState}>{executionLabels[run.executionState]}</Badge><Badge tone={run.workStatus}>{workLabels[run.workStatus]}</Badge><Liveness run={run} context={context} /></div>
+        {pr && <p className="mt-2 break-words"><a href={pr.url} target="_blank" rel="noopener noreferrer">#{pr.number} {pr.title}</a>{more > 0 && <button className="mt-2 block underline" onClick={() => reveal(run.id, true)}>+{more} more</button>}</p>}
+        <StatusMessage message={run.message} lines={2} />
+        <CloseRunButton run={run} onClose={() => setClosing(run)} />
+        <MarkDoneButton run={run} />
+        {open && <RunDetails run={run} runs={runs} agents={agents} projects={projects} onReveal={reveal} />}
+      </li>;
+    })}</ul>}
     </div><div className="mt-4 flex flex-wrap items-center justify-between gap-3"><p role="status">Runs {page.start}–{page.end} of {page.total} · Page {page.page + 1} of {page.pages}</p><div className="flex gap-2"><Button disabled={page.page === 0} onClick={() => setPage({ index: page.page - 1, signature, expandedKey })}>Previous</Button><Button disabled={page.page + 1 === page.pages} onClick={() => setPage({ index: page.page + 1, signature, expandedKey })}>Next</Button></div></div></>}
     {closing && <CloseRunDialog key={closing.id} run={closing} onClose={() => setClosing(null)} />}
   </section>;

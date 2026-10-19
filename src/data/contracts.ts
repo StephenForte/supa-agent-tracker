@@ -28,6 +28,8 @@ export interface TrackerDataSource extends ObservableSource {
   updateRunMetadata(runId: string, patch: RunMetadataPatch, expectedRevision: number): Promise<WriteResult<Run>>;
   /** Only running executions may close; records a user audit event, does not mutate next steps. */
   closeRun(runId: string, outcome: 'failed' | 'cancelled', reason: string): Promise<WriteResult<Run>>;
+  /** Finished runs that are not completed. No timeline event. */
+  markRunDone(runId: string): Promise<WriteResult<Run>>;
   listNextSteps(projectId: string): Promise<ProjectNextSteps>;
   setNextStepDone(stepId: string, done: boolean, expectedRevision: number): Promise<WriteResult<NextStep>>;
   /** Demo only. A worker may rewrite its own instruction, never user completion or another worker's step. */

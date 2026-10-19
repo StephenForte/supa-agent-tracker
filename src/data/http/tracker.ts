@@ -68,6 +68,10 @@ export function createHttpTracker(client: HttpClient, visibility?: Visibility, o
       const run = await nullable(() => client.request<Run>(`/api/runs/${segment(id)}`));
       return run ? write<Run>(client, `/api/runs/${segment(id)}/close`, 'POST', { outcome, reason, expected_revision: run.revision, ...actionFields() }) : { status: 'not_found' as const };
     }),
+    markRunDone: (id) => mutation(async () => {
+      const run = await nullable(() => client.request<Run>(`/api/runs/${segment(id)}`));
+      return run ? write<Run>(client, `/api/runs/${segment(id)}/mark-done`, 'POST', { expected_revision: run.revision, ...actionFields() }) : { status: 'not_found' as const };
+    }),
     listNextSteps: id => observable.read(`steps:${id}`, async () => {
       const bundle = await client.request<ProjectNextSteps>(`/api/projects/${segment(id)}/next-steps`);
       for (const [step, project] of stepProjects) if (project === id) stepProjects.delete(step);

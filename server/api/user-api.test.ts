@@ -170,6 +170,7 @@ describe('user REST API', () => {
       () => call('GET', `/api/runs/${richId}`, userB),
       () => call('PATCH', `/api/runs/${richId}`, userB, { title: 'Stolen', expected_revision: 1, request_id: 'iso-run' }),
       () => call('POST', `/api/runs/${richId}/close`, userB, { outcome: 'failed', reason: 'Stolen', expected_revision: 1, request_id: 'iso-close' }),
+      () => call('POST', `/api/runs/${richId}/mark-done`, userB, { expected_revision: 1, request_id: 'iso-mark' }),
     ];
     for (const route of routes) {
       const response = await route();
@@ -462,5 +463,93 @@ describe('user REST API', () => {
     expect(emptyRuns.statusCode).toBe(200);
     const emptyPatch = await call('PATCH', `/api/projects/${alphaId}`, userA, { expected_revision: 1, request_id: nextRequestId() });
     expect(emptyPatch.statusCode).toBe(400);
+  });
+
+  it('marks a finished run done once and refuses every other execution', async () => {
+    const credential = await credentials.createCredential(db, accessA, { label: 'Marker', tokenHash: 'hash-mark-done', displaySuffix: 'mark', projectIds: [alphaId] });
+    const token = { kind: 'credential' as const, userId: userA, credentialId: credential.id, projectIds: [alphaId] };
+    async function endRun(title: string, executionState: 'finished' | 'failed' | 'cancelled', workStatus: 'waiting_for_review' | 'completed' | 'failed' | 'cancelled') {
+      const run = await runsRepo.createRun(db, accessA, alphaId, { agentId: agentAId, title, workloadType: 'coding' });
+      const ended = await runsRepo.updateRun(db, token, alphaId, run.id, 1, { executionState, workStatus }, { event: { kind: 'check_out' } });
+      if (ended.status !== 'saved') throw new Error(`expected ${title} to end`);
+      return ended.value;
+    }
+    async function tablesExceptIdempotency() {
+      const snapshotBody = { ...(await snapshot() as Record<string, unknown>) };
+      delete snapshotBody.idempotency_keys;
+      return snapshotBody;
+    }
+
+    const review = await endRun('Needs done', 'finished', 'waiting_for_review');
+    const before = await call('GET', `/api/runs/${review.id}`, userA);
+    const beforeBody = before.json() as { revision: number; events: Array<{ id: string }>; lastContactAt: string; finishedAt: string | null; message: string; executionState: string };
+    const marked = await call('POST', `/api/runs/${review.id}/mark-done`, userA, { expected_revision: beforeBody.revision, request_id: 'mark-once' });
+    expect(marked.statusCode).toBe(200);
+    const markedBody = marked.json() as { workStatus: string; executionState: string; revision: number; message: string; lastContactAt: string; finishedAt: string | null; events: Array<{ id: string; kind: string; message: string }> };
+    expect(markedBody.workStatus).toBe('completed');
+    expect(markedBody.executionState).toBe('finished');
+    expect(markedBody.revision).toBe(beforeBody.revision + 1);
+    expect(markedBody.events).toEqual(beforeBody.events);
+    expect(markedBody.message).toBe(beforeBody.message);
+    expect(markedBody.lastContactAt).toBe(beforeBody.lastContactAt);
+    expect(markedBody.finishedAt).toBe(beforeBody.finishedAt);
+    const auditsForRun = async () => (await audits.listAuditEvents(db, accessA, alphaId)).filter((row) => row.action === 'run_marked_done' && row.target === review.id);
+    expect(await auditsForRun()).toEqual([expect.objectContaining({ details: { previousWorkStatus: 'waiting_for_review' } })]);
+
+    const replay = await call('POST', `/api/runs/${review.id}/mark-done`, userA, { expected_revision: beforeBody.revision, request_id: 'mark-once' });
+    expect(replay.statusCode).toBe(200);
+    expect(replay.json()).toEqual(markedBody);
+    expect(await auditsForRun()).toHaveLength(1);
+
+    const staleBefore = await tablesExceptIdempotency();
+    const stale = await call('POST', `/api/runs/${review.id}/mark-done`, userA, { expected_revision: beforeBody.revision, request_id: 'mark-stale' });
+    expect(stale.statusCode).toBe(409);
+    expect(stale.json()).toMatchObject({ error: { code: errorCodes.conflict, message: 'Revision conflict', details: { current: { id: review.id, revision: markedBody.revision, workStatus: 'completed' } } } });
+    expect(await tablesExceptIdempotency()).toEqual(staleBefore);
+    expect(await auditsForRun()).toHaveLength(1);
+
+    const again = await call('POST', `/api/runs/${review.id}/mark-done`, userA, { expected_revision: markedBody.revision, request_id: 'mark-again' });
+    expect(again.statusCode).toBe(409);
+    expect(again.json()).toMatchObject({ error: { code: errorCodes.conflict, message: 'Run is already completed', details: { current: { id: review.id, workStatus: 'completed', revision: markedBody.revision } } } });
+    expect(await auditsForRun()).toHaveLength(1);
+    expect((await call('GET', `/api/runs/${review.id}`, userA)).json()).toEqual(markedBody);
+
+    const reported = await runsRepo.updateRun(db, token, alphaId, review.id, markedBody.revision, { message: 'Agent update after done' });
+    expect(reported.status).toBe('saved');
+    if (reported.status !== 'saved') return;
+    expect(reported.value.workStatus).toBe('completed');
+    expect(reported.value.revision).toBe(markedBody.revision + 1);
+    const afterAgent = (await call('GET', `/api/runs/${review.id}`, userA)).json() as { events: Array<{ kind: string; message: string }> };
+    expect(afterAgent.events.filter((event) => event.kind === 'status' && event.message === 'Agent update after done')).toHaveLength(1);
+
+    const other = await call('POST', `/api/runs/${review.id}/mark-done`, userB, { expected_revision: reported.value.revision, request_id: 'mark-other-owner' });
+    expect(other.statusCode).toBe(404);
+    expect(other.json()).toEqual({ error: { code: errorCodes.not_found, message: 'Not found' } });
+
+    const bearer = await app.inject({
+      method: 'POST',
+      url: `/api/runs/${review.id}/mark-done`,
+      headers: { authorization: `Bearer stub:${userA}:${alphaId}`, 'content-type': 'application/json' },
+      payload: JSON.stringify({ expected_revision: reported.value.revision, request_id: 'mark-credential' }),
+    });
+    expect(bearer.statusCode).toBe(401);
+    expect(bearer.json()).toEqual({ error: { code: errorCodes.unauthenticated, message: 'Sign in required' } });
+
+    for (const executionState of ['running', 'failed', 'cancelled'] as const) {
+      const run = executionState === 'running'
+        ? await runsRepo.createRun(db, accessA, alphaId, { agentId: agentAId, title: 'Still running', workloadType: 'coding' })
+        : await endRun(`Already ${executionState}`, executionState, executionState);
+      const prior = await tablesExceptIdempotency();
+      const refused = await call('POST', `/api/runs/${run.id}/mark-done`, userA, { expected_revision: run.revision, request_id: `mark-${executionState}` });
+      expect(refused.statusCode).toBe(409);
+      expect(refused.json()).toMatchObject({ error: { code: errorCodes.conflict, message: 'Only finished runs can be marked done', details: { current: { id: run.id, executionState } } } });
+      expect(await tablesExceptIdempotency()).toEqual(prior);
+      expect((await audits.listAuditEvents(db, accessA, alphaId)).some((row) => row.action === 'run_marked_done' && row.target === run.id)).toBe(false);
+    }
+
+    const completed = await endRun('Checked out complete', 'finished', 'completed');
+    const completedRefusal = await call('POST', `/api/runs/${completed.id}/mark-done`, userA, { expected_revision: completed.revision, request_id: 'mark-completed' });
+    expect(completedRefusal.statusCode).toBe(409);
+    expect(completedRefusal.json()).toMatchObject({ error: { code: errorCodes.conflict, message: 'Run is already completed', details: { current: { id: completed.id, workStatus: 'completed' } } } });
   });
 });
