@@ -9,7 +9,7 @@ import { createDemoSources } from '../../data/mock/createDemoSources';
 import type { StorageAdapter } from '../../data/mock/persistence';
 import { DemoAccountContext } from '../../app/useDemoAccount';
 import { IntegrationsPanel } from './IntegrationsPanel';
-import { BASE_INSTRUCTION_DRAFT } from '../../domain/integrations/agentContext';
+import { BASE_INSTRUCTION_DRAFT, newestPromptProject, projectPrompt } from '../../domain/integrations/agentContext';
 import { createClock } from '../../domain/clock';
 
 const PRIVATE_NOTES = ['Remember to inspect the mobile preview before approving.', 'Ask about the stale run before retrying.'];
@@ -32,10 +32,14 @@ describe('integration setup', () => {
     render(<DataProvider sources={{ tracker: sources.tracker, privateNotes }}><RouterProvider router={router} /></DataProvider>);
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Integration setup' })).toBeVisible();
-    expect(screen.getAllByText('Not connected · Not tested')).toHaveLength(3);
+    expect(screen.getAllByText('Not connected · Not tested')).toHaveLength(5);
     expect(screen.getByText('Production-verified 2026-10-16 (P1-G2, Cursor 3.25.6)')).toBeVisible();
+    expect(screen.getByRole('article', { name: 'Cursor' })).toHaveTextContent("Don't sign in. Create a new token here and replace it in the client config.");
     expect(screen.getAllByText('Production-verified 2026-10-16 (P1-G2)')).toHaveLength(2);
-    for (const name of ['Cursor', 'Claude Desktop (macOS)', 'Grok Bot']) {
+    expect(screen.getByText('Production-verified 2026-10-20 (operator, Codex desktop)')).toBeVisible();
+    expect(screen.getByText('Not yet verified')).toBeVisible();
+    expect(screen.getByText('The CLI form is from OpenAI\'s Codex docs, not a live check. The desktop app, the CLI, and the IDE extension share ~/.codex/config.toml. Add [mcp_servers.supa-agent-tracker] with url and bearer_token_env_var. Codex reads SUPA_AGENT_TRACKER_TOKEN from the process environment; do not put the token value in config.toml.')).toBeVisible();
+    for (const name of ['Cursor', 'Claude Desktop (macOS)', 'Grok Bot', 'Codex', 'Claude Code']) {
       const card = screen.getByRole('article', { name });
       expect(card).toHaveTextContent('https://<your tracker host>/mcp');
       expect(card).toHaveTextContent('<YOUR_TOKEN>');
@@ -83,6 +87,28 @@ describe('integration setup', () => {
     writeText.mockRejectedValueOnce(new Error('denied'));
     await user.click(screen.getByRole('button', { name: 'Copy MCP URL' }));
     expect(screen.getByRole('status')).toHaveTextContent('Copy failed');
+    sources.dispose();
+  });
+
+  it('copies the prompt for the picked project and defaults to the newest non-archived one', async () => {
+    const user = userEvent.setup();
+    const sources = createDemoSources({ storage: memoryStorage() });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    const projects = await sources.tracker.listProjects();
+    const router = createMemoryRouter([{ path: '/', element: <DemoAccountContext value={false}><IntegrationsPanel /></DemoAccountContext> }]);
+    render(<DataProvider sources={sources}><RouterProvider router={router} /></DataProvider>);
+    await screen.findByRole('heading', { name: 'Server and instructions' });
+    expect(screen.getByLabelText('Prompt project')).toHaveValue(newestPromptProject(projects)!.id);
+    await user.selectOptions(screen.getByLabelText('Prompt project'), 'prj_offers');
+    await user.click(screen.getByRole('button', { name: 'Copy prompt for this project' }));
+    expect(writeText).toHaveBeenLastCalledWith(projectPrompt(projects.find(project => project.id === 'prj_offers')!));
+    const copied = String(writeText.mock.calls.at(-1)?.[0]);
+    expect(copied.startsWith('Report to Supa Agent Tracker project "Offers workspace" (project_id prj_offers); use that id instead of matching by repository.\n')).toBe(true);
+    expect(copied.slice(copied.indexOf('\n') + 1)).toBe(BASE_INSTRUCTION_DRAFT);
+    expect(copied).not.toContain('sat_');
+    await user.click(screen.getByRole('button', { name: 'Copy base prompt' }));
+    expect(writeText).toHaveBeenLastCalledWith(BASE_INSTRUCTION_DRAFT);
     sources.dispose();
   });
 

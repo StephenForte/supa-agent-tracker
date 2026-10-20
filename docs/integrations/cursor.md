@@ -27,6 +27,8 @@ Cursor subagents inherited MCP tools on the parent session in P1-A2. Each still 
 
 If Cursor shows "Needs authentication" or offers to sign in, the token is missing or revoked. Replace it with a new token's "Copy Cursor config" and toggle the server off and on.
 
+If Cursor (or another client) shows an Authenticate or Sign in button for this server, the token is wrong or revoked. Don't sign in. Create a new token here and replace it in the client config.
+
 ## Optional heartbeat hooks
 
 Install the [heartbeat adapter](../../adapters/heartbeat/README.md) and private env file first. With Node 24 on PATH, merge this into the workspace-root `.cursor/hooks.json`. Replace both absolute paths. Project hooks run from the workspace root, so `.supa/run-id` resolves there. User-level hooks run from `~/.cursor/`; if you use those instead, set an absolute `SUPA_RUN_ID_FILE` for a single workspace.

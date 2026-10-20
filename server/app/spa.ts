@@ -3,9 +3,10 @@ import type { FastifyInstance } from 'fastify';
 
 import { apiError, errorCodes } from './errors.js';
 
-/** /api and /mcp never fall back to the SPA. /mcp* includes /mcp and /mcp/... */
+/** /api, /mcp, and /.well-known never fall back to the SPA. /mcp* includes /mcp and /mcp/... */
 export function isReservedPath(pathname: string): boolean {
-  return pathname === '/api' || pathname.startsWith('/api/') || pathname.startsWith('/mcp');
+  return pathname === '/api' || pathname.startsWith('/api/') || pathname.startsWith('/mcp')
+    || pathname === '/.well-known' || pathname.startsWith('/.well-known/');
 }
 
 export function requestPathname(url: string): string {

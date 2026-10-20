@@ -1,3 +1,5 @@
+import { BAD_TOKEN_HELP, claudeCodeConfigSnippet, codexConfigSnippet } from './clientConfig.js';
+
 export const INTEGRATION_STATUS = 'Not connected · Not tested' as const;
 export const MCP_PLACEHOLDER_URL = "https://<your tracker host>/mcp";
 
@@ -7,7 +9,7 @@ export function deploymentMcpUrl(origin: string | null): string {
 }
 
 export interface IntegrationExample {
-  id: 'cursor' | 'claude-desktop' | 'grok-bot';
+  id: 'cursor' | 'claude-desktop' | 'grok-bot' | 'codex' | 'claude-code';
   name: string;
   status: typeof INTEGRATION_STATUS;
   verifiedLabel: string;
@@ -27,7 +29,8 @@ export function integrationExamples(url = MCP_PLACEHOLDER_URL): readonly Integra
     "instructions": [
       "Prefer Copy Cursor config on the one-time token reveal: it pastes a complete mcpServers object with this deployment's URL and the new token. Otherwise, in ~/.cursor/mcp.json, add the server URL and headers.Authorization as shown below and merge with existing servers. Choose All my projects (including future ones) or specific projects when issuing the token.",
       "Paste the base prompt into the project\u2019s agent instructions or a Cursor rule. This placement is guidance; P1-A2 verified MCP calls, not automatic prompt loading.",
-      "Cursor subagents inherited MCP tools on the parent session in P1-A2. Each still needs its own check-in and parent_run_id. Omit model when unavailable."
+      "Cursor subagents inherited MCP tools on the parent session in P1-A2. Each still needs its own check-in and parent_run_id. Omit model when unavailable.",
+      BAD_TOKEN_HELP
     ],
     "example": "{\n  \"mcpServers\": {\n    \"supa-agent-tracker\": {\n      \"url\": \"https://<your tracker host>/mcp\",\n      \"headers\": {\n        \"Authorization\": \"Bearer <YOUR_TOKEN>\"\n      }\n    }\n  }\n}",
     "docs": [
@@ -107,8 +110,57 @@ export function integrationExamples(url = MCP_PLACEHOLDER_URL): readonly Integra
         "url": "https://cursor.com/help/grok-bot/routines"
       }
     ]
+  },
+  {
+    "id": "codex",
+    "name": "Codex",
+    "status": "Not connected \u00b7 Not tested",
+    "verifiedLabel": "Production-verified 2026-10-20 (operator, Codex desktop)",
+    "instructions": [
+      "Prefer Copy Codex config on the one-time token reveal: it pastes the server URL, the bearer token env var name SUPA_AGENT_TRACKER_TOKEN, and SUPA_AGENT_TRACKER_TOKEN set to the new token. In the Codex desktop app, set URL to the server URL and Bearer token env var to SUPA_AGENT_TRACKER_TOKEN, and leave Headers empty. Choose All my projects (including future ones) or specific projects when issuing the token.",
+      "The CLI form is from OpenAI's Codex docs, not a live check. The desktop app, the CLI, and the IDE extension share ~/.codex/config.toml. Add [mcp_servers.supa-agent-tracker] with url and bearer_token_env_var. Codex reads SUPA_AGENT_TRACKER_TOKEN from the process environment; do not put the token value in config.toml.",
+      "Paste the base prompt, or Copy prompt for this project on this page, into the Codex thread. This placement is guidance."
+    ],
+    "example": "",
+    "docs": [
+      {
+        "label": "Codex MCP",
+        "url": "https://learn.chatgpt.com/docs/extend/mcp"
+      },
+      {
+        "label": "Codex configuration reference",
+        "url": "https://learn.chatgpt.com/docs/config-file/config-reference"
+      }
+    ]
+  },
+  {
+    "id": "claude-code",
+    "name": "Claude Code",
+    "status": "Not connected \u00b7 Not tested",
+    "verifiedLabel": "Not yet verified",
+    "instructions": [
+      "Prefer Copy Claude Code command on the one-time token reveal. It runs claude mcp add with --transport http, --scope user, the server URL, and an Authorization bearer header. Choose All my projects (including future ones) or specific projects when issuing the token.",
+      "Use --scope user. Without it, claude mcp add can write a project-scoped .mcp.json (--scope project), and that file would be committed with the token in it. User scope stores the server in ~/.claude.json for all of your projects and keeps the token out of the repository. This command is from the Claude Code MCP docs and has not been run against production.",
+      "Paste the base prompt, or Copy prompt for this project on this page, into the Claude Code session."
+    ],
+    "example": "",
+    "docs": [
+      {
+        "label": "Claude Code MCP",
+        "url": "https://code.claude.com/docs/en/mcp"
+      },
+      {
+        "label": "Claude Code MCP quickstart",
+        "url": "https://code.claude.com/docs/en/mcp-quickstart"
+      }
+    ]
   }
-].map(example => ({ ...example, id: example.id as IntegrationExample['id'], status: INTEGRATION_STATUS, example: example.example.replaceAll(MCP_PLACEHOLDER_URL, url) }));
+].map(example => ({
+  ...example,
+  id: example.id as IntegrationExample['id'],
+  status: INTEGRATION_STATUS,
+  example: (example.id === 'codex' ? codexConfigSnippet(url, '<YOUR_TOKEN>') : example.id === 'claude-code' ? claudeCodeConfigSnippet(url, '<YOUR_TOKEN>') : example.example).replaceAll(MCP_PLACEHOLDER_URL, url),
+}));
 }
 
 export const CURSOR_HOOK_EXAMPLE = "{\n  \"version\": 1,\n  \"hooks\": {\n    \"postToolUse\": [{ \"command\": \"node --env-file=/ABSOLUTE/PRIVATE/supa-heartbeat.env /ABSOLUTE/PATH/heartbeat.mjs\", \"timeout\": 12 }],\n    \"postToolUseFailure\": [{ \"command\": \"node --env-file=/ABSOLUTE/PRIVATE/supa-heartbeat.env /ABSOLUTE/PATH/heartbeat.mjs\", \"timeout\": 12 }]\n  }\n}";

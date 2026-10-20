@@ -7,11 +7,13 @@ import { agentName, liveContact, primaryPr, projectName } from '../../domain/run
 import type { Run } from '../../domain/types';
 import { CloseRunDialog } from '../../features/runs/CloseRunDialog';
 import { MarkDoneButton } from '../../features/runs/MarkDoneButton';
+import { GettingStarted } from './GettingStarted';
 import { useAttention } from './useAttention';
 
 export function NeedsMePage() {
   const { result, attention, now, retry } = useAttention();
   const demo = useDemoAccount();
+  const starting = !demo && result.status === 'ready' && result.data && result.data.runs.length === 0 ? result.data : null;
   const [closing, setClosing] = useState<Run | null>(null);
   function card(run: Run, group: AttentionGroup) {
     if (!attention) return null;
@@ -37,6 +39,7 @@ export function NeedsMePage() {
     {result.status === 'loading' ? <p role="status">Loading attention items…</p> : result.status === 'error' ? <ErrorState message={result.error.message} onRetry={retry} /> : attention && <>
       <p role="status">{attention.total} {attention.total === 1 ? 'item needs' : 'items need'} you</p>
       <p className="text-sm text-slate-600">{attentionGroups.map(group => `${attentionLabels[group]}: ${attention.groups[group].length}`).join(' · ')}</p>
+      {starting && <GettingStarted projects={starting.projects} tokens={starting.tokens} />}
       {attention.total === 0 ? <section className="empty-state"><h2>Nothing needs you right now</h2><div className="link-list"><Link to="/agents">All agents</Link><Link to="/projects">Projects</Link></div></section> : attentionGroups.map(group => <section key={group} aria-labelledby={`needs-${group}`} className="mt-6"><h2 id={`needs-${group}`}>{attentionLabels[group]} ({attention.groups[group].length})</h2><ul className="grid gap-3">{attention.groups[group].map(run => card(run, group))}</ul></section>)}
     </>}
     {closing && <CloseRunDialog key={closing.id} run={closing} onClose={() => setClosing(null)} />}

@@ -12,7 +12,8 @@ function useAttentionQuery() {
     const account = source.auth ? await source.auth.getSession() : await source.getAccount();
     if (!account) return null;
     const [projects, runs, agents] = await Promise.all([source.listProjects(), source.listRuns(), source.listAgents()]);
-    return { account, projects, runs, agents };
+    const tokens = runs.length === 0 ? await source.listTokens() : [];
+    return { account, projects, runs, agents, tokens };
   }, [source, attempt]));
   return { result, attention: result.status === 'ready' && result.data ? needsAttention(result.data.account.id, result.data.projects, result.data.runs, result.data.agents, now) : null, now, retry: () => setAttempt(value => value + 1) };
 }

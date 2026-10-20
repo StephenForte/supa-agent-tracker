@@ -215,6 +215,25 @@ describe('MCP and tokens over real Postgres and the SDK HTTP client', () => {
     expect(String(queried.headers['www-authenticate'])).not.toContain('QQQQ9P2C');
     expect(queried.body).not.toContain('QQQQ9P2C');
   });
+  it('serves protected-resource metadata on the RFC 9728 mcp path and 404s other well-known lookups', async () => {
+    const root = await app.inject('/.well-known/oauth-protected-resource');
+    const nested = await app.inject('/.well-known/oauth-protected-resource/mcp');
+    expect(nested.statusCode).toBe(200);
+    expect(nested.headers['content-type']).toContain('application/json');
+    expect(nested.headers['cache-control']).toBe('no-store');
+    expect(nested.body).toBe(root.body);
+    expect(root.headers['cache-control']).toBe('no-store');
+    for (const path of ['/.well-known/oauth-authorization-server', '/.well-known/openid-configuration', '/.well-known/oauth-protected-resource/extra']) {
+      const response = await app.inject(path);
+      expect(response.statusCode, path).toBe(404);
+      expect(response.headers['content-type']).toContain('application/json');
+      expect(response.json()).toEqual({ error: { code: 'not_found', message: 'Not found' } });
+      expect(response.body).not.toContain('<html');
+    }
+    const bad = await app.inject({ method: 'POST', url: '/mcp', headers: { authorization: 'Bearer bogus-token' } });
+    expect(bad.statusCode).toBe(401);
+    expect(bad.headers['www-authenticate']).toBe('Bearer resource_metadata="https://tracker.example/.well-known/oauth-protected-resource", error="invalid_token", error_description="Token missing, revoked or mistyped; create a new one in Settings -> MCP tokens."');
+  });
   it('rejects browser Origins, query credentials, malformed or missing bearers before dispatch', async () => {
     for (const origin of ['https://evil.example', 'null', '']) {
       expect((await app.inject({ url: '/mcp', headers: { origin } })).statusCode).toBe(403);

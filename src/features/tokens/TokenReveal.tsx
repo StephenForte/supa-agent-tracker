@@ -1,11 +1,13 @@
 import { useRef, useState } from 'react';
 import { Button } from '../../components/ui/Button';
-import { claudeDesktopConfigSnippet, cursorConfigSnippet, grokBotConfigSnippet } from '../../domain/integrations/clientConfig';
+import { BAD_TOKEN_HELP, claudeCodeConfigSnippet, claudeDesktopConfigSnippet, codexConfigSnippet, cursorConfigSnippet, grokBotConfigSnippet } from '../../domain/integrations/clientConfig';
 
 const snippetsFor = (mcpUrl: string, plaintext: string) => [
-  { name: 'Cursor config', copy: 'Copy Cursor config', text: cursorConfigSnippet(mcpUrl, plaintext) },
-  { name: 'Claude Desktop config', copy: 'Copy Claude Desktop config', text: claudeDesktopConfigSnippet(mcpUrl, plaintext) },
-  { name: 'Grok Bot config', copy: 'Copy Grok Bot config', text: grokBotConfigSnippet(mcpUrl, plaintext) },
+  { name: 'Cursor config', copy: 'Copy Cursor config', text: cursorConfigSnippet(mcpUrl, plaintext), rows: 8 },
+  { name: 'Claude Desktop config', copy: 'Copy Claude Desktop config', text: claudeDesktopConfigSnippet(mcpUrl, plaintext), rows: 4 },
+  { name: 'Grok Bot config', copy: 'Copy Grok Bot config', text: grokBotConfigSnippet(mcpUrl, plaintext), rows: 4 },
+  { name: 'Codex config', copy: 'Copy Codex config', text: codexConfigSnippet(mcpUrl, plaintext), rows: 12 },
+  { name: 'Claude Code command', copy: 'Copy Claude Code command', text: claudeCodeConfigSnippet(mcpUrl, plaintext), rows: 3 },
 ] as const;
 
 /** Plaintext and client snippets exist only while this reveal is mounted. */
@@ -37,10 +39,11 @@ export function TokenReveal({ plaintext, mcpUrl, onDismiss, demo = true }: { pla
       const fieldId = `token-config-${snippet.name.replaceAll(' ', '-').toLowerCase()}`;
       return <div key={snippet.name} className="mt-3">
         <label htmlFor={fieldId} className="block text-sm">{snippet.name}</label>
-        <textarea id={fieldId} readOnly value={snippet.text} autoComplete="off" spellCheck={false} rows={snippet.name === 'Cursor config' ? 8 : 4} className="mt-1 w-full max-w-full break-all rounded border border-slate-400 bg-white px-2 py-2 font-mono text-sm" />
+        <textarea id={fieldId} readOnly value={snippet.text} autoComplete="off" spellCheck={false} rows={snippet.rows} className="mt-1 w-full max-w-full break-all rounded border border-slate-400 bg-white px-2 py-2 font-mono text-sm" />
         <Button onClick={() => void copy(snippet.text, `${snippet.name} copied.`)}>{copied === `${snippet.name} copied.` ? 'Copied' : snippet.copy}</Button>
       </div>;
     })}
+    <p className="mt-3">{BAD_TOKEN_HELP}</p>
     {copied && <p role="status">{copied}</p>}
     {copyError && <p role="alert">{copyError}</p>}
   </section>;

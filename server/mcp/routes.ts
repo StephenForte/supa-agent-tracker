@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
@@ -39,10 +39,7 @@ export async function registerMcpRoutes(app: FastifyInstance, deps: RouteDeps & 
     await Promise.all([...sessions.keys()].map(drop));
     await Promise.all([...initializing].map(async (entry) => { initializing.delete(entry); await entry.server.close(); }));
   });
-  app.get('/.well-known/oauth-protected-resource', { childLoggerFactory: secretSafeLogger }, async (_request, reply) => {
-    reply.header('Cache-Control', 'no-store');
-    return { resource: `${origin}/mcp`, bearer_methods_supported: ['header'], resource_name: 'Supa Agent Tracker' };
-  });
+  registerProtectedResourceMetadata(app, origin);
   await registerTokenRoutes(app, db);
   app.route({ method: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'TRACE'], url: '/mcp',
     // Query credentials and arbitrary metadata must not enter request logs.
@@ -108,6 +105,17 @@ export async function registerMcpRoutes(app: FastifyInstance, deps: RouteDeps & 
       if (request.method === 'DELETE' && typeof sessionId === 'string') await drop(sessionId);
     },
   });
+}
+
+/** RFC 9728 looks up https://host/mcp at /.well-known/oauth-protected-resource/mcp first. */
+export function registerProtectedResourceMetadata(app: FastifyInstance, origin: string): void {
+  const send = async (_request: FastifyRequest, reply: FastifyReply) => {
+    reply.header('Cache-Control', 'no-store');
+    return { resource: `${origin}/mcp`, bearer_methods_supported: ['header'], resource_name: 'Supa Agent Tracker' };
+  };
+  const opts = { childLoggerFactory: secretSafeLogger };
+  app.get('/.well-known/oauth-protected-resource', opts, send);
+  app.get('/.well-known/oauth-protected-resource/mcp', opts, send);
 }
 
 function observedClientInfo(info: { name: string; version: string } | undefined) {
