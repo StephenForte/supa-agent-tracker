@@ -83,6 +83,13 @@ function PublicBody({ state }: { state: PublicView }) {
       for (const run of agent.runs) rows.push({ project: project.name, agent: agent.name, run });
     }
   }
+  // Sort only the flattened rows; preserve loader order for ties and empty rows.
+  rows.sort((a, b) => {
+    if (!a.run) return b.run ? 1 : 0;
+    if (!b.run) return -1;
+    return Date.parse(b.run.lastContactAt) - Date.parse(a.run.lastContactAt)
+      || Date.parse(b.run.startedAt) - Date.parse(a.run.startedAt);
+  });
   return <>
     <p className="text-sm text-slate-600">Status for {state.page.owner.handle}. This page refreshes while it is visible.</p>
     {rows.length === 0 ? <p>No public projects.</p> : <div className="max-w-full overflow-x-auto rounded border border-slate-200">
