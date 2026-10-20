@@ -1,17 +1,19 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { useTrackerData } from '../../data/hooks';
+import { clearRegistrationInvite, getRegistrationInvite, rememberRegistrationInvite } from './registrationInvite';
 import { Button } from '../../components/ui/Button';
 export function LiveAuthScreen() {
   const { auth } = useTrackerData();
   const location = useLocation(); const navigate = useNavigate();
   const path = location.pathname;
   const token = new URLSearchParams(location.search).get('token');
-  const [invite] = useState(() => path === '/register' ? new URLSearchParams(location.search).get('invite') : null);
+  const [invite, setInvite] = useState(() => (path === '/register' ? new URLSearchParams(location.search).get('invite') : null) ?? getRegistrationInvite());
   useEffect(() => {
     if (path !== '/register') return;
     const query = new URLSearchParams(location.search);
     if (!query.has('invite')) return;
+    rememberRegistrationInvite(query.get('invite'));
     query.delete('invite');
     navigate({ pathname: path, search: query.toString(), hash: location.hash }, { replace: true, state: location.state });
   }, [path, location.search, location.hash, location.state, navigate]);
@@ -31,7 +33,7 @@ export function LiveAuthScreen() {
     if ((path === '/register' || path === '/reset-password') && value('password') !== value('confirm')) { setMessage('Passwords do not match.'); return; }
     setPending(true); setMessage('');
     try {
-      if (path === '/register') { await auth.submit('sign-up/email', { name: value('name'), email: value('email'), password: value('password'), ...(invite ? { invite } : {}) }); setMessage('Check your email for a verification link.'); }
+      if (path === '/register') { await auth.submit('sign-up/email', { name: value('name'), email: value('email'), password: value('password'), ...(invite ? { invite } : {}) }); clearRegistrationInvite(); setInvite(null); setMessage('Check your email for a verification link.'); }
       if (path === '/login') {
         await auth.submit('sign-in/email', { email: value('email'), password: value('password') });
         const target: unknown = location.state?.returnTo;
@@ -43,18 +45,19 @@ export function LiveAuthScreen() {
       form.reset();
     } catch (error) {
       const status = typeof error === 'object' && error !== null && 'status' in error ? error.status : undefined;
-      setMessage(status === 403 && path === '/register' ? 'This invitation is invalid or has expired' : status === 429 ? 'Too many requests. Please try again shortly.' : path === '/login' ? 'Unable to log in. Check your email and password.' : 'Unable to complete this request. Please try again.');
+      setMessage(status === 403 && path === '/register' ? 'This invitation is invalid or has expired. Use the email address the invitation was sent to, or ask for a new invitation.' : status === 429 ? 'Too many requests. Please try again shortly.' : path === '/login' ? 'Unable to log in. Check your email and password.' : 'Unable to complete this request. Please try again.');
     }
     finally { setPending(false); }
   }
   if (!auth) return null;
   if (path === '/verify-email') return <><p role="status">{message || (token ? 'Verifying email…' : 'Open the verification link from your email.')}</p><Link to="/login">Log in</Link></>;
   return <>
+    {path === '/register' && <p>{invite ? "You're registering with an invitation. Use the email address the invitation was sent to." : 'Registration is by invitation only. Open the invitation link from your email.'}</p>}
     <form onSubmit={event => void submit(event)} className="grid max-w-md gap-3">
-      {path === '/register' && <label>Name<input name="name" required autoComplete="name" /></label>}
-      {['/register', '/login', '/forgot-password'].includes(path) && <label>Email<input name="email" type="email" required autoComplete="email" /></label>}
-      {['/register', '/login', '/reset-password'].includes(path) && <label>{path === '/reset-password' ? 'New password' : 'Password'}<input name="password" type="password" minLength={8} required autoComplete={path === '/login' ? 'current-password' : 'new-password'} /></label>}
-      {['/register', '/reset-password'].includes(path) && <label>Confirm password<input name="confirm" type="password" required autoComplete="new-password" /></label>}
+      {path === '/register' && <label>Name<input className="mt-1 block w-full rounded border border-slate-400 bg-white px-3 py-2" name="name" required autoComplete="name" /></label>}
+      {['/register', '/login', '/forgot-password'].includes(path) && <label>Email<input className="mt-1 block w-full rounded border border-slate-400 bg-white px-3 py-2" name="email" type="email" required autoComplete="email" /></label>}
+      {['/register', '/login', '/reset-password'].includes(path) && <label>{path === '/reset-password' ? 'New password' : 'Password'}<input className="mt-1 block w-full rounded border border-slate-400 bg-white px-3 py-2" name="password" type="password" minLength={8} required autoComplete={path === '/login' ? 'current-password' : 'new-password'} /></label>}
+      {['/register', '/reset-password'].includes(path) && <label>Confirm password<input className="mt-1 block w-full rounded border border-slate-400 bg-white px-3 py-2" name="confirm" type="password" required autoComplete="new-password" /></label>}
       {path === '/logout' && <p>End your current session?</p>}
       {path === '/reset-password' && !token && <p>Open the reset link from your email.</p>}
       <Button type="submit" variant="primary" disabled={pending || (path === '/reset-password' && !token)}>{pending ? 'Please wait…' : ({ '/register': 'Create account', '/login': 'Log in', '/forgot-password': 'Send reset link', '/reset-password': 'Reset password', '/logout': 'Confirm log out' }[path])}</Button>

@@ -1,7 +1,8 @@
 import { act, cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createMemoryRouter, RouterProvider } from 'react-router';
+import { clearRegistrationInvite } from './registrationInvite';
 import { routes } from '../../app/routes';
 import { DataProvider } from '../../data/hooks';
 import { createHttpSources } from '../../data/http/createHttpSources';
@@ -39,6 +40,7 @@ async function setup(path: string, signedIn = true) {
   render(<DataProvider sources={sources}><RouterProvider router={router} /></DataProvider>);
   return { fetch, router };
 }
+beforeEach(() => { clearRegistrationInvite(); });
 afterEach(() => { cleanup(); localStorage.clear(); sessionStorage.clear(); });
 it('hides every demo surface on project detail while fetching the expanded timeline only', async () => {
   const { fetch } = await setup('/projects/prj_offers?run=run_3');
@@ -100,7 +102,7 @@ it('shows invitation-only registration errors without simulated copy', async () 
   await user.type(screen.getByLabelText('Password', { exact: true }), 'password-for-live-test'); await user.type(screen.getByLabelText('Confirm password'), 'password-for-live-test');
   fetch.mockResolvedValueOnce(new Response(JSON.stringify({ error: { message: 'This invitation is invalid or has expired' } }), { status: 403 }));
   await user.click(screen.getByRole('button', { name: 'Create account' }));
-  expect(await screen.findByText('This invitation is invalid or has expired')).toBeVisible();
+  expect(await screen.findByText('This invitation is invalid or has expired. Use the email address the invitation was sent to, or ask for a new invitation.')).toBeVisible();
   expect(screen.queryByText(/Registration does not create/)).not.toBeInTheDocument();
 });
 it('verifies the emailed token and removes it from the route after success', async () => {
@@ -137,4 +139,62 @@ it('signs out through HTTP and lands on login with a cleared session', async () 
   await screen.findByRole('heading', { name: 'Log in', level: 1 });
   expect(router.state.location.pathname).toBe('/login');
   expect(fetch.mock.calls.some(([path]) => path === '/api/auth/sign-out')).toBe(true);
+});
+
+
+it('keeps an invite across auth navigation without exposing it and clears it after signup', async () => {
+  const user = userEvent.setup();
+  const invite = 'inv_navigation_private';
+  const { router, fetch } = await setup(`/register?invite=${invite}&keep=yes#section`, false);
+  await screen.findByLabelText('Name');
+  const expectSecretAbsent = () => {
+    expect(router.state.location.search).not.toContain(invite);
+    expect(document.documentElement.innerHTML).not.toContain(invite);
+    expect(JSON.stringify({ ...localStorage, ...sessionStorage })).not.toContain(invite);
+    expect(document.cookie).not.toContain(invite);
+  };
+  expectSecretAbsent();
+  expect(screen.getByText("You're registering with an invitation. Use the email address the invitation was sent to.")).toBeVisible();
+  await user.click(screen.getByRole('link', { name: 'Log in' }));
+  expectSecretAbsent();
+  await user.click(screen.getByRole('link', { name: 'Forgot password' }));
+  expectSecretAbsent();
+  await user.click(screen.getByRole('link', { name: 'Register' }));
+  expectSecretAbsent();
+  const signup = async () => {
+    await user.type(screen.getByLabelText('Name'), 'New user');
+    await user.type(screen.getByLabelText('Email'), 'new@example.test');
+    await user.type(screen.getByLabelText('Password', { exact: true }), 'password-for-live-test');
+    await user.type(screen.getByLabelText('Confirm password'), 'password-for-live-test');
+    await user.click(screen.getByRole('button', { name: 'Create account' }));
+    await screen.findByText('Check your email for a verification link.');
+  };
+  await signup();
+  const signups = () => fetch.mock.calls.filter(([path]) => path === '/api/auth/sign-up/email').map(([, init]) => JSON.parse(String(init?.body)));
+  expect(signups()[0].invite).toBe(invite);
+  expect(screen.getByText('Registration is by invitation only. Open the invitation link from your email.')).toBeVisible();
+  expectSecretAbsent();
+  await user.click(screen.getByRole('link', { name: 'Log in' }));
+  await user.click(screen.getByRole('link', { name: 'Register' }));
+  await signup();
+  expect(signups()).toHaveLength(2);
+  expect(signups()[1]).not.toHaveProperty('invite');
+  expectSecretAbsent();
+});
+
+
+it.each(['/login', '/register', '/forgot-password', '/reset-password?token=synthetic-reset'])('styles every live field on %s with stacked full-width inputs', async path => {
+  await setup(path, false);
+  const inputs = document.querySelectorAll('form input');
+  expect(inputs.length).toBeGreaterThan(0);
+  for (const input of inputs) {
+    expect(input).toHaveClass('mt-1', 'block', 'w-full', 'rounded', 'border', 'border-slate-400', 'bg-white', 'px-3', 'py-2');
+    expect(input.closest('label')).not.toBeNull();
+  }
+});
+
+it('keeps no-invite registration usable for admin bootstrap', async () => {
+  await setup('/register', false);
+  expect(await screen.findByText('Registration is by invitation only. Open the invitation link from your email.')).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Create account' })).toBeEnabled();
 });
