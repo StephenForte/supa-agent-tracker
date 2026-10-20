@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { nextStepSummary } from '../derive';
 import type { NextStep, Project, WaitingNote } from '../types';
-import { agentFacingContext } from './agentContext';
+import { BASE_INSTRUCTION_DRAFT, agentFacingContext, gettingStartedState, newestPromptProject, projectPrompt } from './agentContext';
 
 function project(): Project {
   return {
@@ -44,5 +44,33 @@ describe('agentFacingContext', () => {
     expect(JSON.stringify(context)).not.toContain('run_secret');
     expect(context.remainingOpenSteps).toBe(0);
     expect(context.openSteps).toEqual([]);
+  });
+});
+
+describe('project prompt', () => {
+  it('starts with the project line and then the base draft verbatim', () => {
+    const prompt = projectPrompt({ id: 'prj_1', name: 'Offers' });
+    const line = 'Report to Supa Agent Tracker project "Offers" (project_id prj_1); use that id instead of matching by repository.';
+    expect(prompt.startsWith(`${line}\n`)).toBe(true);
+    expect(prompt.slice(line.length + 1)).toBe(BASE_INSTRUCTION_DRAFT);
+    expect(prompt).not.toContain('sat_');
+    expect(prompt).not.toContain('Bearer');
+  });
+
+  it('picks the newest non-archived project and scores 0, 1 and 2 done steps', () => {
+    const older = { ...project(), id: 'prj_old', name: 'Old', createdAt: '2026-10-01T00:00:00.000Z' };
+    const newer = { ...project(), id: 'prj_new', name: 'New', createdAt: '2026-10-18T00:00:00.000Z' };
+    const archived = { ...project(), id: 'prj_zzz', name: 'Archived', lifecycle: 'archived' as const, createdAt: '2026-10-19T00:00:00.000Z' };
+    expect(newestPromptProject([older, archived, newer])?.id).toBe('prj_new');
+    expect(newestPromptProject([archived])).toBeNull();
+    expect(gettingStartedState([], []).doneCount).toBe(0);
+    expect(gettingStartedState([older], []).doneCount).toBe(1);
+    expect(gettingStartedState([], [{ revokedAt: null }]).doneCount).toBe(1);
+    expect(gettingStartedState([older], [{ revokedAt: '2026-10-02T00:00:00.000Z' }]).doneCount).toBe(1);
+    const ready = gettingStartedState([older, newer], [{ revokedAt: '2026-10-02T00:00:00.000Z' }, { revokedAt: null }]);
+    expect(ready.doneCount).toBe(2);
+    expect(ready.steps.map(step => step.done)).toEqual([true, true, false]);
+    expect(ready.promptProject?.id).toBe('prj_new');
+    expect(gettingStartedState([older, newer], [{ revokedAt: null }]).steps[2]?.done).toBe(false);
   });
 });

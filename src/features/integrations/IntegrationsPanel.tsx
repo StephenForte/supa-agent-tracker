@@ -4,7 +4,7 @@ import { useDemoAccount } from '../../app/useDemoAccount';
 import { Button } from '../../components/ui/Button';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { useSourceQuery, useTrackerData } from '../../data/hooks';
-import { agentFacingContext, BASE_INSTRUCTION_DRAFT } from '../../domain/integrations/agentContext';
+import { agentFacingContext, BASE_INSTRUCTION_DRAFT, newestPromptProject, projectPrompt } from '../../domain/integrations/agentContext';
 import { CURSOR_HOOK_EXAMPLE, deploymentMcpUrl, integrationExamples } from '../../domain/integrations/examples';
 
 export function IntegrationsPanel() {
@@ -12,6 +12,7 @@ export function IntegrationsPanel() {
   const demo = useDemoAccount();
   const mcpUrl = deploymentMcpUrl(demo ? null : window.location.origin);
   const [copyStatus, setCopyStatus] = useState('');
+  const [promptProjectId, setPromptProjectId] = useState('');
   async function copy(value: string, label: string) {
     try { await navigator.clipboard.writeText(value); setCopyStatus(`${label} copied.`); }
     catch { setCopyStatus('Copy failed. Select the text and copy it manually.'); }
@@ -28,6 +29,8 @@ export function IntegrationsPanel() {
   }, [tracker, projectId, attempt]));
   if (projects.status === 'loading') return <p>Loading integration setup…</p>;
   if (projects.status === 'error') return <ErrorState message={projects.error.message} onRetry={() => setAttempt(value => value + 1)} />;
+  const promptProjects = [...projects.data].sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
+  const selectedPrompt = promptProjects.find(project => project.id === promptProjectId) ?? newestPromptProject(promptProjects);
   return <div className="flex min-w-0 flex-col gap-4">
     <p className="lede">Connect an agent with a project-scoped bearer token. Never put a token in chat or commit it.</p>
     <section className="slot min-w-0" aria-labelledby="connection-heading">
@@ -38,9 +41,18 @@ export function IntegrationsPanel() {
       <h3>Base reporting prompt</h3>
       <pre className="max-w-full whitespace-pre-wrap break-words rounded bg-slate-100 p-3 text-sm">{BASE_INSTRUCTION_DRAFT}</pre>
       <Button onClick={() => void copy(BASE_INSTRUCTION_DRAFT, 'Base prompt')}>Copy base prompt</Button>
+      <div className="mt-3 flex max-w-md flex-col gap-1">
+        <label htmlFor="prompt-project">Prompt project</label>
+        <select id="prompt-project" value={selectedPrompt?.id ?? ''} onChange={event => setPromptProjectId(event.target.value)} className="w-full rounded border border-slate-400 bg-white px-2 py-2">
+          {!selectedPrompt && <option value="">Choose a project</option>}
+          {promptProjects.map(project => <option key={project.id} value={project.id}>{project.name}{project.lifecycle === 'archived' ? ' (archived)' : ''}</option>)}
+        </select>
+      </div>
+      <Button className="mt-2 max-w-full whitespace-normal text-left" disabled={!selectedPrompt} onClick={() => { if (selectedPrompt) void copy(projectPrompt(selectedPrompt), 'Project prompt'); }}>Copy prompt for this project</Button>
+      {!selectedPrompt && <p>Create a project first.</p>}
       <p role="status" aria-live="polite">{copyStatus}</p>
     </section>
-    <div className="grid gap-4 md:grid-cols-3">
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
       {integrationExamples(mcpUrl).map(example => <article key={example.id} aria-label={example.name} className="slot min-w-0">
         <h2>{example.name}</h2>
         {demo && <p>{example.status}</p>}

@@ -13,6 +13,34 @@ export interface AgentFacingContext {
   waitingNote: string | null;
 }
 
+/** One leading line plus the unchanged base prompt. Holds the project id and name only. */
+export function projectPrompt(project: { id: string; name: string }): string {
+  return `Report to Supa Agent Tracker project "${project.name}" (project_id ${project.id}); use that id instead of matching by repository.\n${BASE_INSTRUCTION_DRAFT}`;
+}
+
+/** Most recently created project that is not archived. Later id wins a createdAt tie. */
+export function newestPromptProject<T extends { id: string; lifecycle: string; createdAt: string }>(projects: readonly T[]): T | null {
+  return projects
+    .filter(project => project.lifecycle !== 'archived')
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))[0] ?? null;
+}
+
+export interface GettingStartedStep { id: 'project' | 'token' | 'connect'; title: string; done: boolean }
+
+/**
+ * Steps 1 and 2 follow project and active-token data. Step 3 stays not done:
+ * a run is the signal that an agent connected, and any run hides this section.
+ */
+export function gettingStartedState(projects: readonly { id: string; name: string; lifecycle: string; createdAt: string }[], tokens: readonly { revokedAt: string | null }[]) {
+  const promptProject = newestPromptProject(projects);
+  const steps: GettingStartedStep[] = [
+    { id: 'project', title: 'Create a project', done: projects.length > 0 },
+    { id: 'token', title: 'Create an MCP token', done: tokens.some(token => token.revokedAt === null) },
+    { id: 'connect', title: 'Connect your agent and give it the prompt', done: false },
+  ];
+  return { steps, doneCount: steps.filter(step => step.done).length, promptProject };
+}
+
 /** Agent-facing preview built only from a project and its tracker handoff. Completed steps are omitted. */
 export function agentFacingContext(project: Project, handoff: ProjectNextSteps): AgentFacingContext {
   const summary = nextStepSummary(handoff.steps);
