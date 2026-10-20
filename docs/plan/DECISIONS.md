@@ -327,3 +327,10 @@ Status: **Confirmed by operator (2026-10-19)**: email via the existing Resend se
 - No web push (a possible later task). No per-project settings or quiet hours.
 - Task: P2-G.
 
+
+### D-038 — Invitee side of invite-only registration
+Status: **Planner decision (2026-10-19)**, from operator feedback (a friend's sign-up hit the generic invite error). Builds on D-022 and D-031; changes nothing server-side.
+- Once `/register?invite=…` loads, the invite stays attached in memory across in-app navigation between auth pages. It's cleared after a successful sign-up. It never goes to the URL (after the first load), the DOM or browser storage. A full reload may lose it, and that's accepted.
+- `/register` says whether an invite is attached. With one: use the invited email address. Without one: registration is by invitation; open the link. Submit stays enabled for the `ADMIN_EMAIL` bootstrap.
+- The client's 403 text adds the email-match hint and "ask for a new invitation". The server keeps one generic 403 body for every failure (D-031), so nothing becomes enumerable.
+- Not now: prefilling or locking the invited email (it needs a token lookup endpoint).
