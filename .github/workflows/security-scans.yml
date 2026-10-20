@@ -26,6 +26,12 @@ jobs:
       - name: Install Semgrep
         run: pip install semgrep
 
+      # semgrep ci exits 0 when it cannot log in, so a missing token would pass silently.
+      - name: Require Semgrep token
+        run: test -n "$SEMGREP_APP_TOKEN" || { echo "::error::SEMGREP_APP_TOKEN secret is missing or empty"; exit 1; }
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+
       - name: Run Semgrep CI
         run: semgrep ci
         env:
@@ -46,6 +52,7 @@ jobs:
         with:
           scan-type: 'fs'
           scan-ref: '.'
+          scanners: 'vuln,secret,misconfig'
           format: 'table'
           severity: 'HIGH,CRITICAL'
           exit-code: '1'
