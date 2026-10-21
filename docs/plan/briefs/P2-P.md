@@ -69,7 +69,7 @@ Every other key of the profile payload, the exact-key test, the query-count boun
 Server tests use the operator's Postgres.app (PostgreSQL 18, localhost:5432) the way the existing suites do; any database you create gets dropped at the end. State test-file and test counts before and after; unexplained movement is a finding. Existing checks may not be weakened, skipped or deleted. A test that encoded behaviour this task deliberately changes may change: declare it under EXISTING CHECKS MODIFIED with before, after, and why it's a strengthening.
 
 ## Stop and report
-If the task seems to need a file outside "Owns" / "Add only", or a change to the Contract, stop and report it under DECISIONS NEEDED instead of widening scope. If you think the approach is wrong, argue it with evidence rather than implementing it half-heartedly.
+If the task seems to need a file outside "Owns" / "Add only", or a change to any profile key other than the harnesses.series grouping and labels, stop and report it under DECISIONS NEEDED instead of widening scope. If you think the approach is wrong, argue it with evidence rather than implementing it half-heartedly.
 
 ## Hand-back — do all of these yourself, in order, without waiting to be asked
 - H1. Commit and push p2-p-harness-fold to StephenForte/supa-agent-tracker.
