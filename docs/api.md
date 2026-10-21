@@ -260,7 +260,7 @@ headers and bodies so URL query credentials cannot leak through logging.
 
 P1-C2. All of these routes use `requireUser`. Another user's project, agent or run is `404 not_found` with no `details` and no write. A successful body uses the field names and nesting in `src/domain/types.ts` (`Project`, `LogicalAgent`, `Run`, `RunEvent`, `PrReference`, `ToolAggregate`) so a later HTTP client can map them without renaming. `WriteResult` is not a response envelope: `2xx` is the resource, and `409 conflict` puts that resource at `error.details.current`. `GET` of a missing id is `404`, which a client can treat as the contract's `null`.
 
-`GET /api/account` returns `{ id, name, email, emailVerified, publicHandle, alerts }`. `name` is `users.display_name`. `publicHandle` is null until the owner sets one. `alerts` is `{ blocked, stale, review }`, each false until the owner opts in. There is no `demo` flag.
+`GET /api/account` returns `{ id, name, email, emailVerified, publicHandle, alerts, publicProfile }`. `name` is `users.display_name`. `publicHandle` is null until the owner sets one. `alerts` is `{ blocked, stale, review }`, each false until the owner opts in. `publicProfile` is `{ name, bio, github, x, linkedin, timezone, avatarUpdatedAt }`. The five text fields are null until set. `timezone` is `UTC` until set. `avatarUpdatedAt` is null until an avatar is stored, then an ISO-8601 timestamp. Avatar bytes are not in this body. There is no `demo` flag.
 
 Collections return `{ items, nextCursor }` using the pagination rules above. An empty `cursor` or `limit` is treated as omitted. Cursors are opaque and apply only to the same filters.
 
@@ -379,9 +379,47 @@ The live register screen captures `invite` in component memory, replaces the URL
 
 ## Account handle
 
-`PATCH /api/account` requires a browser session and a mutation body with `request_id` plus at least one of `publicHandle` and `alerts`. `publicHandle` is either `null` (clear the page) or 3–32 characters from `a-z`, `0-9` and `-`, starting and ending with a letter or number. The server trims and lowercases it before storing. A handle that differs only by case is the same handle: the second account gets `409 conflict` with message `That public handle is already taken` and no other account in the body. A bad format is `400 validation_error`. Omitting `publicHandle` leaves the handle unchanged.
+`PATCH /api/account` requires a browser session and a mutation body with `request_id` plus at least one of `publicHandle`, `alerts` and `publicProfile`. `publicHandle` is either `null` (clear the page) or 3–32 characters from `a-z`, `0-9` and `-`, starting and ending with a letter or number. The server trims and lowercases it before storing. A handle that differs only by case is the same handle: the second account gets `409 conflict` with message `That public handle is already taken` and no other account in the body. A bad format is `400 validation_error`. Omitting `publicHandle` leaves the handle unchanged.
 
-`alerts` is `{ blocked, stale, review }` with three booleans. Omitting it leaves the saved preferences unchanged. Each kind defaults to false, so a new account is not emailed. When a kind changes from false to true, every run that currently matches that kind for this user is recorded as a baseline in the same transaction and is not emailed. Turning a kind off stops further mail for it. Turning it back on baselines the runs that match at that moment. Sending the same preferences again does not baseline runs that started matching since the last change. Only a verified email address receives mail. The same `request_id` and body replays the original response. A different body is `409 idempotency_mismatch`. Success returns the same account object as `GET /api/account`, including `isAdmin`, `publicHandle` and `alerts`.
+`alerts` is `{ blocked, stale, review }` with three booleans. Omitting it leaves the saved preferences unchanged. Each kind defaults to false, so a new account is not emailed. When a kind changes from false to true, every run that currently matches that kind for this user is recorded as a baseline in the same transaction and is not emailed. Turning a kind off stops further mail for it. Turning it back on baselines the runs that match at that moment. Sending the same preferences again does not baseline runs that started matching since the last change. Only a verified email address receives mail. The same `request_id` and body replays the original response. A different body is `409 idempotency_mismatch`. Success returns the same account object as `GET /api/account`, including `isAdmin`, `publicHandle`, `alerts` and `publicProfile`.
+
+`publicProfile`, when sent, is `{ name, bio, github, x, linkedin, timezone }` and all six keys are required. `null` clears a text field. `name` is trimmed to 1–60 characters or null. `bio` is trimmed to 1–160 characters or null. `github` matches `^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$` or is null. `x` matches `^[A-Za-z0-9_]{1,15}$` or is null. `linkedin` matches `^[A-Za-z0-9-]{3,100}$` or is null. `timezone` is `UTC` or one of `Intl.supportedValuesOf('timeZone')`. Anything else, including a missing key or an unknown key, is `400 validation_error` and writes nothing. Omitting `publicProfile` leaves the profile columns unchanged. Sending `publicProfile` does not change `publicHandle` or `alerts`, and sending those does not change the profile columns. It uses the same `request_id` idempotency path as the other account fields.
+
+## Avatar
+
+`PUT /api/account/avatar` and `DELETE /api/account/avatar` use the same browser-session guard as `PATCH /api/account`. An MCP bearer token is not a session: a request that presents only a bearer token is `401 unauthenticated`. There is no `request_id`. Neither route writes an audit row.
+
+`PUT` sends the raw image bytes. `Content-Type` must be `image/png`, `image/jpeg` or `image/webp`, and the body must be at most 262144 bytes. Any other type, including `image/svg+xml`, `multipart/form-data` and `text/plain`, is `415` with `validation_error` and message `Unsupported media type`. A larger body is `413` `payload_too_large` with message `Avatar exceeds the size limit`. An empty body, or magic bytes that do not match the declared type (PNG `89 50 4E 47 0D 0A 1A 0A`, JPEG `FF D8 FF`, WebP `RIFF` at bytes 0–3 and `WEBP` at bytes 8–11), is `400 validation_error` and is not stored. Success replaces any previous avatar and returns the account object. The stored SHA-256 is the hash of those bytes.
+
+`DELETE` removes the avatar and returns the account object. Deleting when there is no avatar is still `200`.
+
+The image parsers and the 262144-byte limit are registered only on `PUT /api/account/avatar`. Every other route keeps the global 1 MiB JSON limit.
+
+## Public profile
+
+`GET /api/public/:handle/profile` is unauthenticated. It does not read a session cookie or an MCP credential, and it is not an MCP tool. `Cache-Control` is `no-store`. It uses the same per-IP limiter as `GET /api/public/:handle/agents` (60 requests per 60 seconds, then `429` `rate_limited` with `Retry-After: 60`), so the two routes share one budget. An unknown handle, a malformed handle, and a handle whose owner has no public non-archived project all return the same `404` body as the agents route.
+
+The response is built field by field. These are the only keys:
+
+| Object | Keys |
+|---|---|
+| Root | `owner`, `stats`, `activity`, `harnesses` |
+| `owner` | `handle`, `name`, `bio`, `links`, `joinedAt`, `avatarUrl` |
+| `links` | `github`, `x`, `linkedin` |
+| `stats` | `agentRuns`, `longestRunSeconds`, `currentStreakDays`, `longestStreakDays` |
+| `activity` | `start`, `end`, `counts` |
+| `harnesses` | `start`, `end`, `series` |
+| series item | `harness`, `counts` |
+
+`joinedAt` is `users.created_at` as ISO-8601. `avatarUrl` is `/api/public/<handle>/avatar?v=<first 16 hex chars of the avatar sha256>`, or null when there is no avatar. `name`, `bio` and the link fields are the stored profile values, or null. They are not the account display name or email.
+
+Stats, the heatmap and the harness chart count runs on this owner's `is_public` projects whose lifecycle is not `archived`, including subagent runs, for all time. Private projects, archived projects and other owners are absent. `agentRuns` is the count of those runs. `longestRunSeconds` is `floor` of the maximum of `coalesce(finished_at, last_contact_at) - started_at`, or 0 when there are no runs. An active day is an owner-zone calendar day with at least one run started. `currentStreakDays` is the consecutive active days ending today, or ending yesterday when today has none, otherwise 0. `longestStreakDays` is the longest such run.
+
+`activity.start` and `activity.end` are `YYYY-MM-DD` dates in the owner's profile timezone. `end` is today there. `counts` has 365 entries for `start` through `end` inclusive. `counts[i]` is how many runs started on that day. Days are bucketed with `started_at AT TIME ZONE <zone>`, not the process timezone.
+
+`harnesses` covers the last 30 owner-zone days ending today. Each `counts` array has length 30. At most five series are returned: the top four harnesses by 30-day total (descending, then name ascending on a tie), then `Other` for the rest when that remainder is non-zero. A null harness is labelled `Unknown`. A series whose total is zero is omitted. `Other` is last.
+
+`GET /api/public/:handle/avatar` returns the stored bytes and the stored `Content-Type`. Response headers are `X-Content-Type-Options: nosniff`, `Content-Security-Policy: default-src 'none'; sandbox`, `ETag: "<full sha256 hex>"` and `Cache-Control: no-cache`. `If-None-Match` equal to that ETag returns `304`. The `404` body matches the profile `404`, including when the profile exists but no avatar is stored. This route has its own per-IP limiter with the same 60/60s budget, separate from the agents and profile limiter. A miss still sends `Cache-Control: no-store`.
 
 ## Public agents
 

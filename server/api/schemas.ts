@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { REQUEST_ID_PATTERN } from '../app/conventions.js';
+import { isProfileTimezone, PUBLIC_BIO_MAX, PUBLIC_GITHUB_PATTERN, PUBLIC_LINKEDIN_PATTERN, PUBLIC_NAME_MAX, PUBLIC_X_PATTERN } from '../public/fields.js';
 import { PUBLIC_HANDLE_PATTERN } from '../public/handle.js';
 
 /** Bounds chosen for P1-C2 and recorded in docs/api.md. They are not a schema migration. */
@@ -107,11 +108,24 @@ export const alertPreferencesSchema = z.strictObject({
   review: z.boolean(),
 });
 
+const nullableTrimmed = (max: number) => z.union([z.null(), z.string().trim().min(1).max(max)]);
+const nullablePattern = (pattern: RegExp) => z.union([z.null(), z.string().regex(pattern)]);
+
+export const publicProfileSchema = z.strictObject({
+  name: nullableTrimmed(PUBLIC_NAME_MAX),
+  bio: nullableTrimmed(PUBLIC_BIO_MAX),
+  github: nullablePattern(PUBLIC_GITHUB_PATTERN),
+  x: nullablePattern(PUBLIC_X_PATTERN),
+  linkedin: nullablePattern(PUBLIC_LINKEDIN_PATTERN),
+  timezone: z.string().refine(isProfileTimezone),
+});
+
 export const patchAccountSchema = z.strictObject({
   publicHandle: z.union([z.null(), publicHandleSchema]).optional(),
   alerts: alertPreferencesSchema.optional(),
+  publicProfile: publicProfileSchema.optional(),
   request_id: requestIdSchema,
-}).refine((value) => value.publicHandle !== undefined || value.alerts !== undefined);
+}).refine((value) => value.publicHandle !== undefined || value.alerts !== undefined || value.publicProfile !== undefined);
 
 export const closeRunSchema = z.strictObject({
   outcome: z.enum(['failed', 'cancelled']),

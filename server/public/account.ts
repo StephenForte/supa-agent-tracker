@@ -17,6 +17,15 @@ export interface AccountRow {
 
 export type HandleUpdate = { status: 'saved'; user: AccountRow } | { status: 'taken' };
 
+export interface PublicProfileInput {
+  name: string | null;
+  bio: string | null;
+  github: string | null;
+  x: string | null;
+  linkedin: string | null;
+  timezone: string;
+}
+
 const accountColumns = {
   id: users.id,
   displayName: users.displayName,
@@ -48,4 +57,18 @@ export async function setPublicHandle(db: Database, access: UserAccess, handle: 
     if (postgresCode(error) === '23505') return { status: 'taken' };
     throw error;
   }
+}
+
+/** Writes profile text and timezone only. public_handle and alert flags stay as they are. */
+export async function setPublicProfile(db: Database, access: UserAccess, profile: PublicProfileInput): Promise<void> {
+  requireUser(access);
+  await db.update(users).set({
+    publicName: profile.name,
+    publicBio: profile.bio,
+    publicGithub: profile.github,
+    publicX: profile.x,
+    publicLinkedin: profile.linkedin,
+    profileTimezone: profile.timezone,
+    updatedAt: new Date(),
+  }).where(eq(users.id, access.userId));
 }

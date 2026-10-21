@@ -1,0 +1,75 @@
+import { describe, expect, it } from 'vitest';
+
+import { activityWindow, calendarDate, currentStreakDays, formatCalendarDate, harnessSeries, harnessWindow, longestStreakDays } from './stats.js';
+
+const noon = new Date('2026-10-21T18:00:00.000Z');
+
+describe('profile day and streak math', () => {
+  it('places 2026-10-21T06:30Z on the previous Los Angeles date and the same UTC date', () => {
+    const instant = new Date('2026-10-21T06:30:00.000Z');
+    expect(formatCalendarDate(calendarDate(instant, 'America/Los_Angeles'))).toBe('2026-10-20');
+    expect(formatCalendarDate(calendarDate(instant, 'UTC'))).toBe('2026-10-21');
+  });
+
+  it('keeps a streak that ends yesterday and drops it after a missed day', () => {
+    expect(currentStreakDays(new Set(['2026-10-19', '2026-10-20']), 'UTC', noon)).toBe(2);
+    expect(currentStreakDays(new Set(['2026-10-18', '2026-10-19']), 'UTC', noon)).toBe(0);
+    expect(longestStreakDays(new Set(['2026-10-18', '2026-10-19']))).toBe(2);
+    const early = new Date('2026-10-21T06:30:00.000Z');
+    expect(currentStreakDays(new Set(['2026-10-20']), 'America/Los_Angeles', early)).toBe(1);
+    expect(currentStreakDays(new Set(['2026-10-21']), 'America/Los_Angeles', early)).toBe(0);
+    expect(currentStreakDays(new Set(['2026-10-21']), 'UTC', early)).toBe(1);
+  });
+
+  it('counts a 5-day run and a later 2-day run ending today', () => {
+    const active = new Set(['2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04', '2026-10-05', '2026-10-20', '2026-10-21']);
+    expect(currentStreakDays(active, 'UTC', noon)).toBe(2);
+    expect(longestStreakDays(active)).toBe(5);
+  });
+
+  it('builds a 365-day window ending on the owner-zone today, including across DST', () => {
+    const utc = activityWindow(noon, 'UTC');
+    expect(utc.end).toBe('2026-10-21');
+    expect(utc.dates).toHaveLength(365);
+    expect(new Set(utc.dates).size).toBe(365);
+    expect(utc.dates[0]).toBe(utc.start);
+    expect(utc.dates.at(-1)).toBe(utc.end);
+
+    const spring = activityWindow(new Date('2026-03-10T12:00:00.000Z'), 'America/Los_Angeles');
+    expect(spring.end).toBe('2026-03-10');
+    expect(spring.dates).toHaveLength(365);
+    expect(new Set(spring.dates).size).toBe(365);
+    expect(spring.dates).toContain('2026-03-08');
+
+    const fall = activityWindow(new Date('2026-11-02T12:00:00.000Z'), 'America/Los_Angeles');
+    expect(fall.end).toBe('2026-11-02');
+    expect(fall.dates).toHaveLength(365);
+    expect(new Set(fall.dates).size).toBe(365);
+    expect(fall.dates).toContain('2026-11-01');
+    expect(harnessWindow(noon, 'America/Los_Angeles').dates).toHaveLength(30);
+  });
+
+  it('keeps the top 4 harnesses, breaks ties by name, labels a null harness Unknown, and folds the rest into Other', () => {
+    const dates = ['2026-10-20', '2026-10-21'];
+    const six = harnessSeries([
+      { harness: 'n', day: dates[1]!, count: 10 },
+      { harness: 'm', day: dates[1]!, count: 9 },
+      { harness: 'b', day: dates[0]!, count: 8 },
+      { harness: 'a', day: dates[1]!, count: 7 },
+      { harness: 'z', day: dates[1]!, count: 2 },
+      { harness: 'y', day: dates[0]!, count: 1 },
+      { harness: 'quiet', day: dates[1]!, count: 0 },
+    ], dates);
+    expect(six.map((series) => series.harness)).toEqual(['n', 'm', 'b', 'a', 'Other']);
+    expect(six[0]?.counts).toEqual([0, 10]);
+    expect(six[4]?.counts).toEqual([1, 2]);
+    expect(six.every((series) => series.counts.length === 2)).toBe(true);
+
+    const tied = harnessSeries([
+      { harness: 'bravo', day: dates[1]!, count: 5 },
+      { harness: 'alpha', day: dates[1]!, count: 5 },
+      { harness: null, day: dates[1]!, count: 9 },
+    ], dates);
+    expect(tied.map((series) => series.harness)).toEqual(['Unknown', 'alpha', 'bravo']);
+  });
+});

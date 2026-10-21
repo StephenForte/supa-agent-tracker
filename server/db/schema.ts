@@ -1,5 +1,11 @@
 import { sql } from 'drizzle-orm';
-import { pgTable, text, integer, boolean, timestamp, jsonb, check, unique, uniqueIndex, index, primaryKey, foreignKey } from 'drizzle-orm/pg-core';
+import { pgTable, text, integer, boolean, timestamp, jsonb, check, unique, uniqueIndex, index, primaryKey, foreignKey, customType } from 'drizzle-orm/pg-core';
+
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType() {
+    return 'bytea';
+  },
+});
 
 export const users = pgTable('users', {
   id: text('id').primaryKey().default(sql`gen_random_uuid()::text`),
@@ -9,6 +15,12 @@ export const users = pgTable('users', {
   timezone: text('timezone').notNull().default('UTC'),
   image: text('image'),
   publicHandle: text('public_handle'),
+  publicName: text('public_name'),
+  publicBio: text('public_bio'),
+  publicGithub: text('public_github'),
+  publicX: text('public_x'),
+  publicLinkedin: text('public_linkedin'),
+  profileTimezone: text('profile_timezone').notNull().default('UTC'),
   alertBlocked: boolean('alert_blocked').notNull().default(false),
   alertStale: boolean('alert_stale').notNull().default(false),
   alertReview: boolean('alert_review').notNull().default(false),
@@ -18,6 +30,27 @@ export const users = pgTable('users', {
   uniqueIndex('users_email_ci').on(sql`lower(${t.email})`),
   uniqueIndex('users_public_handle_ci').on(sql`lower(${t.publicHandle})`),
   check('users_public_handle_format', sql`${t.publicHandle} IS NULL OR ${t.publicHandle} ~ '^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$'`),
+  check('users_public_name_format', sql`${t.publicName} IS NULL OR (char_length(${t.publicName}) BETWEEN 1 AND 60 AND ${t.publicName} !~ '^[[:space:]]' AND ${t.publicName} !~ '[[:space:]]$')`),
+  check('users_public_bio_format', sql`${t.publicBio} IS NULL OR (char_length(${t.publicBio}) BETWEEN 1 AND 160 AND ${t.publicBio} !~ '^[[:space:]]' AND ${t.publicBio} !~ '[[:space:]]$')`),
+  check('users_public_github_format', sql`${t.publicGithub} IS NULL OR ${t.publicGithub} ~ '^[A-Za-z0-9][A-Za-z0-9-]{0,38}$'`),
+  check('users_public_x_format', sql`${t.publicX} IS NULL OR ${t.publicX} ~ '^[A-Za-z0-9_]{1,15}$'`),
+  check('users_public_linkedin_format', sql`${t.publicLinkedin} IS NULL OR ${t.publicLinkedin} ~ '^[A-Za-z0-9-]{3,100}$'`),
+  check('users_profile_timezone_format', sql`${t.profileTimezone} ~ '^[A-Za-z0-9_+/-]{1,100}$'`),
+]);
+
+/** Avatar bytes live off the users row so account reads never load them. */
+export const userAvatars = pgTable('user_avatars', {
+  userId: text('user_id').primaryKey(),
+  contentType: text('content_type').notNull(),
+  bytes: bytea('bytes').notNull(),
+  byteSize: integer('byte_size').notNull(),
+  sha256: text('sha256').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+}, (t) => [
+  foreignKey({ name: 'user_avatars_user_fk', columns: [t.userId], foreignColumns: [users.id] }).onDelete('cascade'),
+  check('user_avatars_content_type', sql`${t.contentType} IN ('image/png', 'image/jpeg', 'image/webp')`),
+  check('user_avatars_byte_size', sql`${t.byteSize} BETWEEN 1 AND 262144 AND ${t.byteSize} = octet_length(${t.bytes})`),
+  check('user_avatars_sha256', sql`${t.sha256} ~ '^[0-9a-f]{64}$'`),
 ]);
 
 export const projects = pgTable('projects', {

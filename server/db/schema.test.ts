@@ -44,7 +44,7 @@ describe('0001 schema', () => {
       expect(row.data_type === 'ARRAY' ? `${row.udt_name.slice(1)}[]` : row.data_type).toBe(column.type);
     }
   });
-  it('allows only reviewed auth secret columns and invite hashes, with RESTRICT invite FKs and no cascading FKs', async () => {
+  it('allows only reviewed auth secret columns and invite hashes, with RESTRICT invite FKs and only the avatar cascade', async () => {
     const inviteColumns = await pool.query("SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name='invites' ORDER BY column_name");
     expect(inviteColumns.rows.map(row => row.column_name)).toEqual(['created_at', 'email', 'expires_at', 'id', 'invited_by', 'revoked_at', 'token_hash', 'used_at', 'used_by']);
     const inviteFks = await pool.query("SELECT confrelid::regclass::text AS target, confdeltype FROM pg_constraint WHERE conrelid='invites'::regclass AND contype='f'");
@@ -63,6 +63,12 @@ describe('0001 schema', () => {
       'mcp_credentials.token_hash', // Existing P1-B1 supplied MCP credential hash.
     ]);
     expect(sensitive.rows.filter((row) => !allowed.has(`${row.table_name}.${row.column_name}`))).toEqual([]);
-    expect((await pool.query(`SELECT conname FROM pg_constraint WHERE contype='f' AND confdeltype='c' AND connamespace='public'::regnamespace`)).rows).toEqual([]);
+    const cascades = await pool.query<{ conname: string; source: string; target: string }>(
+      `SELECT conname, conrelid::regclass::text AS source, confrelid::regclass::text AS target
+       FROM pg_constraint
+       WHERE contype = 'f' AND confdeltype = 'c' AND connamespace = 'public'::regnamespace
+       ORDER BY conname`,
+    );
+    expect(cascades.rows).toEqual([{ conname: 'user_avatars_user_fk', source: 'user_avatars', target: 'users' }]);
   });
 });

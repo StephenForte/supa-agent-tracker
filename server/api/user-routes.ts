@@ -26,7 +26,9 @@ import {
   toRunPatch,
 } from './map.js';
 import { applyAlertPreferences } from '../alerts/preferences.js';
-import { setPublicHandle } from '../public/account.js';
+import { setPublicHandle, setPublicProfile } from '../public/account.js';
+import { deleteUserAvatar, putUserAvatar } from '../public/avatar.js';
+import { AVATAR_MAX_BYTES, avatarMagicMatches, avatarMediaType } from '../public/image.js';
 import {
   closeRunSchema,
   markRunDoneSchema,
@@ -65,6 +67,7 @@ export async function registerUserApiRoutes(app: FastifyInstance, deps: { pool: 
         }
       }
       if (body.alerts) await applyAlertPreferences(tx, access.userId, body.alerts, new Date());
+      if (body.publicProfile !== undefined) await setPublicProfile(tx, access, body.publicProfile);
       return { statusCode: 200, payload: accountBody(toAccount(await readAccount(tx, access))) };
     });
   }));
@@ -177,6 +180,56 @@ export async function registerUserApiRoutes(app: FastifyInstance, deps: { pool: 
       return { statusCode: 200, payload: detailFromGetRun(await getRun(tx, access, owned.projectId, runId)) };
     });
   }));
+
+  app.delete('/api/account/avatar', guard, (request, reply) => handle(reply, async () => {
+    const access = accessOf(request);
+    await deleteUserAvatar(db, access);
+    return reply.send(accountBody(toAccount(await readAccount(db, access)))); // nosemgrep: javascript.express.security.audit.xss.direct-response-write.direct-response-write plain object → Fastify JSON serialiser
+  }));
+
+  await app.register(async function accountAvatar(scope) {
+    scope.addHook('preParsing', async (request, _reply, payload) => {
+      const header = request.headers['content-type'];
+      const raw = Array.isArray(header) ? header[0] : header;
+      if (avatarMediaType(raw)) return payload;
+      const error = new Error('Unsupported media type');
+      Object.assign(error, { statusCode: 415 });
+      throw error;
+    });
+    scope.addContentTypeParser(
+      ['image/png', 'image/jpeg', 'image/webp'],
+      { parseAs: 'buffer', bodyLimit: AVATAR_MAX_BYTES },
+      (_request, body, done) => { done(null, body); },
+    );
+    scope.setErrorHandler((error, request, reply) => {
+      if (reply.sent) return;
+      const statusCode = typeof error === 'object' && error !== null && 'statusCode' in error && typeof error.statusCode === 'number' ? error.statusCode : 500;
+      const code = typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'string' ? error.code : undefined;
+      if (statusCode === 413 || code === 'FST_ERR_CTP_BODY_TOO_LARGE') {
+        return reply.code(413).send(apiError(errorCodes.payload_too_large, 'Avatar exceeds the size limit'));
+      }
+      if (statusCode === 415) {
+        return reply.code(415).send(apiError(errorCodes.validation_error, 'Unsupported media type'));
+      }
+      if (statusCode >= 500) {
+        request.log.error('avatar request failed');
+        return reply.code(500).send(apiError(errorCodes.internal_error, 'Internal server error'));
+      }
+      return reply.code(statusCode).send(apiError(errorCodes.validation_error, 'Request could not be processed'));
+    });
+    scope.put('/api/account/avatar', { bodyLimit: AVATAR_MAX_BYTES, preHandler: requireUser }, (request, reply) => handle(reply, async () => {
+      const header = request.headers['content-type'];
+      const raw = Array.isArray(header) ? header[0] : header;
+      const type = avatarMediaType(raw);
+      const body = request.body;
+      if (!type || !Buffer.isBuffer(body) || !avatarMagicMatches(type, body)) {
+        return reply.code(400).send(apiError(errorCodes.validation_error, 'Request could not be processed'));
+      }
+      const access = accessOf(request);
+      await putUserAvatar(db, access, type, body);
+      return reply.send(accountBody(toAccount(await readAccount(db, access)))); // nosemgrep: javascript.express.security.audit.xss.direct-response-write.direct-response-write plain object → Fastify JSON serialiser
+    }));
+  });
 }
 
 function accessOf(request: FastifyRequest): UserAccess {
