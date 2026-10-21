@@ -92,7 +92,7 @@ export async function registerUserApiRoutes(app: FastifyInstance, deps: { pool: 
 
   app.get<{ Params: { projectId: string } }>('/api/projects/:projectId', guard, (request, reply) => handle(reply, async () => {
     const row = await getProject(db, accessOf(request), request.params.projectId);
-    return reply.send(toProject(row));
+    return reply.send(toProject(row)); // nosemgrep: javascript.express.security.audit.xss.direct-response-write.direct-response-write plain object → Fastify JSON serialiser
   }));
 
   app.patch<{ Params: { projectId: string } }>('/api/projects/:projectId', guard, (request, reply) => handle(reply, async () => {
@@ -125,7 +125,7 @@ export async function registerUserApiRoutes(app: FastifyInstance, deps: { pool: 
     const access = accessOf(request);
     const owned = await findOwnedRun(db, access, request.params.runId);
     const row = await getRun(db, access, owned.projectId, request.params.runId);
-    return reply.send(detailFromGetRun(row));
+    return reply.send(detailFromGetRun(row)); // nosemgrep: javascript.express.security.audit.xss.direct-response-write.direct-response-write plain object → Fastify JSON serialiser
   }));
 
   app.patch<{ Params: { runId: string } }>('/api/runs/:runId', guard, (request, reply) => handle(reply, async () => {

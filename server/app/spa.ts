@@ -25,6 +25,6 @@ export async function registerSpa(app: FastifyInstance, spaRoot: string): Promis
     if (isReservedPath(pathname)) {
       return reply.code(404).send(apiError(errorCodes.not_found, 'Not found'));
     }
-    return reply.sendFile('index.html');
+    return reply.sendFile('index.html'); // nosemgrep: javascript.express.security.audit.express-res-sendfile.express-res-sendfile constant filename, request path not used
   });
 }

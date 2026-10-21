@@ -24,6 +24,10 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
 
   app.addHook('onRequest', async (request, reply) => {
     reply.header('x-request-id', request.id);
+    // Set before any handler writes. /mcp hijacks reply.raw and skips Fastify's
+    // send pipeline, so the raw header has to already be on the socket.
+    reply.header('x-content-type-options', 'nosniff');
+    reply.raw.setHeader('X-Content-Type-Options', 'nosniff');
   });
 
   app.setErrorHandler((error, request, reply) => {
