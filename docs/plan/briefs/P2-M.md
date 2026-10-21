@@ -10,7 +10,7 @@ Teardown: after the push and green CI, stop your processes, drop your databases,
 # P2-M — Public profile: server (migration 0008, profile fields, avatar, profile endpoint)
 
 ## Why (operator, 2026-10-21)
-"Update the Public Agents page to be a profile similar to Cursor's, include the ability to upload an image/avatar as well as show the public agents in a table/grid format. Include the streaks, etc like Cursor: https://cursor.com/@stevef". That page shows: avatar, name, @handle, "Joined 498 days ago", X/GitHub/LinkedIn links, four tiles (Longest Agent 4h · Agents 218 · Longest Streak 102d · Current Streak 102d), a year heatmap of daily activity, a tokens chart, and an agents-per-day chart split Local/Cloud. The planner's decision is D-039; it's on the planner docs branch (PR #74), not main, so **this brief is the full spec**. P2-N builds the page and settings UI in parallel against the Contract below.
+"Update the Public Agents page to be a profile similar to Cursor's, include the ability to upload an image/avatar as well as show the public agents in a table/grid format. Include the streaks, etc like Cursor: https://cursor.com/@stevef". That page shows: avatar, name, @handle, "Joined 498 days ago", X/GitHub/LinkedIn links, four tiles (Longest Agent 4h · Agents 218 · Longest Streak 102d · Current Streak 102d), a year heatmap of daily activity, a tokens chart, and an agents-per-day chart split Local/Cloud. The planner's decision is D-040; it's on the planner docs branch (PR #74), not main, so **this brief is the full spec**. P2-N builds the page and settings UI in parallel against the Contract below.
 
 ## Read first (trust the repository over this brief)
 AGENTS.md (gate, hygiene); docs/plan/DECISIONS.md D-035 (public page rules: opt-in, allowlist, identical 404, rate limit, no-store, no IDs), D-010 (no deps), D-033 (idempotency). Code: server/public/{read,routes,handle,limit,account}.ts and public.test.ts (the exact-key allowlist tests to copy), server/api/{user-routes,schemas,map}.ts (PATCH /api/account with publicHandle + alerts), server/repo/views.ts (readAccount), server/db/schema.ts, server/db/migrations/0006_public_pages.sql and 0007_alerts.sql (style), server/app/build-app.ts (bodyLimit 1 MiB, global nosniff from P2-L), server/app/auth-context.ts (requireUser), docs/api.md.
@@ -38,9 +38,9 @@ Branch p2-m-profile-server, cut from origin/main. PR title "P2-M: Public profile
 
 ## Pre-assigned identifiers (override any "next number" convention; stop and ask if taken)
 - Migration: server/db/migrations/0008_public_profile.sql (0007_alerts is the latest on main).
-- Decision: D-039 (already written by the planner; cite it, don't add to DECISIONS.md).
+- Decision: D-040 (already written by the planner; cite it, don't add to DECISIONS.md).
 
-## Contract (D-039) — identical text in the P2-M and P2-N briefs. Neither task changes it alone; a needed change is a DECISIONS NEEDED item.
+## Contract (D-040) — identical text in the P2-M and P2-N briefs. Neither task changes it alone; a needed change is a DECISIONS NEEDED item.
 Account body (GET /api/account and every PATCH/PUT/DELETE account response) gains:
     publicProfile: { name: string|null, bio: string|null, github: string|null, x: string|null, linkedin: string|null, timezone: string, avatarUpdatedAt: string|null (ISO 8601) }
 PATCH /api/account body gains optional `publicProfile: { name, bio, github, x, linkedin, timezone }`. When present, all six keys are required. null clears a text field. Same request_id idempotency as publicHandle and alerts today. 400 validation_error unless:
@@ -90,7 +90,7 @@ D-035's rules and GET /api/public/:handle/agents byte-for-byte (its tests unchan
 - Any client code under src/** — P2-N owns it and is building against the Contract now.
 - Image resizing/transcoding on the server — it needs a dependency (D-010); the client re-encodes and the server validates.
 - Search indexing — still noindex per D-035, operator's call.
-- Token usage — the tracker doesn't collect it (D-039).
+- Token usage — the tracker doesn't collect it (D-040).
 
 ## Scope
 - Owns: server/db/migrations/0008_public_profile.sql (new), server/public/** (new files and edits), docs/api.md.
