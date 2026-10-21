@@ -20,58 +20,64 @@ export function PublicProfileForm({ account }: { account: Account }) {
   const [pending, setPending] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const preview = useRef<string | null>(null);
+  const busy = useRef(false);
   useEffect(() => () => { if (preview.current) URL.revokeObjectURL(preview.current); }, []);
   function replacePreview(next: string | null) {
     if (preview.current) URL.revokeObjectURL(preview.current);
     preview.current = next;
     setPreviewUrl(next);
   }
+  function occupy(): boolean {
+    if (busy.current) return false;
+    busy.current = true;
+    setPending(true);
+    setMessage('');
+    return true;
+  }
+  function release() {
+    busy.current = false;
+    setPending(false);
+  }
   async function save() {
-    if (pending) return;
+    if (!occupy()) return;
     const input = profileInputFromFields({ name, bio, github, x, linkedin, timezone });
     const nextErrors = profileErrors(input);
     setErrors(nextErrors);
-    if (Object.keys(nextErrors).length > 0) { setMessage(''); return; }
-    setPending(true);
-    setMessage('');
+    if (Object.keys(nextErrors).length > 0) { release(); return; }
     try {
       const result = await tracker.updateAccount({ publicProfile: input });
       setMessage(result.status === 'saved' ? 'Public profile saved.' : result.message);
     } catch {
       setMessage('The public profile could not be saved. Try again.');
     } finally {
-      setPending(false);
+      release();
     }
   }
   async function onPick(file: File | undefined) {
-    if (!file || pending) return;
-    setMessage('');
+    if (!file || !occupy()) return;
     try {
       await uploadAvatarFile(file, async blob => {
-        const url = URL.createObjectURL(blob);
-        replacePreview(url);
-        setPending(true);
         const result = await tracker.uploadAvatar(blob);
-        setMessage(result.status === 'saved' ? 'Avatar saved.' : result.message);
+        if (result.status !== 'saved') { setMessage(result.message); return; }
+        replacePreview(URL.createObjectURL(blob));
+        setMessage('Avatar saved.');
       });
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not prepare the image.');
     } finally {
-      setPending(false);
+      release();
     }
   }
   async function removeAvatar() {
-    if (pending) return;
-    setPending(true);
-    setMessage('');
+    if (!occupy()) return;
     try {
       const result = await tracker.removeAvatar();
-      replacePreview(null);
+      if (result.status === 'saved') replacePreview(null);
       setMessage(result.status === 'saved' ? 'Avatar removed.' : result.message);
     } catch {
       setMessage('The avatar could not be removed. Try again.');
     } finally {
-      setPending(false);
+      release();
     }
   }
   const zones = timezoneOptions();

@@ -85,4 +85,51 @@ describe('avatar upload', () => {
     expect(created).toEqual([canvasBlob]);
     expect(created).not.toContain(file);
   });
+
+  it('does not preview a rejected upload or start a second one while preparing', async () => {
+    const canvasBlob = new Blob([new Uint8Array([9])], { type: 'image/webp' });
+    stubCanvas(canvasBlob);
+    const file = new File([new Uint8Array([1, 2, 3, 4])], 'phone.jpg', { type: 'image/jpeg' });
+    const created: unknown[] = [];
+    vi.spyOn(URL, 'createObjectURL').mockImplementation(value => { created.push(value); return 'blob:preview'; });
+    const fetch = vi.fn<typeof globalThis.fetch>(async () => json({ error: { message: 'The image could not be stored.' } }, 400));
+    const sources = createHttpSources({ fetch });
+    render(<MemoryRouter><DataProvider sources={sources}><PublicProfileForm account={account} /></DataProvider></MemoryRouter>);
+    await userEvent.upload(screen.getByLabelText('Avatar'), file);
+    expect(await screen.findByText('The image could not be stored.')).toBeVisible();
+    expect(screen.queryByRole('img', { name: 'Avatar preview' })).not.toBeInTheDocument();
+    expect(created).toEqual([]);
+    expect(fetch.mock.calls[0]?.[1]?.body).toBe(canvasBlob);
+    expect(fetch.mock.calls[0]?.[1]?.body).not.toBe(file);
+  });
+
+  it('ignores a second file while the first image is still being prepared', async () => {
+    const canvasBlob = new Blob([new Uint8Array([9])], { type: 'image/webp' });
+    stubCanvas(canvasBlob);
+    let release = () => {};
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    let started = false;
+    const decode = vi.fn(async () => {
+      started = true;
+      await gate;
+      return { width: 8, height: 8, close() {} };
+    });
+    vi.stubGlobal('createImageBitmap', decode);
+    const fetch = vi.fn<typeof globalThis.fetch>(async () => json({ ...account, publicProfile: { ...emptyPublicProfile(), avatarUpdatedAt: '2026-10-21T00:00:00.000Z' } }));
+    const sources = createHttpSources({ fetch });
+    render(<MemoryRouter><DataProvider sources={sources}><PublicProfileForm account={account} /></DataProvider></MemoryRouter>);
+    const input = screen.getByLabelText('Avatar');
+    const first = new File([new Uint8Array([5])], 'other.jpg', { type: 'image/jpeg' });
+    const second = new File([new Uint8Array([6])], 'third.jpg', { type: 'image/jpeg' });
+    const running = userEvent.upload(input, first);
+    await vi.waitFor(() => expect(started).toBe(true));
+    await running;
+    await userEvent.upload(input, second);
+    release();
+    expect(await screen.findByText('Avatar saved.')).toBeVisible();
+    expect(decode).toHaveBeenCalledTimes(1);
+    expect(decode).toHaveBeenCalledWith(first);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch.mock.calls[0]?.[1]?.body).not.toBeInstanceOf(File);
+  });
 });
