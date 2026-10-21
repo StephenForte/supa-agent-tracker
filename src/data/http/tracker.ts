@@ -1,5 +1,6 @@
 import type { TrackerDataSource, BrowserAuth } from '../contracts.js';
-import type { Account, LogicalAgent, McpToken, NextStep, Project, ProjectNextSteps, Run, TokenIssueResult } from '../../domain/types.js';
+import type { Account, LogicalAgent, McpToken, NextStep, Project, ProjectNextSteps, PublicProfile, Run, TokenIssueResult } from '../../domain/types.js';
+import { emptyPublicProfile } from '../../domain/public/profile.js';
 import { actionFields, HttpError, nullable, pages, segment, write, type HttpClient } from './client.js';
 import { createObservable, type Visibility } from './observable.js';
 export function createHttpTracker(client: HttpClient, visibility?: Visibility, onSessionChange: () => void = () => {}): TrackerDataSource {
@@ -30,6 +31,20 @@ export function createHttpTracker(client: HttpClient, visibility?: Visibility, o
       throw error;
     }
   }
+  function withAccount(value: Omit<Account, 'demo'>): Account {
+    const profile = value.publicProfile;
+    const publicProfile: PublicProfile = profile ? {
+      name: profile.name ?? null, bio: profile.bio ?? null, github: profile.github ?? null, x: profile.x ?? null,
+      linkedin: profile.linkedin ?? null, timezone: profile.timezone || 'UTC', avatarUpdatedAt: profile.avatarUpdatedAt ?? null,
+    } : emptyPublicProfile();
+    return { ...value, demo: false, publicProfile };
+  }
+  function accountFailure(error: unknown): { status: 'invalid'; message: string } | { status: 'conflict'; message: string } | null {
+    if (error instanceof HttpError && error.status === 400) return { status: 'invalid', message: error.message };
+    if (error instanceof HttpError && error.status === 409) return { status: 'conflict', message: error.message };
+    if (error instanceof HttpError && (error.status === 413 || error.status === 415)) return { status: 'invalid', message: error.message };
+    return null;
+  }
   function getSession(notifyUnauthorized = true) {
     return observable.read('session', async () => {
       const result = await client.request<{ user: { id: string; name: string; email: string; emailVerified: boolean } } | null>('/api/auth/get-session', 'GET', undefined, notifyUnauthorized);
@@ -45,19 +60,27 @@ export function createHttpTracker(client: HttpClient, visibility?: Visibility, o
   };
   return {
     subscribe: observable.subscribe, getSnapshot: observable.getSnapshot, observe: observable.observe, auth,
-    getAccount: () => observable.read('account', async () => ({ ...await client.request<Omit<Account, 'demo'>>('/api/account'), demo: false })),
+    getAccount: () => observable.read('account', async () => withAccount(await client.request<Omit<Account, 'demo'>>('/api/account'))),
     updateAccount: (input) => mutation(async () => {
       try {
-        const body: { publicHandle?: string | null; alerts?: { blocked: boolean; stale: boolean; review: boolean }; request_id?: string } = { ...actionFields() };
+        const body: { publicHandle?: string | null; alerts?: { blocked: boolean; stale: boolean; review: boolean }; publicProfile?: typeof input.publicProfile; request_id?: string } = { ...actionFields() };
         if (input.publicHandle !== undefined) body.publicHandle = input.publicHandle;
         if (input.alerts !== undefined) body.alerts = input.alerts;
-        const value = await client.request<Omit<Account, 'demo'>>('/api/account', 'PATCH', body);
-        return { status: 'saved' as const, value: { ...value, demo: false as const } };
+        if (input.publicProfile !== undefined) body.publicProfile = input.publicProfile;
+        return { status: 'saved' as const, value: withAccount(await client.request<Omit<Account, 'demo'>>('/api/account', 'PATCH', body)) };
       } catch (error) {
-        if (error instanceof HttpError && error.status === 400) return { status: 'invalid' as const, message: error.message };
-        if (error instanceof HttpError && error.status === 409) return { status: 'conflict' as const, message: error.message };
+        const failure = accountFailure(error);
+        if (failure) return failure;
         throw error;
       }
+    }),
+    uploadAvatar: (blob) => mutation(async () => {
+      try { return { status: 'saved' as const, value: withAccount(await client.requestRaw<Omit<Account, 'demo'>>('/api/account/avatar', 'PUT', blob)) }; }
+      catch (error) { const failure = accountFailure(error); if (failure && failure.status === 'invalid') return failure; throw error; }
+    }),
+    removeAvatar: () => mutation(async () => {
+      try { return { status: 'saved' as const, value: withAccount(await client.requestRaw<Omit<Account, 'demo'>>('/api/account/avatar', 'DELETE')) }; }
+      catch (error) { const failure = accountFailure(error); if (failure && failure.status === 'invalid') return failure; throw error; }
     }),
     listProjects: () => observable.read('projects', () => pages<Project>(client, '/api/projects?include_archived=true')),
     getProject: id => observable.read(`project:${id}`, () => nullable(() => client.request<Project>(`/api/projects/${segment(id)}`))),

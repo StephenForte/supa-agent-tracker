@@ -1,4 +1,4 @@
-import type { Account, LogicalAgent, McpToken, NextStep, Project, ProjectInput, ProjectNextSteps, Run, RunMetadataPatch, TokenIssueResult, WriteResult } from '../domain/types.js';
+import type { Account, LogicalAgent, McpToken, NextStep, Project, ProjectInput, ProjectNextSteps, PublicProfileInput, Run, RunMetadataPatch, TokenIssueResult, WriteResult } from '../domain/types.js';
 import type { PrivateNote } from '../domain/privateNotes.js';
 /** Subscription functions are synchronous by React's external-store protocol; all business operations are async.
  * getSnapshot returns a stable numeric invalidation revision, never records. Lists return ALL records,
@@ -17,7 +17,10 @@ export interface BrowserAuth {
 export interface TrackerDataSource extends ObservableSource {
   auth?: BrowserAuth;
   getAccount(): Promise<Account>;
-  updateAccount(input: { publicHandle?: string | null; alerts?: { blocked: boolean; stale: boolean; review: boolean } }): Promise<{ status: 'saved'; value: Account } | { status: 'conflict'; message: string } | { status: 'invalid'; message: string }>;
+  updateAccount(input: { publicHandle?: string | null; alerts?: { blocked: boolean; stale: boolean; review: boolean }; publicProfile?: PublicProfileInput }): Promise<{ status: 'saved'; value: Account } | { status: 'conflict'; message: string } | { status: 'invalid'; message: string }>;
+  /** Raw image body. The caller must pass the prepared canvas blob, never the original file. */
+  uploadAvatar(blob: Blob): Promise<{ status: 'saved'; value: Account } | { status: 'invalid'; message: string }>;
+  removeAvatar(): Promise<{ status: 'saved'; value: Account } | { status: 'invalid'; message: string }>;
   listProjects(): Promise<Project[]>;
   getProject(projectId: string): Promise<Project | null>;
   createProject(input: ProjectInput): Promise<WriteResult<Project>>;

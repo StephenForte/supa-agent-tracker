@@ -1,116 +1,96 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router';
-import { Badge } from '../../components/ui/Badge';
-import { formatIdentity, formatTimestamp } from '../../domain/format';
-import { executionLabels, workLabels } from '../../domain/runs/grid';
-import { publicAgentsLoader } from '../../data/public/load';
-import type { PublicAgentsLoader, PublicAgentsPayload, PublicRun } from '../../data/public/types';
+import { useParams, useSearchParams } from 'react-router';
+import { publicAgentsLoader, publicProfileLoader } from '../../data/public/load';
+import type { PublicAgentsLoader, PublicAgentsPayload, PublicProfileLoader, PublicProfilePayload } from '../../data/public/types';
+import { publicAgentsView } from '../../domain/public/agents';
+import { ProfileSummary } from './ProfileSummary';
+import { PublicAgentSection } from './PublicAgentSection';
 
 const POLL_MS = 30_000;
 
-function liveness(run: PublicRun): string {
-  if (run.stale) return 'Stale';
-  if (run.executionState === 'running') return 'Live';
-  return '—';
-}
-
-function useNoIndex() {
+function usePublicDocument(title: string) {
   useEffect(() => {
     const previous = document.title;
-    document.title = 'Public agents';
+    document.title = title;
     const meta = document.createElement('meta');
     meta.name = 'robots';
     meta.content = 'noindex';
     document.head.append(meta);
     return () => { meta.remove(); document.title = previous; };
-  }, []);
+  }, [title]);
 }
 
-type PublicView =
-  | { kind: 'loading' }
-  | { kind: 'missing' }
-  | { kind: 'error' }
-  | { kind: 'ready'; page: PublicAgentsPayload };
+type AsyncState<T> = { kind: 'idle' } | { kind: 'loading' } | { kind: 'missing' } | { kind: 'error' } | { kind: 'ready'; data: T };
 
-export function PublicAgentsPage({ loader = publicAgentsLoader }: { loader?: PublicAgentsLoader | null }) {
-  useNoIndex();
+export function PublicAgentsPage({ loader = publicAgentsLoader, profileLoader = publicProfileLoader }: { loader?: PublicAgentsLoader | null; profileLoader?: PublicProfileLoader | null }) {
   const handle = useParams().handle ?? '';
-  const [state, setState] = useState<PublicView>({ kind: 'loading' });
+  const [params, setParams] = useSearchParams();
+  const view = publicAgentsView(params.get('view'));
+  const [agents, setAgents] = useState<AsyncState<PublicAgentsPayload>>(loader ? { kind: 'loading' } : { kind: 'idle' });
+  const [profile, setProfile] = useState<AsyncState<PublicProfilePayload>>(profileLoader ? { kind: 'loading' } : { kind: 'idle' });
+  const displayName = profile.kind === 'ready' ? (profile.data.owner.name?.trim() || profile.data.owner.handle) : (handle || 'Public profile');
+  usePublicDocument(handle ? `${displayName} (@${handle})` : displayName);
   useEffect(() => {
-    if (!loader) return;
+    if (!loader && !profileLoader) return;
     let stopped = false;
     let timer = 0;
-    const load = loader;
-    async function refresh() {
-      if (stopped || document.visibilityState === 'hidden') return;
+    const loadAgents = loader;
+    const loadProfile = profileLoader;
+    async function refreshAgents() {
+      if (!loadAgents || stopped || document.visibilityState === 'hidden') return;
       try {
-        const result = await load(handle);
-        if (!stopped) setState(result === 'missing' ? { kind: 'missing' } : { kind: 'ready', page: result });
+        const result = await loadAgents(handle);
+        if (!stopped) setAgents(result === 'missing' ? { kind: 'missing' } : { kind: 'ready', data: result });
       } catch {
-        if (!stopped) setState({ kind: 'error' });
+        if (!stopped) setAgents({ kind: 'error' });
+      }
+    }
+    async function refreshProfile() {
+      if (!loadProfile || stopped || document.visibilityState === 'hidden') return;
+      try {
+        const result = await loadProfile(handle);
+        if (!stopped) setProfile(result === 'missing' ? { kind: 'missing' } : { kind: 'ready', data: result });
+      } catch {
+        if (!stopped) setProfile({ kind: 'error' });
       }
     }
     function schedule() {
-      timer = window.setTimeout(() => { void refresh().finally(() => { if (!stopped) schedule(); }); }, POLL_MS);
+      timer = window.setTimeout(() => { void refreshAgents().finally(() => { if (!stopped) schedule(); }); }, POLL_MS);
     }
-    const onVisibility = () => { if (document.visibilityState === 'visible') void refresh(); };
+    const onVisibility = () => {
+      if (document.visibilityState !== 'visible') return;
+      void refreshAgents();
+      void refreshProfile();
+    };
     document.addEventListener('visibilitychange', onVisibility);
-    void refresh().finally(() => { if (!stopped) schedule(); });
+    void refreshAgents().finally(() => { if (!stopped && loadAgents) schedule(); });
+    void refreshProfile();
     return () => { stopped = true; window.clearTimeout(timer); document.removeEventListener('visibilitychange', onVisibility); };
-  }, [handle, loader]);
-  return <main className="mx-auto max-w-6xl px-4 py-8">
-    <p className="eyebrow">Public page</p>
-    <h1>Public agents</h1>
-    {!loader ? <p>Public pages need the live app.</p> : <PublicBody state={state} />}
-  </main>;
-}
-
-function PublicBody({ state }: { state: PublicView }) {
-  if (state.kind === 'loading') return <p>Loading public page…</p>;
-  if (state.kind === 'missing') return <p>No public page here.</p>;
-  if (state.kind === 'error') return <p role="alert">The public page could not be loaded.</p>;
-  const rows: Array<{ project: string; agent: string; run: PublicRun | null }> = [];
-  for (const project of state.page.projects) {
-    if (project.agents.length === 0) {
-      rows.push({ project: project.name, agent: '—', run: null });
-      continue;
-    }
-    for (const agent of project.agents) {
-      if (agent.runs.length === 0) {
-        rows.push({ project: project.name, agent: agent.name, run: null });
-        continue;
-      }
-      for (const run of agent.runs) rows.push({ project: project.name, agent: agent.name, run });
-    }
+  }, [handle, loader, profileLoader]);
+  function setView(next: 'grid' | 'table') {
+    const updated = new URLSearchParams(params);
+    if (next === 'table') updated.set('view', 'table');
+    else updated.delete('view');
+    setParams(updated, { replace: true });
   }
-  // Sort only the flattened rows; preserve loader order for ties and empty rows.
-  rows.sort((a, b) => {
-    if (!a.run) return b.run ? 1 : 0;
-    if (!b.run) return -1;
-    return Date.parse(b.run.lastContactAt) - Date.parse(a.run.lastContactAt)
-      || Date.parse(b.run.startedAt) - Date.parse(a.run.startedAt);
-  });
-  return <>
-    <p className="text-sm text-slate-600">Status for {state.page.owner.handle}. This page refreshes while it is visible.</p>
-    {rows.length === 0 ? <p>No public projects.</p> : <div className="max-w-full overflow-x-auto rounded border border-slate-200">
-      <table className="w-full min-w-[960px] text-left text-sm">
-        <caption className="sr-only">Public project, agent and run status</caption>
-        <thead className="bg-slate-50"><tr>
-          {['Project', 'Agent', 'Run', 'State', 'Work status', 'Harness', 'Started', 'Last contact', 'Finished', 'Live / stale'].map((label) => <th key={label} className="p-3 font-semibold">{label}</th>)}
-        </tr></thead>
-        <tbody>{rows.map((row, index) => <tr key={`${row.project}-${row.agent}-${row.run?.title ?? 'empty'}-${index}`} className="border-t border-slate-200 align-top">
-          <td className="p-3 break-words">{row.project}</td>
-          <td className="p-3 break-words">{row.agent}</td>
-          <td className="p-3 break-words">{row.run?.title ?? '—'}</td>
-          <td className="p-3">{row.run ? <Badge tone={row.run.executionState}>{executionLabels[row.run.executionState]}</Badge> : '—'}</td>
-          <td className="p-3">{row.run ? <Badge tone={row.run.workStatus}>{workLabels[row.run.workStatus]}</Badge> : '—'}</td>
-          <td className="p-3">{row.run ? formatIdentity(row.run.harness) : '—'}</td>
-          <td className="p-3">{row.run ? formatTimestamp(row.run.startedAt) : '—'}</td>
-          <td className="p-3">{row.run ? formatTimestamp(row.run.lastContactAt) : '—'}</td>
-          <td className="p-3">{row.run ? formatTimestamp(row.run.finishedAt) : '—'}</td>
-          <td className="p-3">{row.run ? (row.run.stale ? <Badge tone="stale">Stale</Badge> : liveness(row.run)) : '—'}</td>
-        </tr>)}</tbody>
-      </table>
-    </div>}
-  </>;
+  const blocked = agents.kind === 'missing' || profile.kind === 'missing';
+  const failed = !blocked && (agents.kind === 'error' || profile.kind === 'error');
+  const waitingForProfile = Boolean(profileLoader) && profile.kind === 'loading';
+  const waitingForAgents = Boolean(loader) && agents.kind === 'loading';
+  return <main className="public-page mx-auto min-w-0 max-w-6xl px-4 py-8">
+    <p className="eyebrow">Public profile</p>
+    {!loader && !profileLoader ? <>
+      <h1>{handle || 'Public profile'}</h1>
+      <p>Public pages need the live app.</p>
+    </> : blocked ? <>
+      <h1>{displayName}</h1>
+      <p>No public page here.</p>
+    </> : failed ? <>
+      <h1>{displayName}</h1>
+      <p role="alert">The public page could not be loaded.</p>
+    </> : <>
+      {waitingForProfile ? <><h1>{displayName}</h1><p>Loading public page…</p></> : profile.kind === 'ready' ? <ProfileSummary profile={profile.data} /> : <h1>{displayName}</h1>}
+      {waitingForProfile ? null : waitingForAgents ? <p>Loading public page…</p> : agents.kind === 'ready' ? <PublicAgentSection page={agents.data} view={view} onView={setView} /> : null}
+    </>}
+  </main>;
 }
