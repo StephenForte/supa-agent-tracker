@@ -8,6 +8,8 @@ import type { PrivateNotesSource, TrackerDataSource } from '../../data/contracts
 import { createDemoSources } from '../../data/mock/createDemoSources';
 import type { StorageAdapter } from '../../data/mock/persistence';
 import { createClock } from '../../domain/clock';
+import { museSetupMessage } from '../../domain/integrations/clientConfig';
+import { MCP_PLACEHOLDER_URL } from '../../domain/integrations/examples';
 import type { McpToken } from '../../domain/types';
 import { LiveTokensPanel } from './LiveTokensPanel';
 
@@ -109,9 +111,15 @@ describe('MCP tokens', () => {
     expect(JSON.parse(cursorConfig).mcpServers['supa-agent-tracker'].headers.Authorization).toBe(`Bearer ${secret}`);
     expect((screen.getByRole('textbox', { name: 'Claude Desktop config' }) as HTMLTextAreaElement).value).toContain(`Bearer ${secret}`);
     expect((screen.getByRole('textbox', { name: 'Grok Bot config' }) as HTMLTextAreaElement).value).toContain(`Masked secret: ${secret}`);
+    const museMessage = (screen.getByRole('textbox', { name: 'Muse setup message' }) as HTMLTextAreaElement).value;
+    expect(museMessage).toBe(museSetupMessage(MCP_PLACEHOLDER_URL));
+    expect(museMessage).toContain(MCP_PLACEHOLDER_URL);
+    expect(museMessage).not.toContain(secret);
     await user.click(screen.getByRole('button', { name: 'Copy Cursor config' }));
     await user.click(screen.getByRole('button', { name: 'Copy Claude Desktop config' }));
     await user.click(screen.getByRole('button', { name: 'Copy Grok Bot config' }));
+    await user.click(screen.getByRole('button', { name: 'Copy Muse setup message' }));
+    expect(writeText).toHaveBeenCalledWith(museMessage);
     expect(writeText.mock.calls.map(call => call[0])).toEqual(expect.arrayContaining([secret, cursorConfig]));
     await user.click(screen.getByRole('button', { name: 'Dismiss' }));
     expect(screen.queryByRole('textbox', { name: 'Fake demo token' })).not.toBeInTheDocument();

@@ -32,17 +32,21 @@ describe('integration setup', () => {
     render(<DataProvider sources={{ tracker: sources.tracker, privateNotes }}><RouterProvider router={router} /></DataProvider>);
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Integration setup' })).toBeVisible();
-    expect(screen.getAllByText('Not connected · Not tested')).toHaveLength(5);
+    expect(screen.getAllByText('Not connected · Not tested')).toHaveLength(6);
     expect(screen.getByText('Production-verified 2026-10-16 (P1-G2, Cursor 3.25.6)')).toBeVisible();
     expect(screen.getByRole('article', { name: 'Cursor' })).toHaveTextContent("Don't sign in. Create a new token here and replace it in the client config.");
     expect(screen.getAllByText('Production-verified 2026-10-16 (P1-G2)')).toHaveLength(2);
     expect(screen.getByText('Production-verified 2026-10-20 (operator, Codex desktop)')).toBeVisible();
+    expect(screen.getByText('Production-verified 2026-10-21 (operator, Muse macOS app)')).toBeVisible();
     expect(screen.getByText('Not yet verified')).toBeVisible();
     expect(screen.getByText('The CLI form is from OpenAI\'s Codex docs, not a live check. The desktop app, the CLI, and the IDE extension share ~/.codex/config.toml. Add [mcp_servers.supa-agent-tracker] with url and bearer_token_env_var. Codex reads SUPA_AGENT_TRACKER_TOKEN from the process environment; do not put the token value in config.toml.')).toBeVisible();
-    for (const name of ['Cursor', 'Claude Desktop (macOS)', 'Grok Bot', 'Codex', 'Claude Code']) {
+    const names = ['Cursor', 'Claude Desktop (macOS)', 'Grok Bot', 'Muse', 'Codex', 'Claude Code'];
+    expect(screen.getAllByRole('article').map(card => card.getAttribute('aria-label'))).toEqual(names);
+    for (const name of names) {
       const card = screen.getByRole('article', { name });
       expect(card).toHaveTextContent('https://<your tracker host>/mcp');
-      expect(card).toHaveTextContent('<YOUR_TOKEN>');
+      if (name === 'Muse') expect(card).not.toHaveTextContent('<YOUR_TOKEN>');
+      else expect(card).toHaveTextContent('<YOUR_TOKEN>');
       expect(card).not.toHaveTextContent('sat_');
     }
     for (const link of screen.getAllByRole('link', { name: 'MCP tokens' })) expect(link).toHaveAttribute('href', '/settings/tokens');
