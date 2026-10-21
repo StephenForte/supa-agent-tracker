@@ -105,7 +105,7 @@ export async function registerAuthRoutes(app: FastifyInstance, deps: RouteDeps):
         reply.code(response.status);
         const text = await response.text();
         if (response.headers.get('content-type')?.includes('application/json')) return reply.type('application/json').send(text);
-        return reply.send(text || null);
+        return reply.type('text/plain; charset=utf-8').send(text || null);
       } catch {
         if (['/request-password-reset', '/send-verification-email'].includes(path)) return generic;
         return reply.code(500).send(apiError(errorCodes.internal_error, 'Internal server error'));

@@ -283,4 +283,27 @@ describe('browser authentication through HTTP and Postgres', () => {
     for (const marker of [password, replacement, secret, resendKey, cookie, reset, 'secret-in-query', 'secret-in-path', ...inbox.map(emailToken)]) expect(output).not.toContain(marker);
     expect(output).toContain('request completed');
   });
+  it('serves a non-JSON auth body as text/plain and sends nosniff on an auth error', async () => {
+    const handler = vi.spyOn(app.browserAuth!.auth, 'handler').mockImplementation(async () =>
+      new Response('<script>x</script>', { status: 200, headers: { 'content-type': 'text/html; charset=utf-8' } }),
+    );
+    try {
+      const response = await app.inject({ method: 'GET', url: '/api/auth/get-session' });
+      expect(response.statusCode).toBe(200);
+      expect(response.headers['content-type']).toBe('text/plain; charset=utf-8');
+      expect(String(response.headers['content-type'])).not.toContain('text/html');
+      expect(response.body).toBe('<script>x</script>');
+      handler.mockImplementation(async () => new Response('', { status: 200, headers: { 'content-type': 'text/html' } }));
+      const empty = await app.inject({ method: 'GET', url: '/api/auth/get-session' });
+      expect(empty.statusCode).toBe(200);
+      expect(empty.headers['content-type']).toBe('text/plain; charset=utf-8');
+      expect(String(empty.headers['content-type'])).not.toContain('text/html');
+      expect(empty.body).toBe('');
+    } finally {
+      handler.mockRestore();
+    }
+    const missing = await get('/api/auth/nope');
+    expect(missing.statusCode).toBe(404);
+    expect(missing.headers['x-content-type-options']).toBe('nosniff');
+  });
 });

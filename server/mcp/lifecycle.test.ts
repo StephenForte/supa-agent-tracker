@@ -322,4 +322,27 @@ describe('MCP and tokens over real Postgres and the SDK HTTP client', () => {
     expect(JSON.stringify(responses)).not.toContain(note);
     expect(logs.join('')).not.toContain(note);
   });
+  it('sends nosniff on a bad MCP token, a real initialize, and protected-resource metadata', async () => {
+    const denied = await app.inject({ method: 'POST', url: '/mcp', headers: { authorization: 'Bearer bogus-token' } });
+    expect(denied.statusCode).toBe(401);
+    expect(denied.headers['x-content-type-options']).toBe('nosniff');
+
+    const metadata = await app.inject('/.well-known/oauth-protected-resource');
+    expect(metadata.statusCode).toBe(200);
+    expect(metadata.headers['x-content-type-options']).toBe('nosniff');
+
+    const issued = await issue('nosniff-init');
+    const raw = await fetch(`${base}/mcp`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${issued.plaintext}`, 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'nosniff', version: '1' } } }),
+    });
+    expect(raw.status).toBe(200);
+    expect(raw.headers.get('x-content-type-options')).toBe('nosniff');
+    const session = raw.headers.get('mcp-session-id');
+    await raw.text();
+    if (session) {
+      await fetch(`${base}/mcp`, { method: 'DELETE', headers: { Authorization: `Bearer ${issued.plaintext}`, 'mcp-session-id': session } });
+    }
+  });
 });

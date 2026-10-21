@@ -156,3 +156,42 @@ describe('readiness when the database is unreachable', () => {
     }
   });
 });
+
+describe('X-Content-Type-Options nosniff', () => {
+  it('is present on the SPA document, a static asset, and readiness', async () => {
+    const spaRoot = mkdtempSync(path.join(scratchRoot, 'spa-nosniff-'));
+    mkdirSync(path.join(spaRoot, 'assets'), { recursive: true });
+    writeFileSync(path.join(spaRoot, 'index.html'), '<!doctype html><title>spa-fixture</title>');
+    writeFileSync(path.join(spaRoot, 'assets', 'app.js'), 'console.log("asset")');
+    const pool = new pg.Pool({
+      connectionString: 'postgresql://127.0.0.1:1/supa_test_unreachable',
+      connectionTimeoutMillis: 400,
+      max: 1,
+    });
+    const app = await buildApp({
+      config: testConfig(),
+      pool,
+      migrationsDir: spaRoot,
+      spaRoot,
+    });
+    try {
+      const home = await app.inject({ method: 'GET', url: '/' });
+      expect(home.statusCode).toBe(200);
+      expect(home.headers['content-type']).toContain('text/html');
+      expect(home.headers['x-content-type-options']).toBe('nosniff');
+
+      const asset = await app.inject({ method: 'GET', url: '/assets/app.js' });
+      expect(asset.statusCode).toBe(200);
+      expect(asset.headers['content-type']).not.toContain('text/html');
+      expect(asset.headers['x-content-type-options']).toBe('nosniff');
+
+      const ready = await app.inject({ method: 'GET', url: '/ready' });
+      expect(ready.statusCode).toBe(503);
+      expect(ready.headers['x-content-type-options']).toBe('nosniff');
+    } finally {
+      await app.close();
+      await pool.end();
+      rmSync(spaRoot, { recursive: true, force: true });
+    }
+  });
+});

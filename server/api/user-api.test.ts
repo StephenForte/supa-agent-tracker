@@ -552,4 +552,11 @@ describe('user REST API', () => {
     expect(completedRefusal.statusCode).toBe(409);
     expect(completedRefusal.json()).toMatchObject({ error: { code: errorCodes.conflict, message: 'Run is already completed', details: { current: { id: completed.id, workStatus: 'completed' } } } });
   });
+
+  it('sends nosniff on an authenticated project list', async () => {
+    const response = await call('GET', '/api/projects', userA);
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['content-type']).toContain('application/json');
+    expect(response.headers['x-content-type-options']).toBe('nosniff');
+  });
 });

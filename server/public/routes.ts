@@ -21,6 +21,6 @@ export async function registerPublicRoutes(app: FastifyInstance, deps: RouteDeps
     }
     const page = await readPublicAgents(db, request.params.handle);
     if (!page) return reply.code(404).send(notFound);
-    return reply.send(page);
+    return reply.send(page); // nosemgrep: javascript.express.security.audit.xss.direct-response-write.direct-response-write plain object → Fastify JSON serialiser
   });
 }
