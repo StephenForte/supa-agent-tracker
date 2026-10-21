@@ -334,3 +334,11 @@ Status: **Planner decision (2026-10-19)**, from operator feedback (a friend's si
 - `/register` says whether an invite is attached. With one: use the invited email address. Without one: registration is by invitation; open the link. Submit stays enabled for the `ADMIN_EMAIL` bootstrap.
 - The client's 403 text adds the email-match hint and "ask for a new invitation". The server keeps one generic 403 body for every failure (D-031), so nothing becomes enumerable.
 - Not now: prefilling or locking the invited email (it needs a token lookup endpoint).
+
+### D-039 — Onboarding for new users
+Status: **Confirmed by operator (2026-10-20)** ("brief items 1, 2 and 3 as one task"). Builds on D-018 and D-032.
+- Setup options: Codex (OpenAI; production-verified by the operator on 2026-10-20 in Codex desktop, using URL plus bearer token env var `SUPA_AGENT_TRACKER_TOKEN`) and Claude Code (`claude mcp add --transport http --scope user`; not yet verified) join Cursor, Claude Desktop and Grok Bot on the token reveal and the integration guide. The token plaintext still appears only in the one-time reveal.
+- Getting started: while a user has no runs, Needs me shows three data-driven steps (project, token, connect with a per-project prompt). The per-project prompt is BASE_INSTRUCTION_DRAFT plus a leading line naming the project id. The same copy is on /settings/integrations.
+- Bad token: D-018's 401 and `resource_metadata` stay. Protected-resource metadata is also served at `/.well-known/oauth-protected-resource/mcp` (RFC 9728 path form). Every other `/.well-known/*` returns 404 JSON instead of the SPA, and the UI says an Authenticate or Sign in prompt means a bad token.
+- Later (after feedback from users 2 and 3): one-click connect and per-client installers.
+- Task: P2-J.
