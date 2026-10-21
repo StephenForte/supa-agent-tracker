@@ -72,4 +72,51 @@ describe('profile day and streak math', () => {
     ], dates);
     expect(tied.map((series) => series.harness)).toEqual(['Unknown', 'alpha', 'bravo']);
   });
+
+  it('folds harness names case-insensitively across the window and ranks on the folded total', () => {
+    const dates = ['2026-10-20', '2026-10-21'];
+    const production = harnessSeries([
+      { harness: 'Cursor', day: dates[0]!, count: 10 },
+      { harness: 'Cursor', day: dates[1]!, count: 3 },
+      { harness: 'cursor', day: dates[1]!, count: 5 },
+    ], dates);
+    expect(production).toEqual([{ harness: 'Cursor', counts: [10, 8] }]);
+    expect(production[0]?.counts.reduce((sum, count) => sum + count, 0)).toBe(18);
+
+    const tiedSpelling = harnessSeries([
+      { harness: 'cursor', day: dates[0]!, count: 2 },
+      { harness: 'Cursor', day: dates[1]!, count: 2 },
+    ], dates);
+    expect(tiedSpelling).toEqual([{ harness: 'Cursor', counts: [2, 2] }]);
+
+    const spaced = harnessSeries([
+      { harness: ' Cursor ', day: dates[0]!, count: 3 },
+      { harness: 'CURSOR', day: dates[1]!, count: 1 },
+    ], dates);
+    expect(spaced).toEqual([{ harness: 'Cursor', counts: [3, 1] }]);
+
+    const blanks = harnessSeries([
+      { harness: '', day: dates[0]!, count: 1 },
+      { harness: '   ', day: dates[0]!, count: 2 },
+      { harness: null, day: dates[1]!, count: 3 },
+      { harness: 'Cursor', day: dates[1]!, count: 4 },
+    ], dates);
+    expect(blanks.map((series) => series.harness)).toEqual(['Unknown', 'Cursor']);
+    expect(blanks[0]?.counts).toEqual([3, 3]);
+    expect(blanks[1]?.counts).toEqual([0, 4]);
+
+    // Delta is 4th only while Cursor and cursor are split at 6 each. Folded, Cursor is 12 and Delta is Other.
+    const displaced = harnessSeries([
+      { harness: 'Alpha', day: dates[1]!, count: 10 },
+      { harness: 'Bravo', day: dates[1]!, count: 9 },
+      { harness: 'Charlie', day: dates[1]!, count: 8 },
+      { harness: 'Delta', day: dates[1]!, count: 7 },
+      { harness: 'Cursor', day: dates[0]!, count: 4 },
+      { harness: 'Cursor', day: dates[1]!, count: 2 },
+      { harness: 'cursor', day: dates[1]!, count: 6 },
+    ], dates);
+    expect(displaced.map((series) => series.harness)).toEqual(['Cursor', 'Alpha', 'Bravo', 'Charlie', 'Other']);
+    expect(displaced[0]?.counts).toEqual([4, 8]);
+    expect(displaced[4]?.counts).toEqual([0, 7]);
+  });
 });
