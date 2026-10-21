@@ -9,6 +9,16 @@ type PrRow = typeof pullRequestRefs.$inferSelect;
 type ToolRow = typeof toolUsageAggregates.$inferSelect;
 type RunRow = typeof runs.$inferSelect;
 
+export interface PublicProfileBody {
+  name: string | null;
+  bio: string | null;
+  github: string | null;
+  x: string | null;
+  linkedin: string | null;
+  timezone: string;
+  avatarUpdatedAt: string | null;
+}
+
 export interface AccountBody {
   id: string;
   name: string;
@@ -16,6 +26,7 @@ export interface AccountBody {
   emailVerified: boolean;
   publicHandle: string | null;
   alerts: { blocked: boolean; stale: boolean; review: boolean };
+  publicProfile: PublicProfileBody;
 }
 
 export function toAccount(user: {
@@ -27,6 +38,13 @@ export function toAccount(user: {
   alertBlocked: boolean;
   alertStale: boolean;
   alertReview: boolean;
+  publicName: string | null;
+  publicBio: string | null;
+  publicGithub: string | null;
+  publicX: string | null;
+  publicLinkedin: string | null;
+  profileTimezone: string;
+  avatarUpdatedAt: Date | null;
 }): AccountBody {
   return {
     id: user.id,
@@ -35,6 +53,15 @@ export function toAccount(user: {
     emailVerified: user.emailVerified,
     publicHandle: user.publicHandle,
     alerts: { blocked: user.alertBlocked, stale: user.alertStale, review: user.alertReview },
+    publicProfile: {
+      name: user.publicName,
+      bio: user.publicBio,
+      github: user.publicGithub,
+      x: user.publicX,
+      linkedin: user.publicLinkedin,
+      timezone: user.profileTimezone,
+      avatarUpdatedAt: user.avatarUpdatedAt === null ? null : user.avatarUpdatedAt.toISOString(),
+    },
   };
 }
 

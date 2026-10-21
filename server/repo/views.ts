@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, lt, sql } from 'drizzle-orm';
 import { pageItems, parsePageQuery, PaginationError, type Page } from '../app/pagination.js';
-import { agents, projects, pullRequestRefs, runs, toolUsageAggregates, users } from '../db/schema.js';
+import { agents, projects, pullRequestRefs, runs, toolUsageAggregates, userAvatars, users } from '../db/schema.js';
 import { AccessError, requireUser, withActor, withProject, type Database, type Transaction, type UserAccess } from './access.js';
 
 type AgentRow = typeof agents.$inferSelect;
@@ -27,7 +27,14 @@ export async function readAccount(db: Database, access: UserAccess) {
       alertBlocked: users.alertBlocked,
       alertStale: users.alertStale,
       alertReview: users.alertReview,
-    }).from(users).where(eq(users.id, access.userId));
+      publicName: users.publicName,
+      publicBio: users.publicBio,
+      publicGithub: users.publicGithub,
+      publicX: users.publicX,
+      publicLinkedin: users.publicLinkedin,
+      profileTimezone: users.profileTimezone,
+      avatarUpdatedAt: userAvatars.updatedAt,
+    }).from(users).leftJoin(userAvatars, eq(userAvatars.userId, users.id)).where(eq(users.id, access.userId));
     if (!user) throw new AccessError('not_found');
     return user;
   });
