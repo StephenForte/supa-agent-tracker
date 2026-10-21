@@ -83,6 +83,9 @@ summary { padding: .75rem; border: 1px solid #d6e0e3; border-radius: .4rem; }
   .run-card-message { color: #526670; font-size: 12px; line-height: 18px; }
   .run-card-pr { min-width: 44px; justify-content: center; padding-inline: 8px; font-size: 12px; }
   .run-card-expanded { padding: 0 8px 8px; }
+  .public-page { --mobile-tap-target: 44px; }
+  .public-page :is(a, button, input, select, textarea, summary) { min-height: var(--mobile-tap-target); }
+  .public-page :is(a, button, summary) { display: inline-flex; align-items: center; }
   .project-jumps { display: flex; position: sticky; top: 88px; z-index: 10; background: #f4f6f6; border-bottom: 1px solid #d6e0e3; justify-content: space-around; }
   [id^="project-"] { scroll-margin-top: 145px; }
   .project-counts { padding: .75rem; gap: .5rem; }
@@ -91,3 +94,28 @@ summary { padding: .75rem; border: 1px solid #d6e0e3; border-radius: .4rem; }
   .project-actions { gap: .25rem .75rem; margin-block: .5rem; align-items: center; }
   .panel-grid { grid-template-columns: 1fr; gap: 0; }
 }
+
+/* Public profile. The heatmap is wider than a phone, so it scrolls inside this box and the page does not. */
+.public-page { max-width: 100%; overflow-x: hidden; }
+.public-avatar-fallback { display: grid; width: 6rem; height: 6rem; flex-shrink: 0; place-items: center; border-radius: 999px; background: var(--color-ink); color: white; font-size: 1.125rem; font-weight: 650; }
+.public-scroll { max-width: 100%; min-width: 0; overflow-x: auto; }
+.public-heat { width: max-content; }
+.public-heat-months { display: grid; column-gap: 3px; height: 16px; margin-left: 18px; color: var(--color-status-neutral); font-size: 10px; line-height: 16px; }
+.public-heat-months span { width: 12px; overflow: visible; white-space: nowrap; }
+.public-heat-body { display: flex; align-items: start; }
+.public-heat-days { display: grid; grid-template-rows: repeat(7, 12px); row-gap: 3px; width: 14px; margin-right: 4px; color: var(--color-status-neutral); font-size: 10px; line-height: 12px; }
+.public-heat-week { display: grid; grid-template-rows: repeat(7, 12px); grid-auto-flow: column; gap: 3px; }
+.public-heat-cell { width: 12px; height: 12px; border-radius: 2px; }
+.public-heat-0 { background: var(--status-neutral-bg); }
+.public-heat-1 { background: color-mix(in srgb, var(--color-status-stale) 28%, var(--color-paper)); }
+.public-heat-2 { background: color-mix(in srgb, var(--color-status-stale) 48%, var(--color-paper)); }
+.public-heat-3 { background: color-mix(in srgb, var(--color-status-stale) 72%, var(--color-paper)); }
+.public-heat-4 { background: var(--color-status-stale); }
+.public-chart { display: block; width: 100%; max-width: 100%; height: auto; color: var(--color-ink); }
+.public-legend { display: flex; flex-wrap: wrap; gap: .5rem 1rem; margin: .75rem 0; padding: 0; list-style: none; color: var(--color-ink); }
+.public-swatch { display: inline-block; width: .75rem; height: .75rem; margin-right: .4rem; border-radius: 2px; }
+.public-series-0 { background: var(--color-accent); fill: var(--color-accent); }
+.public-series-1 { background: var(--color-status-review); fill: var(--color-status-review); }
+.public-series-2 { background: var(--color-status-stale); fill: var(--color-status-stale); }
+.public-series-3 { background: var(--color-status-failed); fill: var(--color-status-failed); }
+.public-series-4 { background: var(--color-status-neutral); fill: var(--color-status-neutral); }

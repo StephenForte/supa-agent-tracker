@@ -1,5 +1,7 @@
 import type { TrackerDataSource } from '../contracts';
 import type { McpToken, Project, ProjectInput, TokenIssueResult } from '../../domain/types';
+import { emptyPublicProfile, profileErrorMessage } from '../../domain/public/profile';
+import { AVATAR_NEEDS_LIVE } from '../public/avatar';
 import type { Clock } from '../../domain/clock';
 import { seedTracker, type TrackerState } from './seed';
 import { observable } from './observable';
@@ -55,6 +57,12 @@ export function createTrackerStore({ clock, initial, persist, onReset }: Tracker
         }
       }
       if (input.alerts) next.alerts = { blocked: input.alerts.blocked, stale: input.alerts.stale, review: input.alerts.review };
+      if (input.publicProfile) {
+        const message = profileErrorMessage(input.publicProfile);
+        if (message) return { status: 'invalid', message };
+        const current = next.publicProfile ?? emptyPublicProfile();
+        next.publicProfile = { ...input.publicProfile, avatarUpdatedAt: current.avatarUpdatedAt };
+      }
       state.account = next;
       commit();
       return { status: 'saved', value: copy(state.account) };
@@ -161,6 +169,8 @@ export function createTrackerStore({ clock, initial, persist, onReset }: Tracker
       if (result.status === 'created') { token.revokedAt = timestamp(); commit(); }
       return result;
     },
+    async uploadAvatar() { return { status: 'invalid', message: AVATAR_NEEDS_LIVE }; },
+    async removeAvatar() { return { status: 'invalid', message: AVATAR_NEEDS_LIVE }; },
     async resetDemo() { const now = clock.now(); state = seedTracker(now); onReset(now); changes.notify(); },
   };
   // Reconcile persisted contacts immediately, then keep them fresh for this store's lifetime.

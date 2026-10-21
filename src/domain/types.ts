@@ -5,7 +5,12 @@ export type WorkStatus = 'in_progress' | 'blocked' | 'waiting_for_review' | 'com
 export type ProjectType = 'coding' | 'automation';
 export type Lifecycle = 'active' | 'paused' | 'completed' | 'archived';
 export interface AlertPreferences { blocked: boolean; stale: boolean; review: boolean }
-export interface Account { id: string; name: string; email: string; emailVerified: boolean; demo: boolean; isAdmin?: boolean; publicHandle?: string | null; alerts?: AlertPreferences }
+/** D-040. Text fields are null when cleared. timezone is UTC or an IANA zone. avatarUpdatedAt is ISO 8601 or null. */
+export interface PublicProfileInput {
+  name: string | null; bio: string | null; github: string | null; x: string | null; linkedin: string | null; timezone: string;
+}
+export interface PublicProfile extends PublicProfileInput { avatarUpdatedAt: string | null }
+export interface Account { id: string; name: string; email: string; emailVerified: boolean; demo: boolean; isAdmin?: boolean; publicHandle?: string | null; alerts?: AlertPreferences; publicProfile?: PublicProfile }
 export interface ReportingPolicy { staleThresholdMinutes: number; heartbeatExpected: boolean; instructions: string }
 export interface ProjectInput {
   name: string; description: string; type: ProjectType; lifecycle: Lifecycle;

@@ -7,27 +7,37 @@ export class SessionExpiredError extends HttpError { constructor() { super(401, 
 export function createHttpClient(fetcher: Fetcher = globalThis.fetch.bind(globalThis), onUnauthorized: () => void = () => {}) {
   let sessionEpoch = 0;
   const unauthorizedListeners = new Set<(path: string) => void>();
+  async function exchange<T>(path: string, method: string, init: RequestInit, notifyUnauthorized: boolean): Promise<T> {
+    const requestEpoch = sessionEpoch;
+    if (!path.startsWith('/api/') || path.startsWith('//')) throw new Error('API requests must be same-origin');
+    let response: Response;
+    try { response = await fetcher(path, init); }
+    catch { response = await fetcher(path, init); }
+    const value = await response.json() as { error?: { message?: string; details?: { current?: unknown } } };
+    if (response.ok) {
+      if (method === 'POST' && ['/api/auth/sign-in/email', '/api/auth/sign-out', '/api/auth/change-password', '/api/auth/reset-password'].includes(path)) sessionEpoch++;
+      return value as T;
+    }
+    if (response.status === 401) { if (notifyUnauthorized && requestEpoch === sessionEpoch) { unauthorizedListeners.forEach(listener => listener(path)); onUnauthorized(); } throw new SessionExpiredError(); }
+    const message = response.status >= 500 ? 'The server could not complete the request. Please try again.'
+      : response.status === 429 ? 'Too many requests. Please try again shortly.'
+      : value?.error?.message ?? 'Request could not be processed';
+    throw new HttpError(response.status, message, value?.error?.details?.current);
+  }
   return {
     onUnauthorized(listener: (path: string) => void) { unauthorizedListeners.add(listener); return () => { unauthorizedListeners.delete(listener); }; },
-    async request<T>(path: string, method = 'GET', body?: unknown, notifyUnauthorized = true): Promise<T> {
-      const requestEpoch = sessionEpoch;
-      if (!path.startsWith('/api/') || path.startsWith('//')) throw new Error('API requests must be same-origin');
+    request<T>(path: string, method = 'GET', body?: unknown, notifyUnauthorized = true): Promise<T> {
       // Retry only transport failures, with the exact serialized body and request_id.
       const init = { method, credentials: 'same-origin' as const, cache: 'no-store' as const,
         headers: { 'Content-Type': 'application/json' }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) };
-      let response: Response;
-      try { response = await fetcher(path, init); }
-      catch { response = await fetcher(path, init); }
-      const value = await response.json() as { error?: { message?: string; details?: { current?: unknown } } };
-      if (response.ok) {
-        if (method === 'POST' && ['/api/auth/sign-in/email', '/api/auth/sign-out', '/api/auth/change-password', '/api/auth/reset-password'].includes(path)) sessionEpoch++;
-        return value as T;
-      }
-      if (response.status === 401) { if (notifyUnauthorized && requestEpoch === sessionEpoch) { unauthorizedListeners.forEach(listener => listener(path)); onUnauthorized(); } throw new SessionExpiredError(); }
-      const message = response.status >= 500 ? 'The server could not complete the request. Please try again.'
-        : response.status === 429 ? 'Too many requests. Please try again shortly.'
-        : value?.error?.message ?? 'Request could not be processed';
-      throw new HttpError(response.status, message, value?.error?.details?.current);
+      return exchange<T>(path, method, init, notifyUnauthorized);
+    },
+    /** Image bytes stay binary. Content-Type is the blob type, never multipart and never the original file. */
+    requestRaw<T>(path: string, method: 'PUT' | 'DELETE', body?: Blob, notifyUnauthorized = true): Promise<T> {
+      const headers: Record<string, string> = {};
+      if (body) headers['Content-Type'] = body.type;
+      const init = { method, credentials: 'same-origin' as const, cache: 'no-store' as const, headers, ...(body ? { body } : {}) };
+      return exchange<T>(path, method, init, notifyUnauthorized);
     },
   };
 }

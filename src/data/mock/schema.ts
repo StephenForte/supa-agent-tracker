@@ -36,6 +36,10 @@ export const trackerSchema: z.ZodType<TrackerState> = z.object({
   account: z.object({
     id: z.literal('usr_demo'), name: z.string(), email: z.email(), emailVerified: z.boolean(), demo: z.literal(true), publicHandle: z.string().nullable().optional(),
     alerts: z.object({ blocked: z.boolean(), stale: z.boolean(), review: z.boolean() }).default({ blocked: false, stale: false, review: false }),
+    publicProfile: z.object({
+      name: z.string().nullable(), bio: z.string().nullable(), github: z.string().nullable(), x: z.string().nullable(),
+      linkedin: z.string().nullable(), timezone: z.string(), avatarUpdatedAt: z.string().nullable(),
+    }).default({ name: null, bio: null, github: null, x: null, linkedin: null, timezone: 'UTC', avatarUpdatedAt: null }),
   }),
   projects: z.array(project), agents: z.array(agent), runs: z.array(run.refine(value => value.executionState === 'running' ? value.finishedAt === null : value.finishedAt !== null)), steps: z.array(step), waitingNotes: z.array(waiting), tokens: z.array(token), sequence: z.number().int().nonnegative(),
 }).refine(state => {

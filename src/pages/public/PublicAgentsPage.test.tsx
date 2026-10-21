@@ -34,7 +34,8 @@ afterEach(() => {
 describe('public agents page', () => {
   it('stays outside the app shell and tells the demo build to use the live app', async () => {
     mount('/public/ada-bot/agents');
-    expect(await screen.findByRole('heading', { level: 1, name: 'Public agents' })).toBeVisible();
+    expect(await screen.findByRole('heading', { level: 1, name: 'ada-bot' })).toBeVisible();
+    expect(document.title).toBe('ada-bot (@ada-bot)');
     expect(screen.getByText('Public pages need the live app.')).toBeVisible();
     expect(screen.queryByRole('navigation', { name: 'Main navigation' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
@@ -107,7 +108,7 @@ describe('public agents recency ordering', () => {
     const load = vi.fn(async () => payload);
     const router = createMemoryRouter([
       { path: '/public/:handle/agents', element: <PublicAgentsPage loader={load} /> },
-    ], { initialEntries: ['/public/ada-bot/agents'] });
+    ], { initialEntries: ['/public/ada-bot/agents?view=table'] });
     render(<RouterProvider router={router} />);
     await act(async () => { await Promise.resolve(); });
     expect(payload).toEqual(original);

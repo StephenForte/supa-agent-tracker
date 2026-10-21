@@ -4,6 +4,7 @@ import { ErrorState } from '../../components/ui/ErrorState';
 import { useSourceQuery, useTrackerData } from '../../data/hooks';
 import type { Account } from '../../domain/types';
 import { LiveAccountControls } from './LiveAccountControls';
+import { PublicProfileForm } from './PublicProfileForm';
 import { DisabledPasswordField } from '../auth/DisabledPasswordField';
 
 export function AccountSettings() {
@@ -23,6 +24,7 @@ export function AccountSettings() {
       </dl>
     </section>
     <PublicHandleForm account={account.data} />
+    <PublicProfileForm account={account.data} />
     <EmailAlerts account={account.data} />
     {account.data.demo ? <><section className="slot" aria-labelledby="password-heading">
       <h2 id="password-heading">Password</h2>

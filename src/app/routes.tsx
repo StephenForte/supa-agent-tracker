@@ -12,6 +12,7 @@ import { AuthPage } from '../pages/auth/AuthPage';
 import { SettingsPage } from '../pages/settings/SettingsPage';
 /** D-007 route map, plus the operator's public agents page outside the session. */
 export const routes: RouteObject[] = [
+  { path: '/public/:handle', element: <PublicAgentsPage /> },
   { path: '/public/:handle/agents', element: <PublicAgentsPage /> },
   { element: <Shell />, children: [
   { path: '/', element: <Navigate to="/projects" replace /> },
