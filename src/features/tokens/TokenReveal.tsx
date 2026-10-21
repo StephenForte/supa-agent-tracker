@@ -1,14 +1,17 @@
 import { useRef, useState } from 'react';
 import { Button } from '../../components/ui/Button';
-import { BAD_TOKEN_HELP, claudeCodeConfigSnippet, claudeDesktopConfigSnippet, codexConfigSnippet, cursorConfigSnippet, grokBotConfigSnippet } from '../../domain/integrations/clientConfig';
+import { BAD_TOKEN_HELP, claudeCodeConfigSnippet, claudeDesktopConfigSnippet, codexConfigSnippet, cursorConfigSnippet, grokBotConfigSnippet, museSetupMessage } from '../../domain/integrations/clientConfig';
 
-const snippetsFor = (mcpUrl: string, plaintext: string) => [
+const MUSE_TOKEN_LINE = 'Paste the token only into Muse\'s masked "API Key" field, using the Copy button at the top of this reveal.';
+
+const snippetsFor = (mcpUrl: string, plaintext: string): readonly { name: string; copy: string; text: string; rows: number; note?: string }[] => [
   { name: 'Cursor config', copy: 'Copy Cursor config', text: cursorConfigSnippet(mcpUrl, plaintext), rows: 8 },
   { name: 'Claude Desktop config', copy: 'Copy Claude Desktop config', text: claudeDesktopConfigSnippet(mcpUrl, plaintext), rows: 4 },
   { name: 'Grok Bot config', copy: 'Copy Grok Bot config', text: grokBotConfigSnippet(mcpUrl, plaintext), rows: 4 },
+  { name: 'Muse setup message', copy: 'Copy Muse setup message', text: museSetupMessage(mcpUrl), rows: 4, note: MUSE_TOKEN_LINE },
   { name: 'Codex config', copy: 'Copy Codex config', text: codexConfigSnippet(mcpUrl, plaintext), rows: 12 },
   { name: 'Claude Code command', copy: 'Copy Claude Code command', text: claudeCodeConfigSnippet(mcpUrl, plaintext), rows: 3 },
-] as const;
+];
 
 /** Plaintext and client snippets exist only while this reveal is mounted. */
 export function TokenReveal({ plaintext, mcpUrl, onDismiss, demo = true }: { plaintext: string; mcpUrl: string; onDismiss: () => void; demo?: boolean }) {
@@ -41,6 +44,7 @@ export function TokenReveal({ plaintext, mcpUrl, onDismiss, demo = true }: { pla
         <label htmlFor={fieldId} className="block text-sm">{snippet.name}</label>
         <textarea id={fieldId} readOnly value={snippet.text} autoComplete="off" spellCheck={false} rows={snippet.rows} className="mt-1 w-full max-w-full break-all rounded border border-slate-400 bg-white px-2 py-2 font-mono text-sm" />
         <Button onClick={() => void copy(snippet.text, `${snippet.name} copied.`)}>{copied === `${snippet.name} copied.` ? 'Copied' : snippet.copy}</Button>
+        {snippet.note ? <p className="mt-2">{snippet.note}</p> : null}
       </div>;
     })}
     <p className="mt-3">{BAD_TOKEN_HELP}</p>

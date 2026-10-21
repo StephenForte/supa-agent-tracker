@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { claudeCodeConfigSnippet, claudeDesktopConfigSnippet, codexConfigSnippet, cursorConfigSnippet, grokBotConfigSnippet } from './clientConfig';
+import { claudeCodeConfigSnippet, claudeDesktopConfigSnippet, codexConfigSnippet, cursorConfigSnippet, grokBotConfigSnippet, museSetupMessage } from './clientConfig';
 
 describe('client config snippets', () => {
   const url = 'https://tracker.example/mcp';
@@ -32,5 +32,14 @@ describe('client config snippets', () => {
     expect(claude).toContain('--scope user');
     expect(claude).toContain(url);
     expect(claude).toContain(token);
+  });
+
+  it('builds a Muse chat message from the URL alone and never includes a token', () => {
+    expect(museSetupMessage).toHaveLength(1);
+    const message = museSetupMessage(url);
+    expect(message).toBe(`Please add a remote MCP server named supa-agent-tracker at ${url}. Choose the API key / bearer token option. I will enter the key in the masked "API Key" field, not in this chat.`);
+    expect(message).toContain(url);
+    expect(message).not.toContain(token);
+    expect(message).not.toContain('<YOUR_TOKEN>');
   });
 });

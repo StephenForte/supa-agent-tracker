@@ -62,6 +62,7 @@ Single decision question: **After P1-A2, should Phase 1 implement OAuth alongsid
 - [X2 Codex configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference) — `mcp_servers.<name>.bearer_token_env_var`. Read 2026-10-20.
 - [L1 Claude Code MCP](https://code.claude.com/docs/en/mcp) — `claude mcp add --transport http`, `--header`, and `--scope user` (user config in `~/.claude.json`; `--scope project` writes `.mcp.json`). Read 2026-10-20.
 - [L2 Claude Code MCP quickstart](https://code.claude.com/docs/en/mcp-quickstart) — user scope vs project scope. Read 2026-10-20.
+- [Mu1 Introducing Muse, a personal AI agent](https://about.fb.com/news/2026/09/introducing-muse-personal-ai-agent/) — product page. Cited 2026-10-21. The page does not document MCP setup; the production row is operator-reported.
 
 ## Production verification (P1-G2)
 
@@ -72,5 +73,6 @@ Single decision question: **After P1-A2, should Phase 1 implement OAuth alongsid
 | Grok Bot | 2026-10-16 | (x.ai/bot, via its MCP bridge) | ✅ Added through Grok's own setup with a **masked secret field** plus its bridge (token never in chat). 12 tools. The scripted cycle ran with no errors and no retries; model correctly omitted. Planner read-only check: step `f084f55b…` created with source run `734c9e37…`. Egress 140.248.52.x, UA `undici`/`node` (mcp-remote style). The bridge first sends `GET /mcp` without a session → our 400 ("Initialize a new session"), then proceeds over POST, so it's harmless. The spec allows 405 for servers without a GET stream; noted for later. |
 | Codex (OpenAI desktop) | 2026-10-20 | (operator's Codex desktop) | ✅ Production-verified 2026-10-20 (operator, Codex desktop). MCP server form: URL `https://supa-agent-tracker-app.onrender.com/mcp`, bearer token env var `SUPA_AGENT_TRACKER_TOKEN`, no extra headers. The CLI `~/.codex/config.toml` table (`[mcp_servers.supa-agent-tracker]`, `url`, `bearer_token_env_var`) is from the Codex docs, not a live check. |
 | Claude Code | — | — | Not yet verified. The setup command is from the Claude Code MCP docs (`claude mcp add --transport http --scope user … --header "Authorization: Bearer …"`). User scope keeps the token out of a committed `.mcp.json`. |
+| Muse (macOS app) | 2026-10-21 | (operator's Muse macOS app) | ✅ Production-verified 2026-10-21 (operator, Muse macOS app). Chat-driven setup: ask the main Muse bot to add the remote MCP server, then choose the API key / bearer token option. The token goes in a masked field labelled "API Key". Two runs checked in and reported successfully. Harness, model, hooks, and subagent inheritance are not verified. |
 
 **PRD acceptance scenario 20 met (2026-10-16):** Cursor, Claude Desktop and Grok Bot each completed connect → check_in → update → next step → check_out against production with project-scoped bearer tokens.

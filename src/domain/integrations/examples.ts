@@ -1,4 +1,4 @@
-import { BAD_TOKEN_HELP, claudeCodeConfigSnippet, codexConfigSnippet } from './clientConfig.js';
+import { BAD_TOKEN_HELP, claudeCodeConfigSnippet, codexConfigSnippet, museSetupMessage } from './clientConfig.js';
 
 export const INTEGRATION_STATUS = 'Not connected · Not tested' as const;
 export const MCP_PLACEHOLDER_URL = "https://<your tracker host>/mcp";
@@ -9,7 +9,7 @@ export function deploymentMcpUrl(origin: string | null): string {
 }
 
 export interface IntegrationExample {
-  id: 'cursor' | 'claude-desktop' | 'grok-bot' | 'codex' | 'claude-code';
+  id: 'cursor' | 'claude-desktop' | 'grok-bot' | 'muse' | 'codex' | 'claude-code';
   name: string;
   status: typeof INTEGRATION_STATUS;
   verifiedLabel: string;
@@ -112,6 +112,26 @@ export function integrationExamples(url = MCP_PLACEHOLDER_URL): readonly Integra
     ]
   },
   {
+    "id": "muse",
+    "name": "Muse",
+    "status": "Not connected \u00b7 Not tested",
+    "verifiedLabel": "Production-verified 2026-10-21 (operator, Muse macOS app)",
+    "instructions": [
+      "There is no MCP connector screen. Ask the main Muse bot, in chat, to add a remote MCP server. Prefer Copy Muse setup message on the one-time token reveal: it asks Muse to add a server named supa-agent-tracker at this deployment's URL with API key / bearer token auth, and it says the key will be entered in the secure field, not in chat. The message does not include the token. Choose All my projects (including future ones) or specific projects when issuing the token.",
+      "Muse collects the token through a masked field labelled \"API Key\". Choose the API key / bearer token option. The exact wording of Muse's auth-method choices was not recorded. Paste the token only into that field, using the Copy button at the top of the one-time reveal. Do not paste the token into the chat.",
+      "Paste the base prompt, or Copy prompt for this project on this page, into Muse. This placement is guidance.",
+      "No hook path is known for Muse. Rely on agent heartbeats at natural pauses.",
+      "Set harness from runtime knowledge; omit model when unknown. Muse version, hooks, subagent inheritance, model identity, and the harness string Muse reports are not verified."
+    ],
+    "example": "",
+    "docs": [
+      {
+        "label": "Introducing Muse, a personal AI agent",
+        "url": "https://about.fb.com/news/2026/09/introducing-muse-personal-ai-agent/"
+      }
+    ]
+  },
+  {
     "id": "codex",
     "name": "Codex",
     "status": "Not connected \u00b7 Not tested",
@@ -159,7 +179,7 @@ export function integrationExamples(url = MCP_PLACEHOLDER_URL): readonly Integra
   ...example,
   id: example.id as IntegrationExample['id'],
   status: INTEGRATION_STATUS,
-  example: (example.id === 'codex' ? codexConfigSnippet(url, '<YOUR_TOKEN>') : example.id === 'claude-code' ? claudeCodeConfigSnippet(url, '<YOUR_TOKEN>') : example.example).replaceAll(MCP_PLACEHOLDER_URL, url),
+  example: (example.id === 'codex' ? codexConfigSnippet(url, '<YOUR_TOKEN>') : example.id === 'claude-code' ? claudeCodeConfigSnippet(url, '<YOUR_TOKEN>') : example.id === 'muse' ? museSetupMessage(url) : example.example).replaceAll(MCP_PLACEHOLDER_URL, url),
 }));
 }
 

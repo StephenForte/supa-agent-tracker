@@ -25,6 +25,14 @@ export function grokBotConfigSnippet(mcpUrl: string, token: string): string {
 }
 
 /**
+ * Chat paste for Muse (D-041). The token is not a parameter: Muse collects it
+ * in a masked API Key field, and a message that included it would land in the transcript.
+ */
+export function museSetupMessage(mcpUrl: string): string {
+  return `Please add a remote MCP server named supa-agent-tracker at ${mcpUrl}. Choose the API key / bearer token option. I will enter the key in the masked "API Key" field, not in this chat.`;
+}
+
+/**
  * Desktop form fields plus the CLI table from OpenAI's Codex docs.
  * The token value belongs in the environment, not in config.toml.
  */
