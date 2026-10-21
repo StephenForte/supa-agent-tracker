@@ -10,7 +10,7 @@ Teardown: after the push and green CI, stop your processes, drop your databases,
 # P2-N — Public profile page and profile settings (client)
 
 ## Why (operator, 2026-10-21)
-"Update the Public Agents page to be a profile similar to Cursor's, include the ability to upload an image/avatar as well as show the public agents in a table/grid format. Include the streaks, etc like Cursor: https://cursor.com/@stevef". Cursor's page, top to bottom: avatar + name + @handle; a left column with "Joined 498 days ago" and X / GitHub / LinkedIn links; four stat tiles (Longest Agent 4h · Agents 218 · Longest Streak 102d · Current Streak 102d); a year heatmap (12 month labels across, M/W/F row labels, orange intensity cells); a tokens line chart; an "Agents" daily bar chart stacked Local/Cloud with a legend. Planner decision D-039 is on the planner docs branch (PR #74), not main, so **this brief is the full spec**. P2-M builds the server half in parallel against the Contract below.
+"Update the Public Agents page to be a profile similar to Cursor's, include the ability to upload an image/avatar as well as show the public agents in a table/grid format. Include the streaks, etc like Cursor: https://cursor.com/@stevef". Cursor's page, top to bottom: avatar + name + @handle; a left column with "Joined 498 days ago" and X / GitHub / LinkedIn links; four stat tiles (Longest Agent 4h · Agents 218 · Longest Streak 102d · Current Streak 102d); a year heatmap (12 month labels across, M/W/F row labels, orange intensity cells); a tokens line chart; an "Agents" daily bar chart stacked Local/Cloud with a legend. Planner decision D-040 is on the planner docs branch (PR #74), not main, so **this brief is the full spec**. P2-M builds the server half in parallel against the Contract below.
 
 ## Read first (trust the repository over this brief)
 AGENTS.md; docs/plan/DECISIONS.md D-035 (public page rules), D-007 (routes frozen — this task has explicit approval for the two route lines below), D-010 (no deps: charts and heatmap are hand-built SVG/CSS). Code: src/pages/public/PublicAgentsPage.tsx (+test; the 30 s visible-only polling, noindex, P2-H row order), src/data/public/{client,load,types}.ts, src/app/routes.tsx, src/pages/settings/{AccountSettings,LiveAccountControls,SettingsPage}.tsx (publicHandle + alerts UI), src/data/contracts.ts, src/data/http/tracker.ts, src/data/mock/{schema,seed,trackerStore}.ts, src/domain/types.ts, src/domain/format.ts, src/components/ui/Badge.tsx, src/styles/app.css (mobile rules). docs/plan/PLAN.md "Known traps" (useNow / fake timers).
@@ -37,10 +37,10 @@ If the path contains "Dropbox", or is not /Users/stephenforte/src/supa-agent-tra
 Branch p2-n-profile-page, cut from origin/main. PR title "P2-N: Public profile page and profile settings". Commit subjects start with "P2-N: ". Don't edit docs/plan/** or docs/prd/**. No new dependencies (D-010).
 
 ## Pre-assigned identifiers
-- Decision: D-039 (planner-written; cite it). No migration in this task (P2-M owns 0008).
+- Decision: D-040 (planner-written; cite it). No migration in this task (P2-M owns 0008).
 - New folder: src/domain/public/ for pure helpers (date grid, levels, duration formatting, view param).
 
-## Contract (D-039) — identical text in the P2-M and P2-N briefs. Neither task changes it alone; a needed change is a DECISIONS NEEDED item.
+## Contract (D-040) — identical text in the P2-M and P2-N briefs. Neither task changes it alone; a needed change is a DECISIONS NEEDED item.
 Account body (GET /api/account and every PATCH/PUT/DELETE account response) gains:
     publicProfile: { name: string|null, bio: string|null, github: string|null, x: string|null, linkedin: string|null, timezone: string, avatarUpdatedAt: string|null (ISO 8601) }
 PATCH /api/account body gains optional `publicProfile: { name, bio, github, x, linkedin, timezone }`. When present, all six keys are required. null clears a text field. Same request_id idempotency as publicHandle and alerts today. 400 validation_error unless:
@@ -88,7 +88,7 @@ Duration formatting boundaries (59s, 60s, 3599s, 3600s, 86400s); heatmap levels 
 
 ## Out of scope (with reasons)
 - server/** and migrations — P2-M owns them and is building now.
-- A tokens chart — the tracker doesn't collect tokens (D-039).
+- A tokens chart — the tracker doesn't collect tokens (D-040).
 - Image editing beyond center-crop — not requested.
 - Changing other pages' links to the public page (they still work through the /agents alias).
 
