@@ -362,3 +362,11 @@ Status: **Operator-reported, production-verified 2026-10-21** (Muse app on macOS
 - The token never goes into the Muse chat. The token reveal offers "Copy Muse setup message" (URL and auth method only, **no token**) plus the existing token Copy for the API Key field.
 - Muse joins Cursor, Claude Desktop, Grok Bot, Codex and Claude Code in the token reveal, Settings → Integrations, `docs/integrations/muse.md` and the compatibility matrix. Harness and model: report only what the runtime knows.
 - Task: P2-O.
+
+### D-042 — Harness names fold case-insensitively on the public chart
+Status: **Confirmed by operator (2026-10-21)**, after the P2-M production check showed "Cursor" (13) and "cursor" (5) as two series on `/api/public/stevef/profile`. Amends D-040's harness chart only.
+- Harness is self-reported per run, so spelling varies. For `harnesses.series`, names are grouped by trimmed, case-folded key; null, empty or whitespace-only names are "Unknown".
+- The displayed label for a group is its most-used original spelling (trimmed) in the 30-day window; a tie goes to the code-unit-smallest spelling (so "Cursor" beats "cursor").
+- Ranking (top 4 + Other, tie by label) runs on the folded totals.
+- Not changed: stored run data, the agents table's per-run harness, the run grid, and every other key of the profile payload.
+- Task: P2-P (after P2-N).
