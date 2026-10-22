@@ -19,7 +19,7 @@ import * as agentsRepo from '../repo/agents.js';
 import * as projectsRepo from '../repo/projects.js';
 import { createScratchDatabase, type ScratchDatabase } from '../test/database.js';
 import { readPublicProfile, type PublicProfile } from './profile.js';
-import { activityWindow, harnessWindow } from './stats.js';
+import { activityWindow, calendarDate, harnessWindow } from './stats.js';
 
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01]);
 const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
@@ -205,7 +205,7 @@ describe('public profile', () => {
     expect(page!.activity.end).toBe('2026-10-21');
     expect(page!.activity.start).toBe('2026-10-15');
     expect(page!.activity.counts).toHaveLength(7);
-    const dates = activityWindow(NOON, 'UTC', new Date(page!.owner.joinedAt)).dates;
+    const dates = activityWindow(NOON, 'UTC', calendarDate(new Date(page!.owner.joinedAt), 'UTC')).dates;
     expect(dates).toHaveLength(7);
     expect(dates[0]).toBe('2026-10-15');
     expect(dates).not.toContain('2026-10-01');
@@ -216,11 +216,11 @@ describe('public profile', () => {
     expect(page!.activity.counts.reduce((sum, count) => sum + count, 0)).toBe(3);
     expect(page!.owner.name).toBeNull();
     expect(page!.owner.avatarUrl).toBeNull();
-    const harnessDates = harnessWindow(NOON, 'UTC').dates;
+    const harnessDates = harnessWindow(NOON, 'UTC', calendarDate(new Date(page!.owner.joinedAt), 'UTC')).dates;
     expect(page!.harnesses.series.map((series) => series.harness)).toEqual(['cursor']);
     const beforeHarness = page!.harnesses.series[0]!.counts;
-    expect(beforeHarness).toHaveLength(30);
-    expect(beforeHarness.reduce((sum, count) => sum + count, 0)).toBe(8);
+    expect(beforeHarness).toHaveLength(7);
+    expect(beforeHarness.reduce((sum, count) => sum + count, 0)).toBe(3);
 
     const agentsBefore = await hit('/api/public/streak-one/agents');
     expect(agentsBefore.statusCode).toBe(200);
@@ -258,11 +258,11 @@ describe('public profile', () => {
     expect(after!.activity.counts.reduce((sum, count) => sum + count, 0)).toBe(5);
     const afterHarness = after!.harnesses.series[0]!.counts;
     expect(after!.harnesses.series.map((series) => series.harness)).toEqual(['cursor']);
-    expect(afterHarness).toHaveLength(30);
+    expect(afterHarness).toHaveLength(7);
     expect(afterHarness[harnessDates.indexOf('2026-10-19')]! - beforeHarness[harnessDates.indexOf('2026-10-19')]!).toBe(1);
     expect(afterHarness[harnessDates.indexOf('2026-10-18')]! - beforeHarness[harnessDates.indexOf('2026-10-18')]!).toBe(1);
-    expect(afterHarness[harnessDates.indexOf('2026-09-30')]! - beforeHarness[harnessDates.indexOf('2026-09-30')]!).toBe(1);
-    expect(afterHarness.reduce((sum, count) => sum + count, 0)).toBe(11);
+    expect(harnessDates).not.toContain('2026-09-30');
+    expect(afterHarness.reduce((sum, count) => sum + count, 0)).toBe(5);
 
     const agentsAfter = await hit('/api/public/streak-one/agents');
     expect(agentsAfter.statusCode).toBe(200);
@@ -275,6 +275,73 @@ describe('public profile', () => {
       expect(http.body).not.toContain(sentinel);
       expect(agentsAfter.body).not.toContain(sentinel);
     }
+  });
+
+  it.each([
+    { label: '29 inactive days', starts: ['2026-09-21', '2026-10-21'], chartStart: '2026-09-22', chartDays: 30, heatmapStart: '2026-09-21', heatmapDays: 31 },
+    { label: '30 inactive days', starts: ['2026-09-20', '2026-10-21'], chartStart: '2026-10-15', chartDays: 7, heatmapStart: '2026-10-15', heatmapDays: 7 },
+    { label: '31 inactive days', starts: ['2026-09-19', '2026-10-21'], chartStart: '2026-10-15', chartDays: 7, heatmapStart: '2026-10-15', heatmapDays: 7 },
+    { label: '12-day period after a 40-day break', starts: ['2026-08-28', '2026-08-29', '2026-08-30', '2026-10-10', '2026-10-21'], chartStart: '2026-10-10', chartDays: 12, heatmapStart: '2026-10-10', heatmapDays: 12 },
+    { label: '45 days without a run', starts: ['2026-09-06'], chartStart: '2026-10-15', chartDays: 7, heatmapStart: '2026-10-15', heatmapDays: 7 },
+    { label: 'empty veteran account', starts: [], chartStart: '2026-10-15', chartDays: 7, heatmapStart: '2026-10-15', heatmapDays: 7 },
+  ])('D-046 wires both windows for $label without losing all-time stats', async ({ starts, chartStart, chartDays, heatmapStart, heatmapDays }) => {
+    const id = `period-${octet++}`;
+    await db.insert(users).values({ id, email: `${id}@example.test`, displayName: 'Period', publicHandle: id, createdAt: new Date('2020-01-01T00:00:00Z') });
+    const access: UserAccess = { kind: 'user', userId: id };
+    const project = await projectsRepo.createProject(db, access, { ...base, name: 'Visible', isPublic: true });
+    const hidden = await projectsRepo.createProject(db, access, { ...base, name: 'Archived private', isPublic: false, lifecycle: 'archived' });
+    const agent = await agentsRepo.createAgent(db, access, hidden.id, { name: 'worker', title: 'Worker', workloadType: 'coding' });
+    // Only private archived activity establishes this owner's period (D-043).
+    for (const day of starts) {
+      await pool.query(
+        `INSERT INTO runs (project_id, agent_id, title, workload_type, harness, started_at, finished_at, last_contact_at, execution_state, work_status)
+         VALUES ($1, $2, 'period run', 'coding', 'Cursor', $3::timestamptz, $3::timestamptz + interval '10 minutes', $3::timestamptz + interval '10 minutes', 'finished', 'completed')`,
+        [hidden.id, agent.id, `${day}T12:00:00Z`],
+      );
+    }
+    const texts = await captured(async () => {
+      const page = (await readPublicProfile(db, id, NOON))!;
+      assertExact(page);
+      expect(page.activity.start).toBe(heatmapStart);
+      expect(page.activity.end).toBe('2026-10-21');
+      expect(page.activity.counts).toHaveLength(heatmapDays);
+      expect(page.harnesses.start).toBe(chartStart);
+      expect(page.harnesses.end).toBe('2026-10-21');
+      expect(page.harnesses.series.every((series) => series.counts.length === chartDays)).toBe(true);
+      const visibleDays = starts.filter((day) => day >= heatmapStart);
+      expect(page.activity.counts.reduce((sum, count) => sum + count, 0)).toBe(visibleDays.length);
+      const chartCounts = Array.from({ length: chartDays }, (_, i) => {
+        const day = new Date(`${chartStart}T12:00:00Z`);
+        day.setUTCDate(day.getUTCDate() + i);
+        return starts.includes(day.toISOString().slice(0, 10)) ? 1 : 0;
+      });
+      expect(page.harnesses.series).toEqual(starts.some((day) => day >= chartStart) ? [{ harness: 'Cursor', counts: chartCounts }] : []);
+      expect(page.stats).toEqual({ agentRuns: starts.length, longestRunSeconds: starts.length ? 600 : 0, currentStreakDays: starts.includes('2026-10-21') ? 1 : 0, longestStreakDays: starts.length === 5 ? 3 : starts.length ? 1 : 0 });
+    });
+    expect(texts.filter((text) => !/^(begin|commit|rollback)\b/i.test(text.trim()))).toHaveLength(4);
+    expect(project.id).not.toBe(hidden.id);
+  });
+
+  it('D-046 uses the SQL owner-zone day to restart at the 30-day tail boundary', async () => {
+    const id = 'period-zone';
+    await db.insert(users).values({ id, email: `${id}@example.test`, displayName: 'Zone', publicHandle: id, createdAt: new Date('2020-01-01T00:00:00Z') });
+    const access: UserAccess = { kind: 'user', userId: id };
+    const project = await projectsRepo.createProject(db, access, { ...base, name: 'Zone', isPublic: true });
+    const agent = await agentsRepo.createAgent(db, access, project.id, { name: 'worker', title: 'Worker', workloadType: 'coding' });
+    await pool.query(`INSERT INTO runs (project_id, agent_id, title, workload_type, harness, started_at, finished_at, last_contact_at, execution_state, work_status)
+      VALUES ($1, $2, 'boundary', 'coding', 'Cursor', '2026-10-21T06:30:00Z', '2026-10-21T06:30:00Z', '2026-10-21T06:30:00Z', 'finished', 'completed')`, [project.id, agent.id]);
+    const now = new Date('2026-11-19T18:00:00Z');
+    const utc = (await readPublicProfile(db, id, now))!;
+    expect(utc.activity.start).toBe('2026-10-21');
+    expect(utc.activity.counts).toHaveLength(30);
+    expect(utc.activity.counts[0]).toBe(1);
+    expect(utc.harnesses.series).toEqual([{ harness: 'Cursor', counts: [1, ...Array<number>(29).fill(0)] }]);
+    await pool.query(`UPDATE users SET profile_timezone = 'America/Los_Angeles' WHERE id = $1`, [id]);
+    const la = (await readPublicProfile(db, id, now))!;
+    expect(la.activity).toEqual({ start: '2026-11-13', end: '2026-11-19', counts: Array<number>(7).fill(0) });
+    expect(la.harnesses).toEqual({ start: '2026-11-13', end: '2026-11-19', series: [] });
+    expect(la.stats).toEqual(utc.stats);
+    expect(la.stats.agentRuns).toBe(1);
   });
 
   it('folds stored Cursor and cursor spellings into one Cursor series and leaves runs.harness unchanged', async () => {
@@ -297,10 +364,10 @@ describe('public profile', () => {
     const page = await readPublicProfile(db, 'fold-one', NOON);
     expect(page).not.toBeNull();
     assertExact(page!);
-    const dates = harnessWindow(NOON, 'UTC').dates;
+    const dates = harnessWindow(NOON, 'UTC', calendarDate(new Date(page!.owner.joinedAt), 'UTC')).dates;
     expect(page!.harnesses.series.map((series) => series.harness)).toEqual(['Cursor']);
     const counts = page!.harnesses.series[0]!.counts;
-    expect(counts).toHaveLength(30);
+    expect(counts).toHaveLength(7);
     expect(counts[dates.indexOf('2026-10-20')]).toBe(10);
     expect(counts[dates.indexOf('2026-10-21')]).toBe(8);
     expect(counts.reduce((sum, count) => sum + count, 0)).toBe(18);
@@ -319,8 +386,8 @@ describe('public profile', () => {
       assertExact(page!);
       expect(page!.harnesses.end).toBe('2026-10-21');
       expect(page!.harnesses.series.map((series) => series.harness)).toEqual(['Unknown', 'alpha', 'bravo', 'charlie', 'Other']);
-      expect(page!.harnesses.series.every((series) => series.counts.length === 30)).toBe(true);
-      const last = 29;
+      expect(page!.harnesses.series.every((series) => series.counts.length === 7)).toBe(true);
+      const last = 6;
       expect(page!.harnesses.series.map((series) => series.counts[last])).toEqual([6, 5, 5, 4, 6]);
       expect(page!.stats.agentRuns).toBe(26);
     });
@@ -348,7 +415,7 @@ describe('public profile', () => {
       [project, agent],
     );
     const la = await readPublicProfile(db, 'zone-owner', NOON);
-    const laDates = activityWindow(NOON, 'America/Los_Angeles', new Date(la!.owner.joinedAt)).dates;
+    const laDates = activityWindow(NOON, 'America/Los_Angeles', calendarDate(new Date(la!.owner.joinedAt), 'America/Los_Angeles')).dates;
     expect(la?.activity.end).toBe('2026-10-21');
     expect(la?.activity.start).toBe('2026-10-15');
     expect(la?.activity.counts).toHaveLength(7);
@@ -371,7 +438,7 @@ describe('public profile', () => {
     });
     expect(utc.statusCode).toBe(200);
     const shifted = await readPublicProfile(db, 'zone-owner', NOON);
-    const utcDates = activityWindow(NOON, 'UTC', new Date(shifted!.owner.joinedAt)).dates;
+    const utcDates = activityWindow(NOON, 'UTC', calendarDate(new Date(shifted!.owner.joinedAt), 'UTC')).dates;
     expect(shifted?.activity.counts).toHaveLength(7);
     expect(shifted?.activity.counts[utcDates.indexOf('2026-10-21')]).toBe(1);
     expect(shifted?.activity.counts[utcDates.indexOf('2026-10-20')]).toBe(0);
@@ -404,12 +471,12 @@ describe('public profile', () => {
     expect(live.statusCode).toBe(200);
     const liveBody = live.json() as PublicProfile;
     assertExact(liveBody);
-    const liveWindow = activityWindow(new Date(), 'UTC', new Date(liveBody.owner.joinedAt));
+    const liveWindow = activityWindow(new Date(), 'UTC', calendarDate(new Date(liveBody.owner.joinedAt), 'UTC'));
     expect(liveBody.activity.counts).toHaveLength(7);
     expect(liveWindow.dates).toHaveLength(7);
     expect(liveBody.activity.start).toBe(liveWindow.start);
     expect(liveBody.activity.end).toBe(liveWindow.end);
-    expect(liveBody.harnesses.series.every((series) => series.counts.length === 30)).toBe(true);
+    expect(liveBody.harnesses.series.every((series) => series.counts.length === 7)).toBe(true);
 
     const texts = await captured(async () => {
       const response = await hit('/api/public/bulk-owner/profile');

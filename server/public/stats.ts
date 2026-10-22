@@ -61,22 +61,6 @@ export function parseCalendarDate(value: string): CalendarDate {
   return { year: Number(match[1]), month: Number(match[2]), day: Number(match[3]) };
 }
 
-function datesEnding(end: CalendarDate, length: number): string[] {
-  const dates: string[] = [];
-  for (let offset = length - 1; offset >= 0; offset -= 1) {
-    dates.push(formatCalendarDate(shiftCalendarDate(end, -offset)));
-  }
-  return dates;
-}
-
-function windowEnding(now: Date, timeZone: string, length: number): DayWindow {
-  const dates = datesEnding(calendarDate(now, timeZone), length);
-  const start = dates[0];
-  const end = dates[dates.length - 1];
-  if (!start || !end) throw new Error('calendar window is empty');
-  return { start, end, dates };
-}
-
 const MAX_ACTIVITY_DAYS = 365;
 const MIN_ACTIVITY_DAYS = 7;
 
@@ -103,24 +87,44 @@ function datesThrough(start: CalendarDate, end: CalendarDate): string[] {
 }
 
 /**
- * D-044. end is today in the owner's zone. start is the later of (end − 364 days)
- * and the join date in that zone, then moved earlier so the window is at least 7 days.
- * A join instant after `now` still floors to 7 days. The process timezone is not used.
+ * D-046: latest activity period, bounded by the owner-zone join date.
+ * Between active dates a distance of 31 means 30 inactive days. At the tail,
+ * a last active date 30 days before today resets even without a new run.
+ * Future active dates cannot affect today's period.
  */
-export function activityWindow(now: Date, timeZone: string, joinedAt: Date): DayWindow {
-  const end = calendarDate(now, timeZone);
-  const earliest = shiftCalendarDate(end, -(MAX_ACTIVITY_DAYS - 1));
-  const shortest = shiftCalendarDate(end, -(MIN_ACTIVITY_DAYS - 1));
-  const start = earlierDate(laterDate(calendarDate(joinedAt, timeZone), earliest), shortest);
-  const dates = datesThrough(start, end);
-  const first = dates[0];
-  const last = dates[dates.length - 1];
-  if (!first || !last) throw new Error('calendar window is empty');
-  return { start: first, end: last, dates };
+export function activityAnchor(now: Date, timeZone: string, joinedAt: Date, activeDays: ReadonlySet<string>): CalendarDate {
+  const today = calendarDate(now, timeZone);
+  const todayKey = formatCalendarDate(today);
+  const ordered = [...activeDays].filter((day) => day <= todayKey).sort();
+  const last = ordered.at(-1);
+  if (!last || last <= formatCalendarDate(shiftCalendarDate(today, -30))) {
+    return laterDate(calendarDate(joinedAt, timeZone), today);
+  }
+  let periodStart = ordered[0]!;
+  for (let index = 1; index < ordered.length; index += 1) {
+    const previous = ordered[index - 1]!;
+    const day = ordered[index]!;
+    if (day > formatCalendarDate(shiftCalendarDate(parseCalendarDate(previous), 30))) periodStart = day;
+  }
+  return laterDate(calendarDate(joinedAt, timeZone), parseCalendarDate(periodStart));
 }
 
-export function harnessWindow(now: Date, timeZone: string): DayWindow {
-  return windowEnding(now, timeZone, 30);
+/** D-046: shared anchor, inclusive cap, and a seven-day floor, all in owner-zone calendar dates. */
+function anchoredWindow(now: Date, timeZone: string, anchor: CalendarDate, maximumDays: number): DayWindow {
+  const end = calendarDate(now, timeZone);
+  const earliest = shiftCalendarDate(end, -(maximumDays - 1));
+  const shortest = shiftCalendarDate(end, -(MIN_ACTIVITY_DAYS - 1));
+  const start = earlierDate(laterDate(anchor, earliest), shortest);
+  const dates = datesThrough(start, end);
+  return { start: formatCalendarDate(start), end: formatCalendarDate(end), dates };
+}
+
+export function activityWindow(now: Date, timeZone: string, anchor: CalendarDate): DayWindow {
+  return anchoredWindow(now, timeZone, anchor, MAX_ACTIVITY_DAYS);
+}
+
+export function harnessWindow(now: Date, timeZone: string, anchor: CalendarDate): DayWindow {
+  return anchoredWindow(now, timeZone, anchor, 30);
 }
 
 export function countsForDates(dayCounts: ReadonlyMap<string, number>, dates: readonly string[]): number[] {

@@ -3,7 +3,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { projects, userAvatars, users } from '../db/schema.js';
 import type { Database } from '../repo/access.js';
 import { publicHandleFromParam } from './handle.js';
-import { activityWindow, countsForDates, currentStreakDays, harnessSeries, harnessWindow, longestStreakDays, type HarnessDayCount } from './stats.js';
+import { activityAnchor, activityWindow, countsForDates, currentStreakDays, harnessSeries, harnessWindow, longestStreakDays, type HarnessDayCount } from './stats.js';
 
 export interface PublicProfile {
   owner: {
@@ -67,8 +67,6 @@ export async function readPublicProfile(db: Database, rawHandle: string, now: Da
   )).limit(1);
   if (!project) return null;
 
-  const activity = activityWindow(now, owner.timezone, owner.joinedAt);
-  const harnesses = harnessWindow(now, owner.timezone);
   // D-043: every run this owner has, private and archived included. owner_id stays.
   // The public-project gate above is what 404s; these queries do not repeat it.
   // ::text keeps the calendar date out of the process-local date parser.
@@ -81,6 +79,20 @@ export async function readPublicProfile(db: Database, rawHandle: string, now: Da
     WHERE projects.owner_id = ${owner.id}
     GROUP BY 1
   `);
+  const dayCounts = new Map<string, number>();
+  let agentRuns = 0;
+  let longestRunSeconds = 0;
+  for (const row of rowsOf(dayResult)) {
+    const count = asInt(row.count);
+    const longest = asInt(row.longest);
+    agentRuns += count;
+    if (longest > longestRunSeconds) longestRunSeconds = longest;
+    if (count > 0) dayCounts.set(asDay(row.day), count);
+  }
+  const activeDays = new Set(dayCounts.keys());
+  const anchor = activityAnchor(now, owner.timezone, owner.joinedAt, activeDays);
+  const activity = activityWindow(now, owner.timezone, anchor);
+  const harnesses = harnessWindow(now, owner.timezone, anchor);
   const harnessResult = await db.execute(sql`
     SELECT runs.harness AS harness,
            ((runs.started_at AT TIME ZONE ${owner.timezone})::date)::text AS day,
@@ -92,22 +104,11 @@ export async function readPublicProfile(db: Database, rawHandle: string, now: Da
     GROUP BY 1, 2
   `);
 
-  const dayCounts = new Map<string, number>();
-  let agentRuns = 0;
-  let longestRunSeconds = 0;
-  for (const row of rowsOf(dayResult)) {
-    const count = asInt(row.count);
-    const longest = asInt(row.longest);
-    agentRuns += count;
-    if (longest > longestRunSeconds) longestRunSeconds = longest;
-    if (count > 0) dayCounts.set(asDay(row.day), count);
-  }
   const harnessRows: HarnessDayCount[] = rowsOf(harnessResult).map((row) => ({
     harness: typeof row.harness === 'string' ? row.harness : null,
     day: asDay(row.day),
     count: asInt(row.count),
   }));
-  const activeDays = new Set(dayCounts.keys());
   const avatarUrl = owner.avatarSha === null
     ? null
     : `/api/public/${owner.handle}/avatar?v=${owner.avatarSha.slice(0, 16)}`;
