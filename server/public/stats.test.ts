@@ -28,25 +28,73 @@ describe('profile day and streak math', () => {
   });
 
   it('builds a 365-day window ending on the owner-zone today, including across DST', () => {
-    const utc = activityWindow(noon, 'UTC');
+    const veteran = new Date('2020-01-01T00:00:00.000Z');
+    const utc = activityWindow(noon, 'UTC', veteran);
     expect(utc.end).toBe('2026-10-21');
+    expect(utc.start).toBe('2025-10-22');
     expect(utc.dates).toHaveLength(365);
     expect(new Set(utc.dates).size).toBe(365);
     expect(utc.dates[0]).toBe(utc.start);
     expect(utc.dates.at(-1)).toBe(utc.end);
 
-    const spring = activityWindow(new Date('2026-03-10T12:00:00.000Z'), 'America/Los_Angeles');
+    const spring = activityWindow(new Date('2026-03-10T12:00:00.000Z'), 'America/Los_Angeles', veteran);
     expect(spring.end).toBe('2026-03-10');
+    expect(spring.start).toBe('2025-03-11');
     expect(spring.dates).toHaveLength(365);
     expect(new Set(spring.dates).size).toBe(365);
     expect(spring.dates).toContain('2026-03-08');
 
-    const fall = activityWindow(new Date('2026-11-02T12:00:00.000Z'), 'America/Los_Angeles');
+    const fall = activityWindow(new Date('2026-11-02T12:00:00.000Z'), 'America/Los_Angeles', veteran);
     expect(fall.end).toBe('2026-11-02');
+    expect(fall.start).toBe('2025-11-03');
     expect(fall.dates).toHaveLength(365);
     expect(new Set(fall.dates).size).toBe(365);
     expect(fall.dates).toContain('2026-11-01');
     expect(harnessWindow(noon, 'America/Los_Angeles').dates).toHaveLength(30);
+  });
+
+  it('sizes the heatmap to account age, from 7 days through 365, in the owner zone', () => {
+    const threeDays = activityWindow(noon, 'UTC', new Date('2026-10-18T18:00:00.000Z'));
+    expect(threeDays.end).toBe('2026-10-21');
+    expect(threeDays.start).toBe('2026-10-15');
+    expect(threeDays.dates).toHaveLength(7);
+    expect(new Set(threeDays.dates).size).toBe(7);
+
+    const thirtyDays = activityWindow(noon, 'UTC', new Date('2026-09-21T18:00:00.000Z'));
+    expect(thirtyDays.start).toBe('2026-09-21');
+    expect(thirtyDays.end).toBe('2026-10-21');
+    expect(thirtyDays.dates).toHaveLength(31);
+
+    const twoYears = activityWindow(noon, 'UTC', new Date('2024-10-21T18:00:00.000Z'));
+    expect(twoYears.start).toBe('2025-10-22');
+    expect(twoYears.dates).toHaveLength(365);
+
+    const joinedToday = activityWindow(noon, 'UTC', noon);
+    expect(joinedToday.start).toBe('2026-10-15');
+    expect(joinedToday.dates).toHaveLength(7);
+
+    const joinedAfterNow = activityWindow(noon, 'UTC', new Date('2026-10-22T14:00:00.000Z'));
+    expect(joinedAfterNow.start).toBe('2026-10-15');
+    expect(joinedAfterNow.dates).toHaveLength(7);
+
+    const joined = new Date('2026-10-21T06:30:00.000Z');
+    const later = new Date('2026-11-20T18:00:00.000Z');
+    const utc = activityWindow(later, 'UTC', joined);
+    const losAngeles = activityWindow(later, 'America/Los_Angeles', joined);
+    expect(utc.end).toBe('2026-11-20');
+    expect(losAngeles.end).toBe('2026-11-20');
+    expect(utc.start).toBe('2026-10-21');
+    expect(losAngeles.start).toBe('2026-10-20');
+    expect(utc.dates).toHaveLength(31);
+    expect(losAngeles.dates).toHaveLength(32);
+
+    const dstNow = new Date('2026-03-10T12:00:00.000Z');
+    const dst = activityWindow(dstNow, 'America/Los_Angeles', new Date('2026-03-01T12:00:00.000Z'));
+    expect(dst.start).toBe('2026-03-01');
+    expect(dst.end).toBe('2026-03-10');
+    expect(dst.dates).toHaveLength(10);
+    expect(new Set(dst.dates).size).toBe(10);
+    expect(dst.dates).toContain('2026-03-08');
   });
 
   it('keeps the top 4 harnesses, breaks ties by name, labels a null harness Unknown, and folds the rest into Other', () => {

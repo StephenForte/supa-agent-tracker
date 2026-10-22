@@ -67,9 +67,10 @@ export async function readPublicProfile(db: Database, rawHandle: string, now: Da
   )).limit(1);
   if (!project) return null;
 
-  const activity = activityWindow(now, owner.timezone);
+  const activity = activityWindow(now, owner.timezone, owner.joinedAt);
   const harnesses = harnessWindow(now, owner.timezone);
-  // Same three predicates as readPublicAgents: this owner, is_public, not archived.
+  // D-043: every run this owner has, private and archived included. owner_id stays.
+  // The public-project gate above is what 404s; these queries do not repeat it.
   // ::text keeps the calendar date out of the process-local date parser.
   const dayResult = await db.execute(sql`
     SELECT ((runs.started_at AT TIME ZONE ${owner.timezone})::date)::text AS day,
@@ -78,8 +79,6 @@ export async function readPublicProfile(db: Database, rawHandle: string, now: Da
     FROM runs
     INNER JOIN projects ON projects.id = runs.project_id
     WHERE projects.owner_id = ${owner.id}
-      AND projects.is_public = true
-      AND projects.lifecycle <> 'archived'
     GROUP BY 1
   `);
   const harnessResult = await db.execute(sql`
@@ -89,8 +88,6 @@ export async function readPublicProfile(db: Database, rawHandle: string, now: Da
     FROM runs
     INNER JOIN projects ON projects.id = runs.project_id
     WHERE projects.owner_id = ${owner.id}
-      AND projects.is_public = true
-      AND projects.lifecycle <> 'archived'
       AND ((runs.started_at AT TIME ZONE ${owner.timezone})::date) BETWEEN ${harnesses.start}::date AND ${harnesses.end}::date
     GROUP BY 1, 2
   `);

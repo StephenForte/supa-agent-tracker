@@ -17,7 +17,6 @@ import { migrationsDir } from '../paths.js';
 import type { UserAccess } from '../repo/access.js';
 import * as agentsRepo from '../repo/agents.js';
 import * as projectsRepo from '../repo/projects.js';
-import * as runsRepo from '../repo/runs.js';
 import { createScratchDatabase, type ScratchDatabase } from '../test/database.js';
 import { readPublicProfile, type PublicProfile } from './profile.js';
 import { activityWindow, harnessWindow } from './stats.js';
@@ -198,42 +197,83 @@ describe('public profile', () => {
     }
   }
 
-  it('returns the streak fixture, including a running run and a subagent, and ignores private, archived, and other owners', async () => {
+  it('counts this owner\'s private and archived runs, and still ignores other owners', async () => {
     const page = await readPublicProfile(db, 'streak-one', NOON);
     expect(page).not.toBeNull();
     assertExact(page!);
     expect(page!.stats).toEqual({ agentRuns: 8, longestRunSeconds: 125, currentStreakDays: 2, longestStreakDays: 5 });
     expect(page!.activity.end).toBe('2026-10-21');
-    expect(page!.activity.counts).toHaveLength(365);
-    const dates = activityWindow(NOON, 'UTC').dates;
-    expect(page!.activity.counts[dates.indexOf('2026-10-01')]).toBe(1);
+    expect(page!.activity.start).toBe('2026-10-15');
+    expect(page!.activity.counts).toHaveLength(7);
+    const dates = activityWindow(NOON, 'UTC', new Date(page!.owner.joinedAt)).dates;
+    expect(dates).toHaveLength(7);
+    expect(dates[0]).toBe('2026-10-15');
+    expect(dates).not.toContain('2026-10-01');
     expect(page!.activity.counts[dates.indexOf('2026-10-21')]).toBe(2);
+    expect(page!.activity.counts[dates.indexOf('2026-10-20')]).toBe(1);
     expect(page!.activity.counts[dates.indexOf('2026-10-19')]).toBe(0);
-    expect(page!.activity.counts.reduce((sum, count) => sum + count, 0)).toBe(8);
+    expect(page!.activity.counts[dates.indexOf('2026-10-18')]).toBe(0);
+    expect(page!.activity.counts.reduce((sum, count) => sum + count, 0)).toBe(3);
     expect(page!.owner.name).toBeNull();
     expect(page!.owner.avatarUrl).toBeNull();
+    const harnessDates = harnessWindow(NOON, 'UTC').dates;
+    expect(page!.harnesses.series.map((series) => series.harness)).toEqual(['cursor']);
+    const beforeHarness = page!.harnesses.series[0]!.counts;
+    expect(beforeHarness).toHaveLength(30);
+    expect(beforeHarness.reduce((sum, count) => sum + count, 0)).toBe(8);
+
+    const agentsBefore = await hit('/api/public/streak-one/agents');
+    expect(agentsBefore.statusCode).toBe(200);
 
     const hidden = await projectsRepo.createProject(db, accessStreak, { ...base, name: 'Secret', isPublic: false });
     const hiddenAgent = await agentsRepo.createAgent(db, accessStreak, hidden.id, { name: 'worker', title: 'Hidden', workloadType: 'coding' });
-    await runsRepo.createRun(db, accessStreak, hidden.id, { agentId: hiddenAgent.id, title: 'PRIVATE_SENTINEL', workloadType: 'coding' });
     const archived = await projectsRepo.createProject(db, accessStreak, { ...base, name: 'Old', lifecycle: 'archived', isPublic: true });
     const archivedAgent = await agentsRepo.createAgent(db, accessStreak, archived.id, { name: 'worker', title: 'Old', workloadType: 'coding' });
-    await runsRepo.createRun(db, accessStreak, archived.id, { agentId: archivedAgent.id, title: 'ARCHIVED_SENTINEL', workloadType: 'coding' });
     const otherAccess: UserAccess = { kind: 'user', userId: 'user-bea' };
     await db.insert(users).values({ id: 'user-bea', email: 'bea@example.test', displayName: 'Bea', emailVerified: true, publicHandle: 'bea-owner' });
     const other = await projectsRepo.createProject(db, otherAccess, { ...base, name: 'Theirs', isPublic: true });
     const otherAgent = await agentsRepo.createAgent(db, otherAccess, other.id, { name: 'worker', title: 'Other', workloadType: 'coding' });
-    await runsRepo.createRun(db, otherAccess, other.id, { agentId: otherAgent.id, title: 'OTHER_SENTINEL', workloadType: 'coding' });
+    async function addRun(projectId: string, agentId: string, title: string, start: string, end: string) {
+      await pool.query(
+        `INSERT INTO runs (project_id, agent_id, title, workload_type, harness, started_at, finished_at, last_contact_at, execution_state, work_status)
+         VALUES ($1, $2, $3, 'coding', 'cursor', $4, $5, $5, 'finished', 'completed')`,
+        [projectId, agentId, title, start, end],
+      );
+    }
+    await addRun(hidden.id, hiddenAgent.id, 'PRIVATE_SENTINEL', '2026-10-19T12:00:00.000Z', '2026-10-19T12:10:00.000Z');
+    await addRun(archived.id, archivedAgent.id, 'ARCHIVED_SENTINEL', '2026-10-18T12:00:00.000Z', '2026-10-18T12:00:10.000Z');
+    await addRun(archived.id, archivedAgent.id, 'ARCHIVED_EARLIER', '2026-09-30T12:00:00.000Z', '2026-09-30T12:00:10.000Z');
+    await addRun(other.id, otherAgent.id, 'OTHER_SENTINEL', '2026-10-21T16:00:00.000Z', '2026-10-21T16:30:00.000Z');
 
     const after = await readPublicProfile(db, 'streak-one', NOON);
-    expect(after?.stats).toEqual(page!.stats);
-    expect(after?.activity).toEqual(page!.activity);
-    expect(after?.harnesses).toEqual(page!.harnesses);
+    expect(after).not.toBeNull();
+    assertExact(after!);
+    expect(after!.stats).toEqual({ agentRuns: 11, longestRunSeconds: 600, currentStreakDays: 4, longestStreakDays: 6 });
+    expect(after!.activity.start).toBe('2026-10-15');
+    expect(after!.activity.end).toBe('2026-10-21');
+    expect(after!.activity.counts[dates.indexOf('2026-10-19')]).toBe(1);
+    expect(after!.activity.counts[dates.indexOf('2026-10-18')]).toBe(1);
+    expect(after!.activity.counts[dates.indexOf('2026-10-21')]).toBe(2);
+    expect(after!.activity.counts[dates.indexOf('2026-10-20')]).toBe(1);
+    expect(after!.activity.counts.reduce((sum, count) => sum + count, 0)).toBe(5);
+    const afterHarness = after!.harnesses.series[0]!.counts;
+    expect(after!.harnesses.series.map((series) => series.harness)).toEqual(['cursor']);
+    expect(afterHarness).toHaveLength(30);
+    expect(afterHarness[harnessDates.indexOf('2026-10-19')]! - beforeHarness[harnessDates.indexOf('2026-10-19')]!).toBe(1);
+    expect(afterHarness[harnessDates.indexOf('2026-10-18')]! - beforeHarness[harnessDates.indexOf('2026-10-18')]!).toBe(1);
+    expect(afterHarness[harnessDates.indexOf('2026-09-30')]! - beforeHarness[harnessDates.indexOf('2026-09-30')]!).toBe(1);
+    expect(afterHarness.reduce((sum, count) => sum + count, 0)).toBe(11);
+
+    const agentsAfter = await hit('/api/public/streak-one/agents');
+    expect(agentsAfter.statusCode).toBe(200);
+    expect(agentsAfter.body).toBe(agentsBefore.body);
+
     const http = await hit('/api/public/streak-one/profile');
     expect(http.statusCode).toBe(200);
     expect(http.headers['cache-control']).toBe('no-store');
-    for (const sentinel of ['PRIVATE_SENTINEL', 'ARCHIVED_SENTINEL', 'OTHER_SENTINEL', 'SENTINEL_DISPLAY', 'sentinel-streak', 'user-streak']) {
+    for (const sentinel of ['PRIVATE_SENTINEL', 'ARCHIVED_SENTINEL', 'ARCHIVED_EARLIER', 'OTHER_SENTINEL', 'SENTINEL_DISPLAY', 'sentinel-streak', 'user-streak', 'Secret', 'Old', 'Theirs', hidden.id, archived.id, other.id]) {
       expect(http.body).not.toContain(sentinel);
+      expect(agentsAfter.body).not.toContain(sentinel);
     }
   });
 
@@ -289,11 +329,12 @@ describe('public profile', () => {
   it('drops the current streak to 0 after a missed day', async () => {
     const page = await readPublicProfile(db, 'gap-owner', NOON);
     expect(page?.stats).toEqual({ agentRuns: 2, longestRunSeconds: 0, currentStreakDays: 0, longestStreakDays: 2 });
-    expect(page?.activity.counts).toHaveLength(365);
+    expect(page?.activity.start).toBe('2026-10-15');
+    expect(page?.activity.counts).toHaveLength(7);
     expect(page?.activity.end).toBe('2026-10-21');
   });
 
-  it('buckets 2026-10-21T06:30Z on Oct 20 in Los Angeles and Oct 21 in UTC, and keeps 365 days across DST', async () => {
+  it('buckets 2026-10-21T06:30Z on Oct 20 in Los Angeles and Oct 21 in UTC, and sizes a new account to 7 days', async () => {
     const saved = await call('PATCH', '/api/account', 'user-zone', {
       publicProfile: { ...emptyProfile, timezone: 'America/Los_Angeles' }, request_id: 'zone-la',
     });
@@ -307,9 +348,11 @@ describe('public profile', () => {
       [project, agent],
     );
     const la = await readPublicProfile(db, 'zone-owner', NOON);
-    const laDates = activityWindow(NOON, 'America/Los_Angeles').dates;
+    const laDates = activityWindow(NOON, 'America/Los_Angeles', new Date(la!.owner.joinedAt)).dates;
     expect(la?.activity.end).toBe('2026-10-21');
-    expect(la?.activity.counts).toHaveLength(365);
+    expect(la?.activity.start).toBe('2026-10-15');
+    expect(la?.activity.counts).toHaveLength(7);
+    expect(laDates).toHaveLength(7);
     expect(la?.activity.counts[laDates.indexOf('2026-10-20')]).toBe(1);
     expect(la?.activity.counts[laDates.indexOf('2026-10-21')]).toBe(0);
     expect(la?.stats.currentStreakDays).toBe(1);
@@ -318,7 +361,8 @@ describe('public profile', () => {
     const march = new Date('2026-03-10T12:00:00.000Z');
     const dst = await readPublicProfile(db, 'zone-owner', march);
     expect(dst?.activity.end).toBe('2026-03-10');
-    expect(dst?.activity.counts).toHaveLength(365);
+    expect(dst?.activity.start).toBe('2026-03-04');
+    expect(dst?.activity.counts).toHaveLength(7);
     expect(dst?.activity.counts.every((count) => count === 0)).toBe(true);
     expect(dst?.stats).toEqual({ agentRuns: 1, longestRunSeconds: 0, currentStreakDays: 0, longestStreakDays: 1 });
 
@@ -327,28 +371,45 @@ describe('public profile', () => {
     });
     expect(utc.statusCode).toBe(200);
     const shifted = await readPublicProfile(db, 'zone-owner', NOON);
-    const utcDates = activityWindow(NOON, 'UTC').dates;
+    const utcDates = activityWindow(NOON, 'UTC', new Date(shifted!.owner.joinedAt)).dates;
+    expect(shifted?.activity.counts).toHaveLength(7);
     expect(shifted?.activity.counts[utcDates.indexOf('2026-10-21')]).toBe(1);
     expect(shifted?.activity.counts[utcDates.indexOf('2026-10-20')]).toBe(0);
     expect(shifted?.stats.currentStreakDays).toBe(1);
   });
 
-  it('uses the agents 404, no-store, and a bounded query count that still filters private work', async () => {
+  it('uses the agents 404, no-store, and a bounded query count scoped to this owner', async () => {
     const unknownAgents = await hit('/api/public/missing-handle/agents');
     const unknownProfile = await hit('/api/public/missing-handle/profile');
     const quiet = await hit('/api/public/quiet-page/profile');
     const malformed = await hit('/api/public/NO/profile');
+    const sealedAccess: UserAccess = { kind: 'user', userId: 'user-sealed' };
+    await db.insert(users).values({ id: 'user-sealed', email: 'sealed@example.test', displayName: 'SEALED_DISPLAY', emailVerified: true, publicHandle: 'sealed-owner' });
+    await projectsRepo.createProject(db, sealedAccess, { ...base, name: 'SEALED_PROJECT', isPublic: false });
+    const sealedProfile = await hit('/api/public/sealed-owner/profile');
+    const sealedAgents = await hit('/api/public/sealed-owner/agents');
     expect(unknownProfile.statusCode).toBe(404);
     expect(unknownProfile.body).toBe(unknownAgents.body);
     expect(quiet.body).toBe(unknownAgents.body);
     expect(malformed.body).toBe(unknownAgents.body);
+    expect(sealedProfile.statusCode).toBe(404);
+    expect(sealedAgents.statusCode).toBe(404);
+    expect(sealedProfile.body).toBe(unknownAgents.body);
+    expect(sealedAgents.body).toBe(unknownAgents.body);
+    expect(sealedProfile.body).not.toContain('SEALED_PROJECT');
+    expect(sealedAgents.body).not.toContain('SEALED_PROJECT');
+    expect(sealedProfile.body).not.toContain('SEALED_DISPLAY');
     expect(unknownProfile.headers['cache-control']).toBe('no-store');
     const live = await hit('/api/public/harness-one/profile');
     expect(live.statusCode).toBe(200);
-    assertExact(live.json());
-    expect(live.json().activity.counts).toHaveLength(365);
-    expect(live.json().activity.end).toBe(activityWindow(new Date(), 'UTC').end);
-    expect(live.json().harnesses.series.every((series: { counts: number[] }) => series.counts.length === 30)).toBe(true);
+    const liveBody = live.json() as PublicProfile;
+    assertExact(liveBody);
+    const liveWindow = activityWindow(new Date(), 'UTC', new Date(liveBody.owner.joinedAt));
+    expect(liveBody.activity.counts).toHaveLength(7);
+    expect(liveWindow.dates).toHaveLength(7);
+    expect(liveBody.activity.start).toBe(liveWindow.start);
+    expect(liveBody.activity.end).toBe(liveWindow.end);
+    expect(liveBody.harnesses.series.every((series) => series.counts.length === 30)).toBe(true);
 
     const texts = await captured(async () => {
       const response = await hit('/api/public/bulk-owner/profile');
@@ -360,9 +421,15 @@ describe('public profile', () => {
     const runQueries = statements.filter((text) => /\bruns\b/.test(text) && /projects/.test(text));
     expect(runQueries.length).toBeGreaterThan(0);
     for (const text of runQueries) {
-      expect(text).toContain('is_public');
-      expect(text).toContain('archived');
       expect(text).toContain('owner_id');
+      expect(text).not.toContain('is_public');
+      expect(text).not.toContain('archived');
+    }
+    const gateQueries = statements.filter((text) => text.includes('is_public'));
+    expect(gateQueries.length).toBeGreaterThan(0);
+    for (const text of gateQueries) {
+      expect(text).toContain('archived');
+      expect(text).not.toMatch(/\bruns\b/);
     }
     expect(texts.join('\n')).not.toMatch(/\bbytes\b/);
   });
