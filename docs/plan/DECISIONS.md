@@ -383,3 +383,20 @@ Status: **Confirmed by operator (2026-10-22)**: "use dynamic sizing … where a 
 - `activity.end` = today in the owner's zone. `activity.start` = the later of (end − 364 days) and the account's join date (`users.created_at` as a calendar date in the owner's zone), then moved earlier if needed so the window is at least 7 days. `counts` has one entry per day, start..end inclusive: 7 to 365.
 - The harness chart stays at 30 days.
 - Task: P2-R (server window), P2-S (client renders any length).
+
+### D-045 — Compact public profile; table is the default agents view
+Status: **Confirmed by operator (2026-10-22)**: "tighten it up … the Cursor page has a lot of info above the fold" and "make the table view the default." Amends D-040's layout and its grid-default rule.
+- Above the fold at 1024×768 and 1280×800: header, stats tiles, heatmap, harness chart and the start of the agents table (its header row and at least the first run row). Measured today (2026-10-22, 1024×768): the agents section starts at y=951, below the 768 fold, because the harness chart's SVG scales to 303 px tall.
+- Header: smaller avatar, with join date and links moved into the header (no separate left column). Tiles stay in one row of four on desktop. The heatmap and harness chart sit side by side on wide screens, and the chart has a fixed, short height instead of scaling with width.
+- Agents section: **Table is the default**; `?view=grid` opens the grid; `?view=table` keeps working; an invalid value shows the table.
+- Phones stack everything with no horizontal page scroll; the fold target applies to desktop only.
+- Task: P2-T.
+
+### D-046 — Harness chart and heatmap windows follow the account and restart after a 30-day break
+Status: **Confirmed by operator (2026-10-22)**: "have the chart match the account, same dynamic charting. Account for gaps in usage too, so if you stop usage for 30 days, the next chart should be 1 week." Amends D-044's fixed 30-day harness chart and, after a follow-up the same day ("Apply the 30-day restart to the heatmap as well"), D-044's heatmap window too.
+- Days are owner-zone calendar days; an active day has ≥ 1 run started (all of the owner's runs, D-043).
+- `harnesses.end` = today. The **anchor** is the later of the join date and the start of the current activity period, where periods are separated by 30 or more consecutive inactive days. If the last active day is 30 or more days before today, the anchor is today.
+- `harnesses.start` = the later of (end − 29) and the anchor, then moved earlier if needed so the window is at least 7 days. `counts` length: 7 to 30.
+- Examples: joined 3 days ago → 7 days; joined 2 months ago, active throughout → 30 days; active, then 30 idle days, then active again today → 7 days; resumed 12 days ago after a 40-day break → 12 days; no runs for 45 days → 7 empty days.
+- **Heatmap too (operator, 2026-10-22):** `activity` uses the same anchor. `activity.start` = the later of (end − 364) and the anchor, then moved earlier if needed so the window is at least 7 days (7–365). So after a 30-day break both start again at one week. The stats tiles (agent runs, longest agent, streaks) stay all-time.
+- Tasks: P2-U (server windows for both), P2-T (client renders 7–30 bars; the heatmap already renders any length). Merge P2-T first: the current client draws exactly 30 bar slots.
