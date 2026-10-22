@@ -52,7 +52,7 @@ Branch p2-u-chart-window, cut from origin/main. PR title "P2-U: Harness chart wi
 
 ## The trap
 - **Off by one at the 30-day boundary.** "30 or more consecutive inactive days" is easy to code as 29, 30 or 31. Required tests: a gap of exactly 29 inactive days does not restart; exactly 30 does; 31 does. The last active day exactly 29 days ago keeps the window; exactly 30 days ago → anchor today → 7 days. Every example in the Why section is a test.
-- **Ignoring the join date or the caps.** Joined yesterday with a long history impossible → 7; joined 2 years ago with steady use → 30 (never more); restart today → 7 (never fewer).
+- **Ignoring the join date or the caps.** Joined yesterday → 7; joined 2 years ago with steady use → 30 (never more); restart today → 7 (never fewer).
 - **Zone.** Active days and the join date are owner-zone dates. Run server/public under TZ=UTC and TZ=America/Los_Angeles and report both; include one case where a run at 06:30Z lands on a different owner-zone day and moves the anchor.
 
 ## Must survive
