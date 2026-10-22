@@ -373,7 +373,7 @@ Status: **Confirmed by operator (2026-10-21)**, after the P2-M production check 
 
 ### D-043 — Profile stats count all of the owner's runs; the agents list stays public-only
 Status: **Confirmed by operator (2026-10-22)**: "include ALL agents in the counts, not just the public ones, but only display the public ones." Supersedes D-040's stats scoping only; the page and avatar 404 rules stay.
-- Stats tiles (agent runs, longest agent, current and longest streak), the activity heatmap and the harness chart count every run in every project the owner has, **private and archived included** (planner reading of "ALL"; the operator can narrow it).
+- Stats tiles (agent runs, longest agent, current and longest streak), the activity heatmap and the harness chart count every run in every project the owner has, **private and archived included** (archived confirmed by the operator, 2026-10-22).
 - Unchanged and still public-only: `/api/public/:handle/agents` (project, agent and run rows), the 404 when the owner has no public, non-archived project, and the field allowlist. No private project names, titles, or IDs appear anywhere.
 - Accepted exposure: anonymous visitors now see the volume, timing and harness names of private work, as counts.
 - Task: P2-R.
