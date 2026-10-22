@@ -113,6 +113,17 @@ describe('public profile settings', () => {
     expect(screen.getByLabelText('GitHub')).not.toHaveAttribute('aria-invalid');
   });
 
+  it('strips only one leading @, so the field and the rejected value still match', async () => {
+    const { sources, user } = mount();
+    expect(await screen.findByLabelText('X')).toBeVisible();
+    const before = await sources.tracker.getAccount();
+    fireEvent.change(screen.getByLabelText('X'), { target: { value: '@@jack' } });
+    await user.click(screen.getByRole('button', { name: 'Save profile' }));
+    expect(screen.getByRole('button', { name: 'Save profile' }).nextElementSibling).toHaveTextContent('Not saved: fix X.');
+    expect(screen.getByLabelText('X')).toHaveValue('@jack');
+    expect(await sources.tracker.getAccount()).toEqual(before);
+  });
+
   it('saves a bare handle from a leading @ or a profile URL', async () => {
     const { sources, user } = mount();
     expect(await screen.findByLabelText('GitHub')).toBeVisible();

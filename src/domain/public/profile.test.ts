@@ -32,6 +32,7 @@ describe('public profile fields', () => {
     expect(normalizeSocialHandle('x', '@jack')).toBe('jack');
     expect(normalizeSocialHandle('x', '  @jack  ')).toBe('jack');
     expect(normalizeSocialHandle('x', '@@jack')).toBe('@jack');
+    expect(profileInputFromFields({ name: '', bio: '', github: '', x: '@@jack', linkedin: '', timezone: 'UTC' }).x).toBe('@jack');
     expect(normalizeSocialHandle('x', '@')).toBe('');
     expect(normalizeSocialHandle('github', 'https://github.com/octocat/')).toBe('octocat');
     expect(normalizeSocialHandle('github', 'http://www.github.com/OctoCat')).toBe('OctoCat');

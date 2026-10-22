@@ -4,7 +4,7 @@ import { Button } from '../../components/ui/Button';
 import { useTrackerData } from '../../data/hooks';
 import { AVATAR_NEEDS_LIVE, uploadAvatarFile } from '../../data/public/avatar';
 import type { Account } from '../../domain/types';
-import { emptyPublicProfile, initialTimezone, normalizeSocialHandle, profileErrors, profileInputFromFields, timezoneOptions } from '../../domain/public/profile';
+import { emptyPublicProfile, initialTimezone, profileErrors, profileInputFromFields, timezoneOptions } from '../../domain/public/profile';
 
 const hints = {
   name: 'Up to 60 characters.',
@@ -77,13 +77,10 @@ export function PublicProfileForm({ account }: { account: Account }) {
   async function save() {
     if (!occupy()) return;
     setNotice(null);
-    const githubHandle = normalizeSocialHandle('github', github);
-    const xHandle = normalizeSocialHandle('x', x);
-    const linkedinHandle = normalizeSocialHandle('linkedin', linkedin);
-    setGithub(githubHandle);
-    setX(xHandle);
-    setLinkedin(linkedinHandle);
-    const input = profileInputFromFields({ name, bio, github: githubHandle, x: xHandle, linkedin: linkedinHandle, timezone });
+    const input = profileInputFromFields({ name, bio, github, x, linkedin, timezone });
+    setGithub(input.github ?? '');
+    setX(input.x ?? '');
+    setLinkedin(input.linkedin ?? '');
     const nextErrors = profileErrors(input);
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) {
