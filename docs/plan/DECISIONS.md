@@ -370,3 +370,16 @@ Status: **Confirmed by operator (2026-10-21)**, after the P2-M production check 
 - Ranking (top 4 + Other, tie by label) runs on the folded totals.
 - Not changed: stored run data, the agents table's per-run harness, the run grid, and every other key of the profile payload.
 - Task: P2-P (after P2-N).
+
+### D-043 — Profile stats count all of the owner's runs; the agents list stays public-only
+Status: **Confirmed by operator (2026-10-22)**: "include ALL agents in the counts, not just the public ones, but only display the public ones." Supersedes D-040's stats scoping only; the page and avatar 404 rules stay.
+- Stats tiles (agent runs, longest agent, current and longest streak), the activity heatmap and the harness chart count every run in every project the owner has, **private and archived included** (planner reading of "ALL"; the operator can narrow it).
+- Unchanged and still public-only: `/api/public/:handle/agents` (project, agent and run rows), the 404 when the owner has no public, non-archived project, and the field allowlist. No private project names, titles, or IDs appear anywhere.
+- Accepted exposure: anonymous visitors now see the volume, timing and harness names of private work, as counts.
+- Task: P2-R.
+
+### D-044 — Activity heatmap length follows account age (one week to one year)
+Status: **Confirmed by operator (2026-10-22)**: "use dynamic sizing … where a week is the smallest and a year is the largest." Amends D-040's 365-day heatmap.
+- `activity.end` = today in the owner's zone. `activity.start` = the later of (end − 364 days) and the account's join date (`users.created_at` as a calendar date in the owner's zone), then moved earlier if needed so the window is at least 7 days. `counts` has one entry per day, start..end inclusive: 7 to 365.
+- The harness chart stays at 30 days.
+- Task: P2-R (server window), P2-S (client renders any length).
