@@ -1,12 +1,19 @@
+import { useLayoutEffect, useRef } from 'react';
 import type { PublicProfilePayload } from '../../data/public/types';
 import { buildActivityGrid } from '../../domain/public/heatmap';
 
 export function ActivityHeatmap({ activity }: { activity: PublicProfilePayload['activity'] }) {
   const grid = buildActivityGrid(activity);
+  const scroller = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const node = scroller.current;
+    if (!node) return;
+    node.scrollLeft = node.scrollWidth - node.clientWidth;
+  }, [activity.end]);
   const columns = `repeat(${grid.columns}, 12px)`;
   return <section aria-labelledby="activity-heading">
     <h2 id="activity-heading">Activity</h2>
-    <div className="public-scroll">
+    <div className="public-scroll" ref={scroller}>
       <div className="public-heat">
         <div className="public-heat-months" style={{ gridTemplateColumns: columns }}>
           {Array.from({ length: grid.columns }, (_, column) => {

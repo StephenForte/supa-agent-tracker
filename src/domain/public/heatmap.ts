@@ -63,14 +63,20 @@ export function buildActivityGrid(activity: { start: string; end: string; counts
       row: offset % 7,
     };
   });
-  const months: ActivityMonth[] = [];
+  const monthStarts: ActivityMonth[] = [];
   let seen = '';
   for (const cell of cells) {
     const key = cell.date.slice(0, 7);
     if (key === seen) continue;
     seen = key;
-    months.push({ label: formatMonthLabel(cell.date), column: cell.column });
+    monthStarts.push({ label: formatMonthLabel(cell.date), column: cell.column });
   }
+  // Drop a label that would sit fewer than three columns before the next one.
+  // A partial first month otherwise reads as one word (OctNov). Cells stay put.
+  const months = monthStarts.filter((month, index) => {
+    const next = monthStarts[index + 1];
+    return next === undefined || next.column - month.column >= 3;
+  });
   const columns = cells.length === 0 ? 0 : cells[cells.length - 1]!.column + 1;
   return { cells, months, columns, leadingBlanks };
 }
