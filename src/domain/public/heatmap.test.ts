@@ -51,6 +51,41 @@ describe('activity heatmap', () => {
     expect(partial.cells.find(cell => cell.date === '2025-02-01')).toMatchObject({ column: 2 });
   });
 
+  it('places Monday-first rows and a month label on 7- and 31-day windows', () => {
+    const mondayEnd = buildActivityGrid({ start: '2026-10-13', end: '2026-10-19', counts: Array(7).fill(0) });
+    expect(mondayEnd.cells).toHaveLength(7);
+    expect(mondayEnd.cells[0]).toMatchObject({ date: '2026-10-13', row: 1 });
+    expect(mondayEnd.cells.at(-1)).toMatchObject({ date: '2026-10-19', row: 0, label: 'Oct 19, 2026: 0 runs' });
+    expect(mondayEnd.months).toEqual([{ label: 'Oct', column: 0 }]);
+
+    const sundayEnd = buildActivityGrid({ start: '2026-10-12', end: '2026-10-18', counts: Array(7).fill(0) });
+    expect(sundayEnd.cells).toHaveLength(7);
+    expect(sundayEnd.cells[0]).toMatchObject({ date: '2026-10-12', row: 0 });
+    expect(sundayEnd.cells.at(-1)).toMatchObject({ date: '2026-10-18', row: 6, label: 'Oct 18, 2026: 0 runs' });
+    expect(sundayEnd.months).toEqual([{ label: 'Oct', column: 0 }]);
+
+    const spanning = buildActivityGrid({ start: '2026-10-27', end: '2026-11-02', counts: Array(7).fill(1) });
+    expect(spanning.cells).toHaveLength(7);
+    expect(spanning.cells.at(-1)).toMatchObject({ date: '2026-11-02', row: 0, label: 'Nov 2, 2026: 1 run' });
+    expect(spanning.months).toEqual([{ label: 'Nov', column: 0 }]);
+
+    const month = buildActivityGrid({ start: '2026-10-01', end: '2026-10-31', counts: Array(31).fill(0) });
+    expect(month.cells).toHaveLength(31);
+    expect(month.cells[0]).toMatchObject({ date: '2026-10-01', row: 3 });
+    expect(month.cells.at(-1)).toMatchObject({ date: '2026-10-31', row: 5, label: 'Oct 31, 2026: 0 runs' });
+    expect(month.months).toEqual([{ label: 'Oct', column: 0 }]);
+
+    const utc = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+    const local = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    for (const ymd of ['2026-10-19', '2026-10-18', '2026-11-02']) {
+      const utcLabel = utc.format(new Date(`${ymd}T00:00:00.000Z`));
+      const localLabel = local.format(new Date(`${ymd}T00:00:00.000Z`));
+      const cell = [...mondayEnd.cells, ...sundayEnd.cells, ...spanning.cells].find(item => item.date === ymd);
+      expect(cell?.label.startsWith(utcLabel)).toBe(true);
+      if (localLabel !== utcLabel) expect(cell?.label.startsWith(localLabel)).toBe(false);
+    }
+  });
+
   it('keeps a month label that starts on the 1st or sits three columns before the next', () => {
     const opened = buildActivityGrid({ start: '2025-10-01', end: '2025-11-30', counts: Array(61).fill(0) });
     expect(opened.months[0]).toEqual({ label: 'Oct', column: 0 });

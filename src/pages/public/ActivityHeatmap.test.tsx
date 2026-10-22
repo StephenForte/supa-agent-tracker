@@ -1,5 +1,6 @@
 import { render } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
+import { mobileCss } from '../../test/mobileTargets';
 import { ActivityHeatmap } from './ActivityHeatmap';
 
 function installScrollerMetrics(metrics: { scrollWidth: number; clientWidth: number }) {
@@ -18,6 +19,38 @@ function installScrollerMetrics(metrics: { scrollWidth: number; clientWidth: num
     }
   };
 }
+
+describe('activity heatmap length', () => {
+  it('renders 7-, 31-, and 365-day windows with the end cell, Monday rows, a month, and no page scroll', () => {
+    expect(mobileCss).toContain('.public-page { max-width: 100%; overflow-x: hidden; }');
+    expect(mobileCss).toContain('.public-scroll { max-width: 100%; min-width: 0; overflow-x: auto; }');
+    const windows = [
+      { start: '2026-10-13', end: '2026-10-19', days: 7, last: 'Oct 19, 2026: 0 runs', row: '0', month: 'Oct' },
+      { start: '2026-10-12', end: '2026-10-18', days: 7, last: 'Oct 18, 2026: 0 runs', row: '6', month: 'Oct' },
+      { start: '2026-10-27', end: '2026-11-02', days: 7, last: 'Nov 2, 2026: 0 runs', row: '0', month: 'Nov' },
+      { start: '2026-10-01', end: '2026-10-31', days: 31, last: 'Oct 31, 2026: 0 runs', row: '5', month: 'Oct' },
+      { start: '2025-10-22', end: '2026-10-21', days: 365, last: 'Oct 21, 2026: 0 runs', row: '2', month: 'Oct' },
+    ];
+    for (const window of windows) {
+      const view = render(<ActivityHeatmap activity={{ start: window.start, end: window.end, counts: Array(window.days).fill(0) }} />);
+      const cells = view.getAllByRole('img');
+      expect(cells).toHaveLength(window.days);
+      const last = cells.at(-1);
+      expect(last).toHaveAttribute('aria-label', window.last);
+      expect(last).toHaveAttribute('data-date', window.end);
+      expect(last).toHaveAttribute('data-row', window.row);
+      expect(last?.closest('.public-scroll')).not.toBeNull();
+      const months = [...view.container.querySelectorAll('.public-heat-months span')].map(node => node.textContent);
+      expect(months).toContain(window.month);
+      expect(document.documentElement.scrollLeft).toBe(0);
+      expect(document.body.scrollLeft).toBe(0);
+      view.unmount();
+    }
+    const monday = render(<ActivityHeatmap activity={{ start: '2026-10-12', end: '2026-10-18', counts: Array(7).fill(0) }} />);
+    expect(monday.container.querySelector('[data-date="2026-10-12"]')).toHaveAttribute('data-row', '0');
+    monday.unmount();
+  });
+});
 
 describe('activity heatmap scroll', () => {
   it('opens on the latest week and follows a later activity.end', () => {

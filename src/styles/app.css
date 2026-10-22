@@ -119,3 +119,10 @@ summary { padding: .75rem; border: 1px solid #d6e0e3; border-radius: .4rem; }
 .public-series-2 { background: var(--color-status-stale); fill: var(--color-status-stale); }
 .public-series-3 { background: var(--color-status-failed); fill: var(--color-status-failed); }
 .public-series-4 { background: var(--color-status-neutral); fill: var(--color-status-neutral); }
+
+/* Profile save errors use the failed token (#a12632 on white, about 7:1). */
+.profile-field-error { color: var(--color-status-failed); }
+.profile-invalid { border-color: var(--color-status-failed); }
+.profile-save-row { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1rem; }
+.profile-save-row p { margin: 0; }
+.profile-save-error { color: var(--color-status-failed); font-weight: 650; }
