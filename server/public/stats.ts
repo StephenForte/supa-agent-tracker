@@ -77,8 +77,46 @@ function windowEnding(now: Date, timeZone: string, length: number): DayWindow {
   return { start, end, dates };
 }
 
-export function activityWindow(now: Date, timeZone: string): DayWindow {
-  return windowEnding(now, timeZone, 365);
+const MAX_ACTIVITY_DAYS = 365;
+const MIN_ACTIVITY_DAYS = 7;
+
+function laterDate(left: CalendarDate, right: CalendarDate): CalendarDate {
+  return formatCalendarDate(left) > formatCalendarDate(right) ? left : right;
+}
+
+function earlierDate(left: CalendarDate, right: CalendarDate): CalendarDate {
+  return formatCalendarDate(left) < formatCalendarDate(right) ? left : right;
+}
+
+/** Inclusive calendar dates from start through end. Start is never after end. */
+function datesThrough(start: CalendarDate, end: CalendarDate): string[] {
+  const dates: string[] = [];
+  const endKey = formatCalendarDate(end);
+  let cursor = start;
+  for (let guard = 0; guard < MAX_ACTIVITY_DAYS; guard += 1) {
+    const key = formatCalendarDate(cursor);
+    dates.push(key);
+    if (key === endKey) return dates;
+    cursor = shiftCalendarDate(cursor, 1);
+  }
+  throw new Error('activity window did not reach its end');
+}
+
+/**
+ * D-044. end is today in the owner's zone. start is the later of (end − 364 days)
+ * and the join date in that zone, then moved earlier so the window is at least 7 days.
+ * A join instant after `now` still floors to 7 days. The process timezone is not used.
+ */
+export function activityWindow(now: Date, timeZone: string, joinedAt: Date): DayWindow {
+  const end = calendarDate(now, timeZone);
+  const earliest = shiftCalendarDate(end, -(MAX_ACTIVITY_DAYS - 1));
+  const shortest = shiftCalendarDate(end, -(MIN_ACTIVITY_DAYS - 1));
+  const start = earlierDate(laterDate(calendarDate(joinedAt, timeZone), earliest), shortest);
+  const dates = datesThrough(start, end);
+  const first = dates[0];
+  const last = dates[dates.length - 1];
+  if (!first || !last) throw new Error('calendar window is empty');
+  return { start: first, end: last, dates };
 }
 
 export function harnessWindow(now: Date, timeZone: string): DayWindow {
