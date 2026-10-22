@@ -1,4 +1,4 @@
-DISPATCH · Model: mid tier (Sonnet 5.5 or Grok 4.7): layout and one default flag, client only · Order: wave 15, now, alone.
+DISPATCH · Model: mid tier (Sonnet 5.5 or Grok 4.7): layout and one default flag, client only · Order: wave 15, now, parallel with P2-U (server); no shared files; **merge P2-T before P2-U** (today's client draws exactly 30 bar slots).
 Surface: a local Claude Code, Cursor or Codex agent on the operator's Mac. Not a cloud sandbox.
 Repository: StephenForte/supa-agent-tracker (private, GitHub)
 Baseline: origin/main at ea52b53. Merge current main into your branch before hand-back.
@@ -17,7 +17,8 @@ Planner measurement of https://supa-agent-tracker-app.onrender.com/public/stevef
     activity heatmap                            339 / 156
     harness chart section                       495 / 412   (its SVG alone is 303 px tall: it scales with width)
     agents section                              951 / 5443  (grid cards are 302 px each)
-Nothing of the agents list is above the fold. Planner decision D-045 is on the docs branch (not on main), so **this brief is the full spec**.
+Nothing of the agents list is above the fold. Planner decisions D-045 and D-046 are on the docs branch (not on main), so **this brief is the full spec**.
+The operator also asked (D-046) for the harness chart to follow the account like the heatmap: P2-U changes the server so harnesses.start..harnesses.end is 7 to 30 days. Today src/pages/public/AgentsChart.tsx hardcodes `const DAYS = 30`, so this task makes the chart draw whatever length the payload has.
 
 ## Read first (trust the repository over this brief)
 AGENTS.md. src/pages/public/{PublicAgentsPage,ProfileSummary,ActivityHeatmap,AgentsChart,PublicAgentSection}.tsx and their tests (PublicAgentsPage.test.tsx, PublicProfilePage.test.tsx, ActivityHeatmap.test.tsx), src/domain/public/agents.ts (publicAgentsView: today grid is the default) and its test, src/styles/app.css (.public-* rules, mobile tap targets). Note: CI runs in UTC only, so date code must also be tested under TZ=America/Los_Angeles.
@@ -43,7 +44,7 @@ If the path contains "Dropbox", or is not /Users/stephenforte/src/supa-agent-tra
 ## Line of work
 Branch p2-t-profile-compact, cut from origin/main. PR title "P2-T: Compact public profile; table is the default view". Commit subjects start with "P2-T: ". Don't edit docs/plan/** or docs/prd/**. No new dependencies (D-010).
 ## Pre-assigned identifiers
-- Decision: D-045 (planner-written; cite it). No migration.
+- Decisions: D-045, D-046 (planner-written; cite them). No migration.
 
 ## Outcomes
 1. **Above the fold.** In a real browser at 1024×768 and at 1280×800 (signed out, on a profile with data, e.g. the dev server pointed at seeded data, or the built app), the header, the four stat tiles, the heatmap, the harness chart and the agents table's header row plus at least its first run row are all visible without scrolling. Report, at both sizes, the measured bottom edge of the agents table's first run row (getBoundingClientRect().bottom at scroll 0); it must be ≤ 768 at 1024×768 and ≤ 800 at 1280×800. Attach both screenshots to the PR.
@@ -52,10 +53,12 @@ Branch p2-t-profile-compact, cut from origin/main. PR title "P2-T: Compact publi
 4. **Tiles.** One row of four on desktop, tighter padding; values stay the dominant text.
 5. **Table by default (D-045).** publicAgentsView returns "table" for a missing or invalid value, "grid" only for ?view=grid; ?view=table still works. The toggle shows Table first. The table keeps the P2-H order and its columns.
 6. **Phones.** At 375 px everything stacks, with no page-level horizontal scroll (the table and heatmap scroll inside their own containers, as today) and 44 px tap targets.
+7. **Chart of any length (D-046).** The chart draws one bar slot per day from harnesses.start to harnesses.end inclusive (the counts length, 7 to 30), filling the chart width at the same fixed height; the date range label and legend totals follow the payload. No `30` constant remains.
 
 ## The trap
 - **"Fits" only in jsdom.** jsdom has no layout, so tests can't prove anything is above the fold. The fold claim is proven only by the measured numbers and screenshots from a real browser at both sizes (Outcome 1). The unit tests cover structure: the view default, the toggle, and that the chart's SVG has a fixed height attribute rather than a width-derived one.
 - **Breaking old links and the P2-H order.** /public/:handle/agents, ?view=table and ?view=grid must keep working; the table rows must stay in the P2-H order (most recent last contact first). Tests that assumed grid as the default change on purpose: declare each under EXISTING CHECKS MODIFIED (before → after: default grid → default table).
+- **A chart that silently assumes 30.** With a 7-day payload, a 30-slot chart draws 7 bars squeezed to the left and 23 empty slots, and it still looks plausible. Required tests: 7-, 12- and 30-day harness payloads render 7, 12 and 30 bar slots (count the slot positions or rects per day), the last slot is the end date, and totals match the series sums.
 - **Squeezing the heatmap.** Side by side, the heatmap container is narrower. It must still scroll to the latest week (P2-Q) and render 7–365 days correctly (D-044). Keep the existing heatmap tests green in both timezones.
 
 ## Must survive
@@ -63,7 +66,7 @@ D-035/D-043 data rules (nothing new is shown; layout only), noindex, the 30 s vi
 
 ## Out of scope (with reasons)
 - server/** and the payload: this is layout only.
-- Changing the harness chart's 30-day window (D-044 keeps it).
+- The harness chart window itself: P2-U computes it on the server (D-046).
 - The settings page.
 
 ## Scope
