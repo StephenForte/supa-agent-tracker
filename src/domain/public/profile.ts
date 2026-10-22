@@ -30,13 +30,73 @@ export function blankToNull(value: string): string | null {
   return trimmed ? trimmed : null;
 }
 
+const socialHosts = {
+  github: ['github.com'],
+  x: ['x.com', 'twitter.com'],
+  linkedin: ['linkedin.com'],
+} as const;
+
+function stripOneLeadingAt(value: string): string {
+  return value.startsWith('@') ? value.slice(1) : value;
+}
+
+function decodePathSegment(segment: string): string {
+  try { return decodeURIComponent(segment); }
+  catch { return segment; }
+}
+
+/** One optional www. prefix. A lookalike host such as github.com.evil.example stays intact. */
+function canonicalHost(hostname: string): string {
+  const host = hostname.toLowerCase();
+  return host.startsWith('www.') ? host.slice(4) : host;
+}
+
+function profileUrl(value: string): URL | null {
+  const withScheme = /^https?:\/\//i.test(value)
+    ? value
+    : /^(?:www\.)?(?:github\.com|x\.com|twitter\.com|linkedin\.com)\//i.test(value)
+      ? `https://${value}`
+      : null;
+  if (!withScheme) return null;
+  try {
+    const url = new URL(withScheme);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+    return url;
+  } catch {
+    return null;
+  }
+}
+
+/** A profile URL is exactly github.com/<h>, x.com/<h>, twitter.com/<h>, or linkedin.com/in/<h>. */
+function handleFromProfileUrl(field: keyof typeof socialHosts, value: string): string | null {
+  const url = profileUrl(value);
+  if (!url) return null;
+  const host = canonicalHost(url.hostname);
+  const allowed: readonly string[] = socialHosts[field];
+  if (!allowed.includes(host)) return null;
+  const segments = url.pathname.split('/').filter(segment => segment.length > 0).map(decodePathSegment);
+  if (field === 'linkedin') {
+    if (segments.length !== 2 || segments[0]?.toLowerCase() !== 'in') return null;
+    return segments[1] || null;
+  }
+  if (segments.length !== 1) return null;
+  return segments[0] || null;
+}
+
+/** Trim, drop one leading @, and take a handle only from that field's own profile host. */
+export function normalizeSocialHandle(field: keyof typeof socialHosts, value: string): string {
+  const trimmed = stripOneLeadingAt(value.trim());
+  const fromUrl = handleFromProfileUrl(field, trimmed);
+  return fromUrl === null ? trimmed : stripOneLeadingAt(fromUrl);
+}
+
 export function profileInputFromFields(fields: { name: string; bio: string; github: string; x: string; linkedin: string; timezone: string }): PublicProfileInput {
   return {
     name: blankToNull(fields.name),
     bio: blankToNull(fields.bio),
-    github: blankToNull(fields.github),
-    x: blankToNull(fields.x),
-    linkedin: blankToNull(fields.linkedin),
+    github: blankToNull(normalizeSocialHandle('github', fields.github)),
+    x: blankToNull(normalizeSocialHandle('x', fields.x)),
+    linkedin: blankToNull(normalizeSocialHandle('linkedin', fields.linkedin)),
     timezone: fields.timezone,
   };
 }

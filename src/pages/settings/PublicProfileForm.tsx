@@ -4,7 +4,42 @@ import { Button } from '../../components/ui/Button';
 import { useTrackerData } from '../../data/hooks';
 import { AVATAR_NEEDS_LIVE, uploadAvatarFile } from '../../data/public/avatar';
 import type { Account } from '../../domain/types';
-import { emptyPublicProfile, initialTimezone, profileErrors, profileInputFromFields, timezoneOptions } from '../../domain/public/profile';
+import { emptyPublicProfile, initialTimezone, normalizeSocialHandle, profileErrors, profileInputFromFields, timezoneOptions } from '../../domain/public/profile';
+
+const hints = {
+  name: 'Up to 60 characters.',
+  bio: 'Up to 160 characters.',
+  github: 'Your GitHub username, e.g. octocat. Not the full URL.',
+  x: 'Your X handle without the @, e.g. jack.',
+  linkedin: 'The part after linkedin.com/in/, e.g. jane-doe.',
+} as const;
+
+const fieldOrder = ['name', 'bio', 'github', 'x', 'linkedin', 'timezone'] as const;
+type ProfileField = typeof fieldOrder[number];
+type ProfileErrors = Partial<Record<ProfileField, string>>;
+
+const fieldLabels: Record<ProfileField, string> = {
+  name: 'Profile name',
+  bio: 'Bio',
+  github: 'GitHub',
+  x: 'X',
+  linkedin: 'LinkedIn',
+  timezone: 'Timezone',
+};
+
+function failureSummary(errors: ProfileErrors): string {
+  const names = fieldOrder.filter(field => errors[field]).map(field => fieldLabels[field]);
+  if (names.length === 1) return `Not saved: fix ${names[0]}.`;
+  if (names.length === 2) return `Not saved: fix ${names[0]} and ${names[1]}.`;
+  return `Not saved: fix ${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}.`;
+}
+
+function describedBy(hintId: string | undefined, errorId: string, invalid: boolean): string | undefined {
+  const ids = [hintId, invalid ? errorId : undefined].filter(Boolean);
+  return ids.length > 0 ? ids.join(' ') : undefined;
+}
+
+const control = 'mt-1 w-full rounded border border-slate-400 bg-white p-2';
 
 export function PublicProfileForm({ account }: { account: Account }) {
   const tracker = useTrackerData();
@@ -15,8 +50,9 @@ export function PublicProfileForm({ account }: { account: Account }) {
   const [x, setX] = useState(saved.x ?? '');
   const [linkedin, setLinkedin] = useState(saved.linkedin ?? '');
   const [timezone, setTimezone] = useState(() => initialTimezone(saved));
-  const [errors, setErrors] = useState<Partial<Record<'name' | 'bio' | 'github' | 'x' | 'linkedin' | 'timezone', string>>>({});
+  const [errors, setErrors] = useState<ProfileErrors>({});
   const [message, setMessage] = useState('');
+  const [notice, setNotice] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
   const [pending, setPending] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const preview = useRef<string | null>(null);
@@ -40,15 +76,29 @@ export function PublicProfileForm({ account }: { account: Account }) {
   }
   async function save() {
     if (!occupy()) return;
-    const input = profileInputFromFields({ name, bio, github, x, linkedin, timezone });
+    setNotice(null);
+    const githubHandle = normalizeSocialHandle('github', github);
+    const xHandle = normalizeSocialHandle('x', x);
+    const linkedinHandle = normalizeSocialHandle('linkedin', linkedin);
+    setGithub(githubHandle);
+    setX(xHandle);
+    setLinkedin(linkedinHandle);
+    const input = profileInputFromFields({ name, bio, github: githubHandle, x: xHandle, linkedin: linkedinHandle, timezone });
     const nextErrors = profileErrors(input);
     setErrors(nextErrors);
-    if (Object.keys(nextErrors).length > 0) { release(); return; }
+    if (Object.keys(nextErrors).length > 0) {
+      setNotice({ tone: 'error', text: failureSummary(nextErrors) });
+      const first = fieldOrder.find(field => nextErrors[field]);
+      if (first) document.getElementById(`profile-${first}`)?.focus();
+      release();
+      return;
+    }
     try {
       const result = await tracker.updateAccount({ publicProfile: input });
-      setMessage(result.status === 'saved' ? 'Public profile saved.' : result.message);
+      if (result.status === 'saved') setNotice({ tone: 'ok', text: 'Public profile saved.' });
+      else setNotice({ tone: 'error', text: result.message });
     } catch {
-      setMessage('The public profile could not be saved. Try again.');
+      setNotice({ tone: 'error', text: 'The public profile could not be saved. Try again.' });
     } finally {
       release();
     }
@@ -95,34 +145,43 @@ export function PublicProfileForm({ account }: { account: Account }) {
     {/* The public-handle control is the only form on this page, so password fields stay outside a form. */}
     <div className="mt-4 grid max-w-xl gap-3">
       <label className="text-sm font-medium" htmlFor="profile-name">Profile name
-        <input id="profile-name" className="mt-1 w-full rounded border border-slate-400 bg-white p-2" value={name} aria-invalid={errors.name ? true : undefined} aria-describedby={errors.name ? 'profile-name-error' : undefined} onChange={event => setName(event.target.value)} autoComplete="name" />
+        <input id="profile-name" className={`${control}${errors.name ? ' profile-invalid' : ''}`} value={name} placeholder={hints.name} aria-invalid={errors.name ? true : undefined} aria-describedby={describedBy('profile-name-hint', 'profile-name-error', !!errors.name)} onChange={event => setName(event.target.value)} autoComplete="name" />
       </label>
-      {errors.name && <p id="profile-name-error" role="alert">{errors.name}</p>}
+      <p id="profile-name-hint" className="text-sm text-slate-600">{hints.name}</p>
+      {errors.name && <p id="profile-name-error" className="profile-field-error" role="alert">{errors.name}</p>}
       <label className="text-sm font-medium" htmlFor="profile-bio">Bio
-        <textarea id="profile-bio" className="mt-1 w-full rounded border border-slate-400 bg-white p-2" rows={3} value={bio} aria-invalid={errors.bio ? true : undefined} aria-describedby="profile-bio-count" onChange={event => setBio(event.target.value)} />
+        <textarea id="profile-bio" className={`${control}${errors.bio ? ' profile-invalid' : ''}`} rows={3} value={bio} placeholder={hints.bio} aria-invalid={errors.bio ? true : undefined} aria-describedby={describedBy('profile-bio-hint profile-bio-count', 'profile-bio-error', !!errors.bio)} onChange={event => setBio(event.target.value)} />
       </label>
+      <p id="profile-bio-hint" className="text-sm text-slate-600">{hints.bio}</p>
       <p id="profile-bio-count" className="text-sm text-slate-600">{bio.trim().length}/160</p>
-      {errors.bio && <p role="alert">{errors.bio}</p>}
+      {errors.bio && <p id="profile-bio-error" className="profile-field-error" role="alert">{errors.bio}</p>}
       <label className="text-sm font-medium" htmlFor="profile-github">GitHub
-        <input id="profile-github" className="mt-1 w-full rounded border border-slate-400 bg-white p-2" value={github} aria-invalid={errors.github ? true : undefined} onChange={event => setGithub(event.target.value)} autoComplete="off" spellCheck={false} />
+        <input id="profile-github" className={`${control}${errors.github ? ' profile-invalid' : ''}`} value={github} placeholder={hints.github} aria-invalid={errors.github ? true : undefined} aria-describedby={describedBy('profile-github-hint', 'profile-github-error', !!errors.github)} onChange={event => setGithub(event.target.value)} autoComplete="off" spellCheck={false} />
       </label>
-      {errors.github && <p role="alert">{errors.github}</p>}
+      <p id="profile-github-hint" className="text-sm text-slate-600">{hints.github}</p>
+      {errors.github && <p id="profile-github-error" className="profile-field-error" role="alert">{errors.github}</p>}
       <label className="text-sm font-medium" htmlFor="profile-x">X
-        <input id="profile-x" className="mt-1 w-full rounded border border-slate-400 bg-white p-2" value={x} aria-invalid={errors.x ? true : undefined} onChange={event => setX(event.target.value)} autoComplete="off" spellCheck={false} />
+        <input id="profile-x" className={`${control}${errors.x ? ' profile-invalid' : ''}`} value={x} placeholder={hints.x} aria-invalid={errors.x ? true : undefined} aria-describedby={describedBy('profile-x-hint', 'profile-x-error', !!errors.x)} onChange={event => setX(event.target.value)} autoComplete="off" spellCheck={false} />
       </label>
-      {errors.x && <p role="alert">{errors.x}</p>}
+      <p id="profile-x-hint" className="text-sm text-slate-600">{hints.x}</p>
+      {errors.x && <p id="profile-x-error" className="profile-field-error" role="alert">{errors.x}</p>}
       <label className="text-sm font-medium" htmlFor="profile-linkedin">LinkedIn
-        <input id="profile-linkedin" className="mt-1 w-full rounded border border-slate-400 bg-white p-2" value={linkedin} aria-invalid={errors.linkedin ? true : undefined} onChange={event => setLinkedin(event.target.value)} autoComplete="off" spellCheck={false} />
+        <input id="profile-linkedin" className={`${control}${errors.linkedin ? ' profile-invalid' : ''}`} value={linkedin} placeholder={hints.linkedin} aria-invalid={errors.linkedin ? true : undefined} aria-describedby={describedBy('profile-linkedin-hint', 'profile-linkedin-error', !!errors.linkedin)} onChange={event => setLinkedin(event.target.value)} autoComplete="off" spellCheck={false} />
       </label>
-      {errors.linkedin && <p role="alert">{errors.linkedin}</p>}
+      <p id="profile-linkedin-hint" className="text-sm text-slate-600">{hints.linkedin}</p>
+      {errors.linkedin && <p id="profile-linkedin-error" className="profile-field-error" role="alert">{errors.linkedin}</p>}
       <label className="text-sm font-medium" htmlFor="profile-timezone">Timezone
-        <select id="profile-timezone" className="mt-1 w-full rounded border border-slate-400 bg-white p-2" value={timezone} aria-invalid={errors.timezone ? true : undefined} onChange={event => setTimezone(event.target.value)}>
+        <select id="profile-timezone" className={`${control}${errors.timezone ? ' profile-invalid' : ''}`} value={timezone} aria-invalid={errors.timezone ? true : undefined} aria-describedby={describedBy(undefined, 'profile-timezone-error', !!errors.timezone)} onChange={event => setTimezone(event.target.value)}>
           {!zones.includes(timezone) && <option value={timezone}>{timezone}</option>}
           {zones.map(zone => <option key={zone} value={zone}>{zone}</option>)}
         </select>
       </label>
-      {errors.timezone && <p role="alert">{errors.timezone}</p>}
-      <Button type="button" variant="primary" disabled={pending} onClick={() => void save()}>Save profile</Button>
+      {errors.timezone && <p id="profile-timezone-error" className="profile-field-error" role="alert">{errors.timezone}</p>}
+      <div className="profile-save-row">
+        <Button type="button" variant="primary" disabled={pending} onClick={() => void save()}>Save profile</Button>
+        {notice?.tone === 'error' ? <p className="profile-save-error" role="alert">{notice.text}</p> : null}
+        {notice?.tone === 'ok' ? <p role="status">{notice.text}</p> : null}
+      </div>
     </div>
     {account.publicHandle && <p className="text-sm"><Link to={`/public/${account.publicHandle}`}>View public profile</Link></p>}
     {message && <p role="status">{message}</p>}

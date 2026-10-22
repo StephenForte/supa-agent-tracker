@@ -58,6 +58,78 @@ describe('public profile settings', () => {
     expect(await sources.tracker.getAccount()).toEqual(before);
   });
 
+  it('shows what each field expects before typing', async () => {
+    mount();
+    expect(await screen.findByLabelText('GitHub')).toHaveAttribute('placeholder', 'Your GitHub username, e.g. octocat. Not the full URL.');
+    expect(screen.getByLabelText('GitHub')).toHaveAttribute('aria-describedby', 'profile-github-hint');
+    expect(screen.getByText('Your GitHub username, e.g. octocat. Not the full URL.')).toBeVisible();
+    expect(screen.getByLabelText('X')).toHaveAttribute('placeholder', 'Your X handle without the @, e.g. jack.');
+    expect(screen.getByLabelText('X')).toHaveAttribute('aria-describedby', 'profile-x-hint');
+    expect(screen.getByText('Your X handle without the @, e.g. jack.')).toBeVisible();
+    expect(screen.getByLabelText('LinkedIn')).toHaveAttribute('placeholder', 'The part after linkedin.com/in/, e.g. jane-doe.');
+    expect(screen.getByLabelText('LinkedIn')).toHaveAttribute('aria-describedby', 'profile-linkedin-hint');
+    expect(screen.getByText('The part after linkedin.com/in/, e.g. jane-doe.')).toBeVisible();
+    expect(screen.getByLabelText('Profile name')).toHaveAttribute('aria-describedby', 'profile-name-hint');
+    expect(screen.getByText('Up to 60 characters.')).toBeVisible();
+    expect(screen.getByLabelText('Bio')).toHaveAttribute('aria-describedby', 'profile-bio-hint profile-bio-count');
+    expect(screen.getByText('Up to 160 characters.')).toBeVisible();
+    expect(screen.getByText('0/160')).toBeVisible();
+  });
+
+  it('puts a red summary next to save, marks the fields, and focuses the first invalid one', async () => {
+    const { sources, user } = mount();
+    expect(await screen.findByLabelText('GitHub')).toBeVisible();
+    const before = await sources.tracker.getAccount();
+    fireEvent.change(screen.getByLabelText('GitHub'), { target: { value: 'https://gitlab.com/octocat' } });
+    fireEvent.change(screen.getByLabelText('X'), { target: { value: 'has space' } });
+    await user.click(screen.getByRole('button', { name: 'Save profile' }));
+    const button = screen.getByRole('button', { name: 'Save profile' });
+    const summary = button.nextElementSibling;
+    expect(summary).toHaveTextContent('Not saved: fix GitHub and X.');
+    expect(summary).toHaveAttribute('role', 'alert');
+    expect(summary?.closest('.profile-save-row')).toBe(button.parentElement);
+    expect(summary).toHaveClass('profile-save-error');
+    const github = screen.getByLabelText('GitHub');
+    expect(github).toHaveAttribute('aria-invalid', 'true');
+    expect(github).toHaveClass('profile-invalid');
+    expect(github).toHaveAttribute('aria-describedby', 'profile-github-hint profile-github-error');
+    expect(github).toHaveValue('https://gitlab.com/octocat');
+    expect(github).toHaveFocus();
+    expect(screen.getByText(profileMessages.github)).toHaveClass('profile-field-error');
+    expect(screen.getByText(profileMessages.x)).toHaveClass('profile-field-error');
+    expect(await sources.tracker.getAccount()).toEqual(before);
+  });
+
+  it('shows a server error with no field in the same red summary', async () => {
+    const { sources, user } = mount();
+    expect(await screen.findByRole('button', { name: 'Save profile' })).toBeVisible();
+    vi.spyOn(sources.tracker, 'updateAccount').mockResolvedValue({ status: 'invalid', message: 'The profile could not be stored.' });
+    await user.click(screen.getByRole('button', { name: 'Save profile' }));
+    const summary = await screen.findByText('The profile could not be stored.');
+    const button = screen.getByRole('button', { name: 'Save profile' });
+    expect(summary).toBe(button.nextElementSibling);
+    expect(summary).toHaveAttribute('role', 'alert');
+    expect(summary).toHaveClass('profile-save-error');
+    expect(screen.getByLabelText('GitHub')).not.toHaveAttribute('aria-invalid');
+  });
+
+  it('saves a bare handle from a leading @ or a profile URL', async () => {
+    const { sources, user } = mount();
+    expect(await screen.findByLabelText('GitHub')).toBeVisible();
+    fireEvent.change(screen.getByLabelText('GitHub'), { target: { value: 'https://github.com/octocat/' } });
+    fireEvent.change(screen.getByLabelText('X'), { target: { value: '@jack' } });
+    fireEvent.change(screen.getByLabelText('LinkedIn'), { target: { value: 'https://www.linkedin.com/in/jane-doe/?trk=x' } });
+    await user.click(screen.getByRole('button', { name: 'Save profile' }));
+    const saved = await screen.findByText('Public profile saved.');
+    expect(saved).toHaveAttribute('role', 'status');
+    expect(saved).not.toHaveClass('profile-save-error');
+    expect(saved).toBe(screen.getByRole('button', { name: 'Save profile' }).nextElementSibling);
+    expect((await sources.tracker.getAccount()).publicProfile).toMatchObject({ github: 'octocat', x: 'jack', linkedin: 'jane-doe' });
+    expect(screen.getByLabelText('GitHub')).toHaveValue('octocat');
+    expect(screen.getByLabelText('X')).toHaveValue('jack');
+    expect(screen.getByLabelText('LinkedIn')).toHaveValue('jane-doe');
+  });
+
   it('saves the profile against the demo store and links to the public page', async () => {
     const { sources, user } = mount();
     expect(await screen.findByLabelText('Profile name')).toBeVisible();
