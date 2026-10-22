@@ -334,3 +334,39 @@ Status: **Planner decision (2026-10-19)**, from operator feedback (a friend's si
 - `/register` says whether an invite is attached. With one: use the invited email address. Without one: registration is by invitation; open the link. Submit stays enabled for the `ADMIN_EMAIL` bootstrap.
 - The client's 403 text adds the email-match hint and "ask for a new invitation". The server keeps one generic 403 body for every failure (D-031), so nothing becomes enumerable.
 - Not now: prefilling or locking the invited email (it needs a token lookup endpoint).
+
+### D-039 — Onboarding for new users
+Status: **Confirmed by operator (2026-10-20)** ("brief items 1, 2 and 3 as one task"). Builds on D-018 and D-032.
+- Setup options: Codex (OpenAI; production-verified by the operator on 2026-10-20 in Codex desktop, using URL plus bearer token env var `SUPA_AGENT_TRACKER_TOKEN`) and Claude Code (`claude mcp add --transport http --scope user`; not yet verified) join Cursor, Claude Desktop and Grok Bot on the token reveal and the integration guide. The token plaintext still appears only in the one-time reveal.
+- Getting started: while a user has no runs, Needs me shows three data-driven steps (project, token, connect with a per-project prompt). The per-project prompt is BASE_INSTRUCTION_DRAFT plus a leading line naming the project id. The same copy is on /settings/integrations.
+- Bad token: D-018's 401 and `resource_metadata` stay. Protected-resource metadata is also served at `/.well-known/oauth-protected-resource/mcp` (RFC 9728 path form). Every other `/.well-known/*` returns 404 JSON instead of the SPA, and the UI says an Authenticate or Sign in prompt means a bad token.
+- Later (after feedback from users 2 and 3): one-click connect and per-client installers.
+- Task: P2-J.
+
+### D-040 — Public profile page (Cursor-style), avatar, streaks
+Status: **Planner decision (2026-10-21)**, from the operator's request to make the public agents page a profile like https://cursor.com/@stevef. Extends D-035; every D-035 rule stays (opt-in handle, public non-archived projects only, identical 404, IP rate limit, `no-store` JSON, `noindex`, explicit allowlist with exact-key tests, no IDs).
+- **Route.** The profile lives at `/public/:handle`. `/public/:handle/agents` keeps working and renders the same page (old links stay valid). `/@handle` isn't possible: React Router segments can't be part-static.
+- **New public fields, all opt-in and owner-set:** display name (≤60), bio (≤160), GitHub / X / LinkedIn **handles** (not URLs; the client builds `https://github.com/<h>`, `https://x.com/<h>`, `https://www.linkedin.com/in/<h>`, so no `javascript:` or arbitrary URLs), avatar, and the account's join date (`users.created_at`, shown as "Joined N days ago"). The account email and the private `display_name` stay private.
+- **Timezone.** `users.profile_timezone` (IANA name, default `UTC`), private. Days, streaks and the heatmap are computed in that zone server-side. Settings defaults the picker to the browser's zone.
+- **Stats, scoped exactly like D-035** (the owner's public, non-archived projects, all runs incl. subagents, all time unless noted): Agent runs = count of runs; Longest agent = max(coalesce(finished_at, last_contact_at) − started_at); an active day = a day with ≥1 run started; Current streak = consecutive active days ending today, or ending yesterday when today has none yet, else 0; Longest streak = longest run of consecutive active days.
+- **Activity heatmap:** last 365 days ending today (owner zone), dense daily run-start counts. **Agents chart:** last 30 days, daily run starts stacked by harness, top 4 harnesses by total plus "Other" (null harness = "Unknown").
+- **No tokens chart.** The tracker doesn't collect token usage; Cursor's tokens panel is replaced by the harness chart.
+- **Agents section:** Grid (one card per logical agent) and Table (today's run table, P2-H order) views, `?view=table` in the URL; grid is the default.
+- **Avatar storage:** a `user_avatars` table (bytea, ≤256 KiB, PNG/JPEG/WebP only, magic bytes must match the declared type; SVG never). Render's disk is ephemeral, and no new dependency (D-010) means no object-storage SDK. The browser center-crops and re-encodes to 256×256 through a canvas before upload, which also drops EXIF/GPS; the server doesn't rely on that. Upload is a session-only `PUT /api/account/avatar` with an image Content-Type (a non-simple type, so cross-site form posts can't reach it). Served from `GET /api/public/:handle/avatar` with `nosniff`, a restrictive CSP and ETag/`no-cache`; same 404 rule as the page.
+- **Contract:** `GET /api/public/:handle/profile` and account field shapes are fixed in the P2-M/P2-N briefs (identical text in both). Migration `0008_public_profile`.
+- Tasks: P2-M (server), P2-N (page + settings), in parallel.
+
+### D-041 — Muse joins the setup options
+Status: **Operator-reported, production-verified 2026-10-21** (Muse app on macOS; two Muse runs reported to the tracker successfully). Builds on D-039.
+- Muse has no MCP connector screen. The user asks the main Muse bot in chat to add the MCP server; it asks for the server URL and the auth method, then collects the token in a **masked field labelled "API Key"**, like Grok Bot. The tracker accepts only `Authorization: Bearer`, so the working runs mean Muse sends the API Key as a bearer token (inferred; the exact wording of Muse's auth-method choices wasn't recorded).
+- The token never goes into the Muse chat. The token reveal offers "Copy Muse setup message" (URL and auth method only, **no token**) plus the existing token Copy for the API Key field.
+- Muse joins Cursor, Claude Desktop, Grok Bot, Codex and Claude Code in the token reveal, Settings → Integrations, `docs/integrations/muse.md` and the compatibility matrix. Harness and model: report only what the runtime knows.
+- Task: P2-O.
+
+### D-042 — Harness names fold case-insensitively on the public chart
+Status: **Confirmed by operator (2026-10-21)**, after the P2-M production check showed "Cursor" (13) and "cursor" (5) as two series on `/api/public/stevef/profile`. Amends D-040's harness chart only.
+- Harness is self-reported per run, so spelling varies. For `harnesses.series`, names are grouped by trimmed, case-folded key; null, empty or whitespace-only names are "Unknown".
+- The displayed label for a group is its most-used original spelling (trimmed) in the 30-day window; a tie goes to the code-unit-smallest spelling (so "Cursor" beats "cursor").
+- Ranking (top 4 + Other, tie by label) runs on the folded totals.
+- Not changed: stored run data, the agents table's per-run harness, the run grid, and every other key of the profile payload.
+- Task: P2-P (after P2-N).
