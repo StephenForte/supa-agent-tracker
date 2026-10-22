@@ -42,7 +42,7 @@ describe('public agents page', () => {
     expect(document.querySelector('meta[name="robots"]')).toHaveAttribute('content', 'noindex');
   });
 
-  it('renders the allowlisted grid, the shared 404, and polls only while visible', async () => {
+  it('renders the allowlisted table by default, the shared 404, and polls only while visible', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const load = vi.fn<(handle: string) => Promise<PublicAgentsPayload | 'missing'>>(async () => page);
     const router = createMemoryRouter([{ path: '/public/:handle/agents', element: <PublicAgentsPage loader={load} /> }], { initialEntries: ['/public/ada-bot/agents'] });

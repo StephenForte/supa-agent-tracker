@@ -1,7 +1,7 @@
 import type { PublicAgent, PublicProject, PublicRun } from '../../data/public/types';
 
 export function publicAgentsView(value: string | null | undefined): 'grid' | 'table' {
-  return value === 'table' ? 'table' : 'grid';
+  return value === 'grid' ? 'grid' : 'table';
 }
 
 export function publicLiveness(run: Pick<PublicRun, 'stale' | 'executionState'> | null): 'Live' | 'Stale' | '—' {

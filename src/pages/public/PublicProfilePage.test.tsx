@@ -107,19 +107,36 @@ describe('public profile page', () => {
     expect(screen.getByText('F').closest('.public-heat-days')).not.toBeNull();
   });
 
-  it('switches to the table from ?view=table and ignores any other value', async () => {
+  it('defaults invalid views to table, preserves other params, and keeps explicit grid/table links', async () => {
     const user = userEvent.setup();
-    const { router } = show('/public/ada-bot?view=nope');
-    expect(await screen.findByRole('button', { name: 'Grid' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.queryByRole('table')).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Table' }));
-    expect(router.state.location.search).toBe('?view=table');
+    const { router } = show('/public/ada-bot?view=nope&keep=yes');
+    expect(await screen.findByRole('button', { name: 'Table' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('columnheader', { name: 'Project' })).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Table' })).toHaveAttribute('aria-pressed', 'true');
+    expect(within(screen.getByRole('group', { name: 'Agents layout' })).getAllByRole('button').map(button => button.textContent)).toEqual(['Table', 'Grid']);
     await user.click(screen.getByRole('button', { name: 'Grid' }));
-    expect(router.state.location.search).toBe('');
+    expect(router.state.location.search).toBe('?view=grid&keep=yes');
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 3, name: 'worker' })).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Table' }));
+    expect(router.state.location.search).toBe('?view=table&keep=yes');
+    expect(screen.getByRole('table')).toBeVisible();
+  });
+
+  it.each(['/public/ada-bot', '/public/ada-bot/agents', '/public/ada-bot?view=table'])(
+    'shows the table at %s', async path => {
+      show(path);
+      expect(await screen.findByRole('table')).toBeVisible();
+      expect(screen.getByRole('cell', { name: 'Status run' })).toBeVisible();
+    },
+  );
+
+  it('keeps identity, joined date and links together in the compact header', async () => {
+    show('/public/ada-bot');
+    const name = await screen.findByRole('heading', { level: 1, name: 'Ada Lovelace' });
+    const header = name.closest('header')!;
+    expect(within(header).getByText('Joined 10 days ago')).toBeVisible();
+    expect(within(header).getByRole('link', { name: 'GitHub' })).toBeVisible();
+    expect(document.querySelector('aside')).toBeNull();
   });
 
   it('shows the shared missing page when the profile is a 404', async () => {
