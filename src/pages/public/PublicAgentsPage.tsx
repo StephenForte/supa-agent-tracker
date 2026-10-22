@@ -69,8 +69,7 @@ export function PublicAgentsPage({ loader = publicAgentsLoader, profileLoader = 
   }, [handle, loader, profileLoader]);
   function setView(next: 'grid' | 'table') {
     const updated = new URLSearchParams(params);
-    if (next === 'table') updated.set('view', 'table');
-    else updated.delete('view');
+    updated.set('view', next);
     setParams(updated, { replace: true });
   }
   const blocked = agents.kind === 'missing' || profile.kind === 'missing';

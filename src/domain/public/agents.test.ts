@@ -7,11 +7,13 @@ const run = (title: string, lastContactAt: string, startedAt = lastContactAt): P
 });
 
 describe('public agent presentation', () => {
-  it('reads the view param and falls back to grid', () => {
-    expect(publicAgentsView(null)).toBe('grid');
+  it('reads explicit grid links and defaults missing or invalid views to table', () => {
+    expect(publicAgentsView(null)).toBe('table');
+    expect(publicAgentsView(undefined)).toBe('table');
+    expect(publicAgentsView('grid')).toBe('grid');
     expect(publicAgentsView('table')).toBe('table');
-    expect(publicAgentsView('TABLE')).toBe('grid');
-    expect(publicAgentsView('cards')).toBe('grid');
+    expect(publicAgentsView('TABLE')).toBe('table');
+    expect(publicAgentsView('cards')).toBe('table');
   });
 
   it('orders cards by latest contact and leaves agents with no runs last', () => {

@@ -9,17 +9,17 @@ export function PublicAgentSection({ page, view, onView }: { page: PublicAgentsP
   const rows = publicTableRows(page.projects);
   const cards = publicAgentCards(page.projects);
   return <section aria-labelledby="public-agents-heading">
-    <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
+    <div className="public-agents-toolbar">
       <h2 id="public-agents-heading">Agents</h2>
       <div className="flex flex-wrap gap-2" role="group" aria-label="Agents layout">
-        <Button aria-pressed={view === 'grid'} onClick={() => onView('grid')}>Grid</Button>
         <Button aria-pressed={view === 'table'} onClick={() => onView('table')}>Table</Button>
+        <Button aria-pressed={view === 'grid'} onClick={() => onView('grid')}>Grid</Button>
       </div>
     </div>
     <p className="text-sm text-slate-600">Status for {page.owner.handle}. This page refreshes while it is visible.</p>
     {view === 'table'
       ? rows.length === 0 ? <p>No public projects.</p> : <div className="public-scroll max-w-full overflow-x-auto rounded border border-slate-200">
-        <table className="w-full min-w-[960px] text-left text-sm">
+        <table className="public-agents-table w-full min-w-[960px] text-left text-sm">
           <caption className="sr-only">Public project, agent and run status</caption>
           <thead className="bg-slate-50"><tr>
             {['Project', 'Agent', 'Run', 'State', 'Work status', 'Harness', 'Started', 'Last contact', 'Finished', 'Live / stale'].map(label => <th key={label} className="p-3 font-semibold">{label}</th>)}

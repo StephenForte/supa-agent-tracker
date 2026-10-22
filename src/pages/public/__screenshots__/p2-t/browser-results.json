@@ -1,0 +1,213 @@
+[
+  {
+    "viewport": [
+      1024,
+      768
+    ],
+    "scrollY": 0,
+    "firstRun": {
+      "top": 676.75,
+      "bottom": 753.75,
+      "width": 990,
+      "height": 77
+    },
+    "header": {
+      "top": 51.796875,
+      "bottom": 160.734375,
+      "width": 992,
+      "height": 108.9375
+    },
+    "tiles": {
+      "top": 176.734375,
+      "bottom": 246.734375,
+      "width": 992,
+      "height": 70
+    },
+    "heatmap": {
+      "top": 262.734375,
+      "bottom": 527.375,
+      "width": 484,
+      "height": 264.640625
+    },
+    "chart": {
+      "top": 262.734375,
+      "bottom": 527.375,
+      "width": 484,
+      "height": 264.640625
+    },
+    "svg": {
+      "top": 318.609375,
+      "bottom": 478.609375,
+      "width": 484,
+      "height": 160
+    },
+    "scrollWidth": 1024,
+    "heatScroll": {
+      "left": 0,
+      "max": 0
+    },
+    "targets": [
+      {
+        "text": "GitHub",
+        "height": 21
+      },
+      {
+        "text": "X",
+        "height": 21
+      },
+      {
+        "text": "Table",
+        "height": 40
+      },
+      {
+        "text": "Grid",
+        "height": 40
+      }
+    ]
+  },
+  {
+    "viewport": [
+      1280,
+      800
+    ],
+    "scrollY": 0,
+    "firstRun": {
+      "top": 653.5625,
+      "bottom": 730.5625,
+      "width": 1246,
+      "height": 77
+    },
+    "header": {
+      "top": 51.796875,
+      "bottom": 160.734375,
+      "width": 1248,
+      "height": 108.9375
+    },
+    "tiles": {
+      "top": 176.734375,
+      "bottom": 246.734375,
+      "width": 1248,
+      "height": 70
+    },
+    "heatmap": {
+      "top": 262.734375,
+      "bottom": 504.1875,
+      "width": 612,
+      "height": 241.453125
+    },
+    "chart": {
+      "top": 262.734375,
+      "bottom": 504.1875,
+      "width": 612,
+      "height": 241.453125
+    },
+    "svg": {
+      "top": 318.609375,
+      "bottom": 478.609375,
+      "width": 612,
+      "height": 160
+    },
+    "scrollWidth": 1280,
+    "heatScroll": {
+      "left": 0,
+      "max": 0
+    },
+    "targets": [
+      {
+        "text": "GitHub",
+        "height": 21
+      },
+      {
+        "text": "X",
+        "height": 21
+      },
+      {
+        "text": "Table",
+        "height": 40
+      },
+      {
+        "text": "Grid",
+        "height": 40
+      }
+    ]
+  },
+  {
+    "viewport": [
+      375,
+      812
+    ],
+    "scrollY": 0,
+    "firstRun": {
+      "top": 967.625,
+      "bottom": 1044.625,
+      "width": 960,
+      "height": 77
+    },
+    "header": {
+      "top": 43.796875,
+      "bottom": 175.734375,
+      "width": 343,
+      "height": 131.9375
+    },
+    "tiles": {
+      "top": 191.734375,
+      "bottom": 343.734375,
+      "width": 343,
+      "height": 152
+    },
+    "heatmap": {
+      "top": 359.734375,
+      "bottom": 510.515625,
+      "width": 343,
+      "height": 150.78125
+    },
+    "chart": {
+      "top": 526.515625,
+      "bottom": 791.15625,
+      "width": 343,
+      "height": 264.640625
+    },
+    "svg": {
+      "top": 582.390625,
+      "bottom": 742.390625,
+      "width": 343,
+      "height": 160
+    },
+    "scrollWidth": 375,
+    "heatScroll": {
+      "left": 0,
+      "max": 0
+    },
+    "targets": [
+      {
+        "text": "GitHub",
+        "height": 44
+      },
+      {
+        "text": "X",
+        "height": 44
+      },
+      {
+        "text": "Table",
+        "height": 44
+      },
+      {
+        "text": "Grid",
+        "height": 44
+      }
+    ]
+  },
+  {
+    "longHeatmap": {
+      "left": 467,
+      "max": 467
+    },
+    "scrollWidth": 375
+  },
+  {
+    "desktopLongHeatmap": {
+      "left": 326,
+      "max": 326
+    }
+  }
+]

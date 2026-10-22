@@ -126,3 +126,32 @@ summary { padding: .75rem; border: 1px solid #d6e0e3; border-radius: .4rem; }
 .profile-save-row { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1rem; }
 .profile-save-row p { margin: 0; }
 .profile-save-error { color: var(--color-status-failed); font-weight: 650; }
+
+/* D-045/D-046: compact full-width identity and stats, with bounded chart height. */
+.public-page { padding-block: 1.25rem; }
+.public-profile-header { display: flex; align-items: center; gap: 1rem; }
+.public-avatar, .public-avatar-fallback { width: 4rem; height: 4rem; flex-shrink: 0; border-radius: 999px; object-fit: cover; }
+.public-profile-header h1 { margin: 0; font-size: 1.75rem; }
+.public-profile-header p { margin: .2rem 0; }
+.public-profile-meta { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem 1rem; color: var(--color-status-neutral); font-size: .875rem; }
+.public-profile-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; margin-block: 1rem; }
+.public-profile-stats > div { padding: .5rem .75rem; border: 1px solid #d6e0e3; border-radius: .25rem; background: white; }
+.public-profile-charts { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
+.public-profile-charts > section { min-width: 0; }
+.public-profile-charts h2 { margin-bottom: .4rem; }
+.public-profile-charts p { margin: 0; }
+.public-profile-charts .public-chart { height: 160px; }
+.public-profile-charts .public-legend { gap: .25rem .75rem; margin: .4rem 0 0; font-size: .8rem; }
+.public-agents-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; margin-top: 1rem; }
+.public-agents-toolbar h2 { margin: 0; }
+@media (min-width: 640px) {
+  .public-profile-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (min-width: 1024px) {
+  .public-profile-charts { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.5rem; }
+}
+
+.public-page > .eyebrow { margin-top: 0; }
+.public-profile-header p { line-height: 1.4; }
+.public-agents-table :is(th, td) { padding: .5rem .65rem; }
+.public-agents-toolbar + p { margin-block: .4rem; }
