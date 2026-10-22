@@ -392,11 +392,11 @@ Status: **Confirmed by operator (2026-10-22)**: "tighten it up … the Cursor pa
 - Phones stack everything with no horizontal page scroll; the fold target applies to desktop only.
 - Task: P2-T.
 
-### D-046 — Harness chart window follows the account and restarts after a 30-day break
-Status: **Confirmed by operator (2026-10-22)**: "have the chart match the account, same dynamic charting. Account for gaps in usage too, so if you stop usage for 30 days, the next chart should be 1 week." Amends D-044's fixed 30-day harness chart.
+### D-046 — Harness chart and heatmap windows follow the account and restart after a 30-day break
+Status: **Confirmed by operator (2026-10-22)**: "have the chart match the account, same dynamic charting. Account for gaps in usage too, so if you stop usage for 30 days, the next chart should be 1 week." Amends D-044's fixed 30-day harness chart and, after a follow-up the same day ("Apply the 30-day restart to the heatmap as well"), D-044's heatmap window too.
 - Days are owner-zone calendar days; an active day has ≥ 1 run started (all of the owner's runs, D-043).
 - `harnesses.end` = today. The **anchor** is the later of the join date and the start of the current activity period, where periods are separated by 30 or more consecutive inactive days. If the last active day is 30 or more days before today, the anchor is today.
 - `harnesses.start` = the later of (end − 29) and the anchor, then moved earlier if needed so the window is at least 7 days. `counts` length: 7 to 30.
 - Examples: joined 3 days ago → 7 days; joined 2 months ago, active throughout → 30 days; active, then 30 idle days, then active again today → 7 days; resumed 12 days ago after a 40-day break → 12 days; no runs for 45 days → 7 empty days.
-- The heatmap keeps D-044 (join date, 7–365 days, no restart after breaks). Planner reading: "the chart" means the harness chart, and the year heatmap should keep showing gaps the way Cursor's and GitHub's do.
-- Tasks: P2-U (server window), P2-T (client renders 7–30 bars). Merge P2-T first: the current client draws exactly 30 bar slots.
+- **Heatmap too (operator, 2026-10-22):** `activity` uses the same anchor. `activity.start` = the later of (end − 364) and the anchor, then moved earlier if needed so the window is at least 7 days (7–365). So after a 30-day break both start again at one week. The stats tiles (agent runs, longest agent, streaks) stay all-time.
+- Tasks: P2-U (server windows for both), P2-T (client renders 7–30 bars; the heatmap already renders any length). Merge P2-T first: the current client draws exactly 30 bar slots.
