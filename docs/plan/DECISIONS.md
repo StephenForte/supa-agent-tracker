@@ -383,3 +383,11 @@ Status: **Confirmed by operator (2026-10-22)**: "use dynamic sizing … where a 
 - `activity.end` = today in the owner's zone. `activity.start` = the later of (end − 364 days) and the account's join date (`users.created_at` as a calendar date in the owner's zone), then moved earlier if needed so the window is at least 7 days. `counts` has one entry per day, start..end inclusive: 7 to 365.
 - The harness chart stays at 30 days.
 - Task: P2-R (server window), P2-S (client renders any length).
+
+### D-045 — Compact public profile; table is the default agents view
+Status: **Confirmed by operator (2026-10-22)**: "tighten it up … the Cursor page has a lot of info above the fold" and "make the table view the default." Amends D-040's layout and its grid-default rule.
+- Above the fold at 1024×768 and 1280×800: header, stats tiles, heatmap, harness chart and the start of the agents table (its header row and at least the first run row). Measured today (2026-10-22, 1024×768): the agents section starts at y=951, below the 768 fold, because the harness chart's SVG scales to 303 px tall.
+- Header: smaller avatar, with join date and links moved into the header (no separate left column). Tiles stay in one row of four on desktop. The heatmap and harness chart sit side by side on wide screens, and the chart has a fixed, short height instead of scaling with width.
+- Agents section: **Table is the default**; `?view=grid` opens the grid; `?view=table` keeps working; an invalid value shows the table.
+- Phones stack everything with no horizontal page scroll; the fold target applies to desktop only.
+- Task: P2-T.
