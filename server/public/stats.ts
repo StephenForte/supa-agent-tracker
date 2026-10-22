@@ -125,28 +125,56 @@ function compareName(left: string, right: string): number {
   return 0;
 }
 
-/** Top 4 harnesses by total (tie → name ascending), then Other for any remainder. A null harness is Unknown. */
+interface FoldedHarness {
+  total: number;
+  byDay: Map<string, number>;
+  spellings: Map<string, number>;
+}
+
+/** Blank, empty, and whitespace-only reports share one group. The label is the mapped name, not the raw spaces. */
+function foldedHarness(raw: string | null): { key: string; label: string } {
+  const trimmed = raw?.trim() ?? '';
+  if (trimmed === '') return { key: 'unknown', label: 'Unknown' };
+  return { key: trimmed.toLowerCase(), label: trimmed };
+}
+
+/** Most-used trimmed spelling in the window. A tie uses plain `<`, so "Cursor" beats "cursor". */
+function preferredSpelling(spellings: ReadonlyMap<string, number>): string {
+  let chosen: string | null = null;
+  let chosenCount = -1;
+  for (const [label, count] of spellings) {
+    if (chosen === null || count > chosenCount || (count === chosenCount && label < chosen)) {
+      chosen = label;
+      chosenCount = count;
+    }
+  }
+  if (chosen === null) throw new Error('harness group has no spelling');
+  return chosen;
+}
+
+/** Top 4 harnesses by folded total (tie → label ascending), then Other. Fold is trim + toLowerCase across the window; null and blank are Unknown. */
 export function harnessSeries(rows: readonly HarnessDayCount[], dates: readonly string[]): { harness: string; counts: number[] }[] {
-  const totals = new Map<string, number>();
-  const byDay = new Map<string, Map<string, number>>();
+  const groups = new Map<string, FoldedHarness>();
   for (const row of rows) {
     if (row.count <= 0) continue;
-    const name = row.harness ?? 'Unknown';
-    totals.set(name, (totals.get(name) ?? 0) + row.count);
-    const days = byDay.get(name) ?? new Map<string, number>();
-    days.set(row.day, (days.get(row.day) ?? 0) + row.count);
-    byDay.set(name, days);
+    const { key, label } = foldedHarness(row.harness);
+    const group = groups.get(key) ?? { total: 0, byDay: new Map<string, number>(), spellings: new Map<string, number>() };
+    group.total += row.count;
+    group.byDay.set(row.day, (group.byDay.get(row.day) ?? 0) + row.count);
+    group.spellings.set(label, (group.spellings.get(label) ?? 0) + row.count);
+    groups.set(key, group);
   }
-  const ranked = [...totals.entries()]
-    .filter(([, total]) => total > 0)
-    .sort((left, right) => right[1] - left[1] || compareName(left[0], right[0]));
-  const series = ranked.slice(0, 4).map(([name]) => ({
-    harness: name,
-    counts: dates.map((day) => byDay.get(name)?.get(day) ?? 0),
+  const ranked = [...groups.values()]
+    .filter((group) => group.total > 0)
+    .map((group) => ({ label: preferredSpelling(group.spellings), total: group.total, byDay: group.byDay }))
+    .sort((left, right) => right.total - left.total || compareName(left.label, right.label));
+  const series = ranked.slice(0, 4).map((group) => ({
+    harness: group.label,
+    counts: dates.map((day) => group.byDay.get(day) ?? 0),
   }));
   const rest = ranked.slice(4);
   if (rest.length > 0) {
-    const counts = dates.map((day) => rest.reduce((sum, [name]) => sum + (byDay.get(name)?.get(day) ?? 0), 0));
+    const counts = dates.map((day) => rest.reduce((sum, group) => sum + (group.byDay.get(day) ?? 0), 0));
     if (counts.some((count) => count > 0)) series.push({ harness: 'Other', counts });
   }
   return series;

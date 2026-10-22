@@ -20,7 +20,7 @@ import * as projectsRepo from '../repo/projects.js';
 import * as runsRepo from '../repo/runs.js';
 import { createScratchDatabase, type ScratchDatabase } from '../test/database.js';
 import { readPublicProfile, type PublicProfile } from './profile.js';
-import { activityWindow } from './stats.js';
+import { activityWindow, harnessWindow } from './stats.js';
 
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01]);
 const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
@@ -235,6 +235,42 @@ describe('public profile', () => {
     for (const sentinel of ['PRIVATE_SENTINEL', 'ARCHIVED_SENTINEL', 'OTHER_SENTINEL', 'SENTINEL_DISPLAY', 'sentinel-streak', 'user-streak']) {
       expect(http.body).not.toContain(sentinel);
     }
+  });
+
+  it('folds stored Cursor and cursor spellings into one Cursor series and leaves runs.harness unchanged', async () => {
+    const access: UserAccess = { kind: 'user', userId: 'user-fold' };
+    await db.insert(users).values({ id: 'user-fold', email: 'fold@example.test', displayName: 'Fold', emailVerified: true, publicHandle: 'fold-one' });
+    const project = await projectsRepo.createProject(db, access, { ...base, name: 'fold public', isPublic: true });
+    const agent = await agentsRepo.createAgent(db, access, project.id, { name: 'worker', title: 'Worker', workloadType: 'coding' });
+    async function addMany(count: number, harnessName: string, at: string) {
+      await pool.query(
+        `INSERT INTO runs (project_id, agent_id, title, workload_type, harness, started_at, finished_at, last_contact_at, execution_state, work_status)
+         SELECT $1, $2, 'h' || i::text, 'coding', $3, $4::timestamptz, $4::timestamptz, $4::timestamptz, 'finished', 'completed'
+         FROM generate_series(1, $5::int) AS i`,
+        [project.id, agent.id, harnessName, at, count],
+      );
+    }
+    await addMany(10, 'Cursor', '2026-10-20T12:00:00.000Z');
+    await addMany(3, 'Cursor', '2026-10-21T12:00:00.000Z');
+    await addMany(5, 'cursor', '2026-10-21T15:00:00.000Z');
+
+    const page = await readPublicProfile(db, 'fold-one', NOON);
+    expect(page).not.toBeNull();
+    assertExact(page!);
+    const dates = harnessWindow(NOON, 'UTC').dates;
+    expect(page!.harnesses.series.map((series) => series.harness)).toEqual(['Cursor']);
+    const counts = page!.harnesses.series[0]!.counts;
+    expect(counts).toHaveLength(30);
+    expect(counts[dates.indexOf('2026-10-20')]).toBe(10);
+    expect(counts[dates.indexOf('2026-10-21')]).toBe(8);
+    expect(counts.reduce((sum, count) => sum + count, 0)).toBe(18);
+    expect(page!.stats.agentRuns).toBe(18);
+
+    const stored = await pool.query<{ harness: string }>(
+      `SELECT DISTINCT harness FROM runs WHERE project_id = $1 ORDER BY harness`,
+      [project.id],
+    );
+    expect(stored.rows.map((row) => row.harness).sort()).toEqual(['Cursor', 'cursor']);
   });
 
   it('ranks six harnesses as four names plus Other and labels a null harness Unknown', () => {

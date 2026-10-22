@@ -83,7 +83,7 @@ export async function readPublicProfile(db: Database, rawHandle: string, now: Da
     GROUP BY 1
   `);
   const harnessResult = await db.execute(sql`
-    SELECT coalesce(runs.harness, 'Unknown') AS harness,
+    SELECT runs.harness AS harness,
            ((runs.started_at AT TIME ZONE ${owner.timezone})::date)::text AS day,
            count(*)::int AS count
     FROM runs
