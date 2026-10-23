@@ -33,6 +33,8 @@ export interface TrackerDataSource extends ObservableSource {
   closeRun(runId: string, outcome: 'failed' | 'cancelled', reason: string): Promise<WriteResult<Run>>;
   /** Finished runs that are not completed. No timeline event. */
   markRunDone(runId: string): Promise<WriteResult<Run>>;
+  /** Failed or cancelled runs whose work status differs from their execution state. No timeline event. */
+  dismissRun(runId: string): Promise<WriteResult<Run>>;
   listNextSteps(projectId: string): Promise<ProjectNextSteps>;
   setNextStepDone(stepId: string, done: boolean, expectedRevision: number): Promise<WriteResult<NextStep>>;
   /** Demo only. A worker may rewrite its own instruction, never user completion or another worker's step. */

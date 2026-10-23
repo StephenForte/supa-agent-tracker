@@ -100,6 +100,22 @@ export async function markRunDone(db: Database, access: UserAccess, projectId: s
   });
 }
 
+/** Owner-only. Aligns work_status with a failed or cancelled execution and audits the previous status. No run_events row. */
+export async function dismissRun(db: Database, access: UserAccess, projectId: string, runId: string, expectedRevision: number): Promise<WriteResult<Run> | { status: 'not_dismissible' | 'already_dismissed'; current: Run }> {
+  requireUser(access);
+  checkRevision(expectedRevision);
+  return withProject(db, access, projectId, async (tx) => {
+    const current = await readRun(tx, projectId, runId);
+    if (current.revision !== expectedRevision) return { status: 'conflict', current };
+    if (current.executionState !== 'failed' && current.executionState !== 'cancelled') return { status: 'not_dismissible', current };
+    if (current.workStatus === current.executionState) return { status: 'already_dismissed', current };
+    const [value] = await tx.update(runs).set({ workStatus: current.executionState, updatedAt: new Date(), revision: expectedRevision + 1 })
+      .where(and(eq(runs.id, runId), eq(runs.projectId, projectId))).returning();
+    await tx.insert(auditEvents).values({ userId: access.userId, projectId, ...actorColumns(access), action: 'run_dismissed', target: runId, details: { previousWorkStatus: current.workStatus } });
+    return { status: 'saved', value: value! };
+  });
+}
+
 /** Agent liveness advances independently of the editable run revision (D-024). */
 export async function heartbeatRun(db: Database, access: import('./access.js').CredentialAccess, projectId: string, runId: string): Promise<Run> {
   return withProject(db, access, projectId, async (tx) => {

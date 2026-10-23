@@ -3,9 +3,11 @@ import { Link } from 'react-router';
 import { useDemoAccount } from '../../app/useDemoAccount';
 import { ErrorState } from '../../components/ui/ErrorState';
 import { attentionGroups, attentionLabels, type AttentionGroup } from '../../domain/needs-me/attention';
-import { agentName, liveContact, primaryPr, projectName } from '../../domain/runs/grid';
+import { formatRelativeContact } from '../../domain/format';
+import { agentName, executionLabels, liveContact, primaryPr, projectName } from '../../domain/runs/grid';
 import type { Run } from '../../domain/types';
 import { CloseRunDialog } from '../../features/runs/CloseRunDialog';
+import { DismissRunButton } from '../../features/runs/DismissRunButton';
 import { MarkDoneButton } from '../../features/runs/MarkDoneButton';
 import { GettingStarted } from './GettingStarted';
 import { useAttention } from './useAttention';
@@ -24,13 +26,14 @@ export function NeedsMePage() {
       <h3 className="my-1 font-semibold">{run.title}</h3>
       <Link to={`/projects/${run.projectId}`}>{projectName(run, attention.projects)}</Link>
       {group === 'blocked' && <p>{run.blocker || 'No blocker details reported.'}</p>}
+      {group === 'blocked' && run.executionState !== 'running' && <p>{executionLabels[run.executionState]} · ended {run.finishedAt ? formatRelativeContact(run.finishedAt, now) : '—'}</p>}
       {group === 'stale' && <p>last contact {liveContact(run, { ...attention, now })?.relative}</p>}
       {group === 'review' && (run.prReferences.length ? <ul aria-label="Pull requests">{run.prReferences.map(ref => <li key={ref.url}><a href={ref.url} target="_blank" rel="noopener noreferrer">#{ref.number} {ref.title}</a></li>)}</ul> : <p className="line-clamp-2" title={run.completionSummary ?? undefined}>{run.completionSummary || 'No completion summary reported.'}</p>)}
       <p data-latest-status className="truncate text-xs text-slate-600" title={run.message}>{run.message.trim() || 'No status message'}</p>
       <div className="needs-actions">
         {group === 'review' && <><MarkDoneButton run={run} />{pr && <a href={pr.url} target="_blank" rel="noopener noreferrer">Open PR</a>}</>}
         {group === 'stale' && <button type="button" onClick={() => setClosing(run)}>{demo ? 'Demo: close run' : 'Close run'}</button>}
-        {group === 'blocked' && <Link to={`/projects/${run.projectId}?run=${encodeURIComponent(run.id)}`}>Open run</Link>}
+        {group === 'blocked' && <><Link to={`/projects/${run.projectId}?run=${encodeURIComponent(run.id)}`}>Open run</Link><DismissRunButton run={run} /><MarkDoneButton run={run} /></>}
       </div>
     </li>;
   }
