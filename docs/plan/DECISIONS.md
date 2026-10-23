@@ -400,3 +400,11 @@ Status: **Confirmed by operator (2026-10-22)**: "have the chart match the accoun
 - Examples: joined 3 days ago → 7 days; joined 2 months ago, active throughout → 30 days; active, then 30 idle days, then active again today → 7 days; resumed 12 days ago after a 40-day break → 12 days; no runs for 45 days → 7 empty days.
 - **Heatmap too (operator, 2026-10-22):** `activity` uses the same anchor. `activity.start` = the later of (end − 364) and the anchor, then moved earlier if needed so the window is at least 7 days (7–365). So after a 30-day break both start again at one week. The stats tiles (agent runs, longest agent, streaks) stay all-time.
 - Tasks: P2-U (server windows for both), P2-T (client renders 7–30 bars; the heatmap already renders any length). Merge P2-T first: the current client draws exactly 30 bar slots.
+
+### D-047 — The owner can dismiss an ended run from Needs me; its execution state never changes
+Status: **Planner, from operator report (2026-10-23)**: a failed run (worker-SEC-2026-10-22 · 10179deb) "stays that way in the tracker, which is fine", but "in the Needs me list, it never goes away nor has any way to remove it." Amends D-036's in-place actions.
+- Cause (source, main 815c7d8): Blocked matches `work_status = 'blocked'` regardless of execution state (needsAttention and the alert SQL). check_out allows failed/cancelled + blocked. Blocked cards offer only "Open run"; Mark done requires `finished`; Close requires `running`. So an ended blocked run has no exit.
+- New owner-only `POST /api/runs/:runId/dismiss`: only when execution state is failed or cancelled and work status differs from it; sets work status to the execution state (failed→failed, cancelled→cancelled). Audit `run_dismissed` with the previous work status. No run_events row; execution state, message and timestamps unchanged.
+- A finished blocked run uses the existing Mark done (shown on its Blocked card). A running blocked run keeps "Open run" only — the agent is live.
+- The attention derivation and alert SQL do not change; the run leaves both because its work status is no longer blocked. Rejected: dropping ended runs from Blocked (silently hides unseen failures, and breaks SQL/TS parity unless both move); widening Mark done to failed runs ("done" is wrong for a failure; its 409 is documented and tested).
+- Task: P2-W.
