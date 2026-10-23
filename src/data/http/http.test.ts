@@ -81,6 +81,26 @@ describe('HTTP contract adapters', () => {
     expect(await tracker.simulateAgentStepUpdate('s', '', 'r', 1)).toMatchObject({ status: 'invalid' });
     await expect(tracker.resetDemo()).rejects.toThrow('unavailable');
   });
+  it('posts dismiss with a fresh revision, invalidates attention reads and skips missing runs', async () => {
+    let dismissed = false;
+    const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation(async (path, init) => {
+      if (String(path).endsWith('/missing')) return json({ error: {} }, 404);
+      if (init?.method === 'POST') { dismissed = true; return json({ id: 'run', revision: 8, workStatus: 'failed' }); }
+      if (path === '/api/runs') return json({ items: [{ id: 'run', workStatus: dismissed ? 'failed' : 'blocked' }], nextCursor: null });
+      return json({ id: 'run', revision: 7 });
+    });
+    const { tracker } = createHttpSources({ fetch });
+    const stop = tracker.subscribe(() => {});
+    expect((await tracker.listRuns())[0]!.workStatus).toBe('blocked');
+    expect(await tracker.dismissRun('missing')).toEqual({ status: 'not_found' });
+    expect(fetch.mock.calls.some(call => call[1]?.method === 'POST')).toBe(false);
+    expect(await tracker.dismissRun('run')).toMatchObject({ status: 'saved', value: { workStatus: 'failed' } });
+    const post = fetch.mock.calls.find(call => call[1]?.method === 'POST')!;
+    expect(post[0]).toBe('/api/runs/run/dismiss');
+    expect(JSON.parse(String(post[1]?.body))).toEqual({ expected_revision: 7, request_id: expect.any(String) });
+    expect((await tracker.listRuns())[0]!.workStatus).toBe('failed');
+    stop();
+  });
   it('posts mark-done with the run revision and skips a missing run', async () => {
     const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation(async (path, init) => {
       if (String(path).endsWith('/missing')) return json({ error: { message: 'Not found' } }, 404);

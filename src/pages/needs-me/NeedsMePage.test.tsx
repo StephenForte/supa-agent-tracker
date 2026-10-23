@@ -3,6 +3,8 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { routes } from '../../app/routes';
 import { DataProvider } from '../../data/hooks';
+import { seedTracker } from '../../data/mock/seed';
+import { seedPrivateNotes } from '../../data/mock/privateNotesStore';
 import { createDemoSources } from '../../data/mock/createDemoSources';
 import { createClock, systemClock } from '../../domain/clock';
 import { expectMobileTapTargets } from '../../test/mobileTargets';
@@ -121,4 +123,50 @@ it('removes all successful actions, hides the badge at zero and renders empty st
   });
   await waitFor(() => expect(screen.getByText('Nothing needs you right now')).toBeVisible());
   expect(badge()).toBeNull();
+});
+
+function endedBlocked(executionState: 'failed' | 'cancelled' | 'finished', path = '/needs-me') {
+  const initial = seedTracker(now);
+  const run = initial.runs.find(run => run.id === 'run_4')!;
+  Object.assign(run, { executionState, finishedAt: new Date(now - 180 * 60_000).toISOString() });
+  const envelope = JSON.stringify({ version: 1, tracker: initial, privateNotes: seedPrivateNotes(now) });
+  const sources = createDemoSources({ clock: createClock(now), storage: { getItem: () => envelope, setItem: () => {}, removeItem: () => {} } });
+  const router = createMemoryRouter(routes, { initialEntries: [path] });
+  disposers.push(sources.dispose, () => router.dispose());
+  const view = render(<DataProvider sources={sources}><RouterProvider router={router} /></DataProvider>);
+  return { ...view, sources };
+}
+it.each(['failed', 'cancelled'] as const)('dismisses an ended %s blocked card and updates the badge without reload', async state => {
+  const { sources, container } = endedBlocked(state);
+  const dismiss = vi.spyOn(sources.tracker, 'dismissRun');
+  await screen.findByText('3 items need you');
+  expect(within(card('run_4')).getByText(`${state === 'failed' ? 'Failed' : 'Cancelled'} · ended 3 hours ago`)).toBeVisible();
+  expect(within(card('run_4')).getByRole('link', { name: 'Open run' })).toBeVisible();
+  expectMobileTapTargets(container);
+  fireEvent.click(within(card('run_4')).getByRole('button', { name: 'Demo: dismiss run_4' }));
+  await screen.findByText('2 items need you');
+  expect(card('run_4')).toBeNull();
+  expect(badge()).toHaveTextContent('2');
+  expect(dismiss).toHaveBeenCalledExactlyOnceWith('run_4');
+});
+it('offers mark done on finished blocked cards and only Open run on live blocked cards', async () => {
+  const { unmount } = endedBlocked('finished');
+  await screen.findByText('3 items need you');
+  expect(within(card('run_4')).queryByRole('button', { name: /dismiss/i })).toBeNull();
+  fireEvent.click(within(card('run_4')).getByRole('button', { name: /mark done/i }));
+  await screen.findByText('2 items need you');
+  expect(card('run_4')).toBeNull();
+  unmount();
+  setup();
+  await screen.findByText('3 items need you');
+  expect(within(card('run_4')).queryByRole('button')).toBeNull();
+  expect(within(card('run_4')).getByRole('link', { name: 'Open run' })).toBeVisible();
+});
+it('offers dismiss from project RunDetails and keeps the failed execution after success', async () => {
+  const { sources } = endedBlocked('failed', '/projects/prj_dashboard?run=run_4');
+  const button = await screen.findByRole('button', { name: 'Demo: dismiss run_4' });
+  expect(button.closest('section')).toHaveTextContent('Run handoff');
+  fireEvent.click(button);
+  await waitFor(() => expect(screen.queryByRole('button', { name: 'Demo: dismiss run_4' })).toBeNull());
+  expect(await sources.tracker.getRun('run_4')).toMatchObject({ executionState: 'failed', workStatus: 'failed' });
 });
