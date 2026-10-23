@@ -57,13 +57,15 @@ function TokenActionDialog({ action, projects, onClose }: { action: Action; proj
     finally { if (mounted.current) setPending(false); }
   }
   const title = plaintext ? 'Copy your token' : action.kind === 'create' ? 'Create token' : action.kind === 'scope' ? 'Edit scope' : action.kind === 'rotate' ? 'Rotate token?' : 'Revoke token?';
-  return <Dialog open title={title} onClose={onClose}>
+  const scopeAction = !plaintext && (action.kind === 'create' || action.kind === 'scope');
+  const controls = <>{error && <p role="alert">{error}</p>}<Button disabled={pending} onClick={() => void confirm()}>{pending ? 'Please wait…' : action.kind === 'create' ? 'Create token' : action.kind === 'scope' ? 'Save scope' : action.kind === 'rotate' ? 'Rotate token' : 'Revoke token'}</Button></>;
+  return <Dialog open title={title} onClose={onClose} footer={scopeAction ? controls : undefined}>
     {plaintext ? <TokenReveal demo={false} plaintext={plaintext} mcpUrl={deploymentMcpUrl(window.location.origin)} onDismiss={onClose} /> : <>
       {action.kind === 'create' || action.kind === 'scope' ? <>
-        {action.kind === 'create' && <label>Label<input value={label} onChange={e => setLabel(e.target.value)} /></label>}
+        {action.kind === 'create' && <label className="token-scope-filter">Label<input value={label} onChange={e => setLabel(e.target.value)} /></label>}
         <ScopeFields mode={mode} projectIds={projectIds} projects={projects} onMode={setMode} onProjectIds={setProjectIds} />
       </> : <p>{action.kind === 'rotate' ? `Rotate ${action.label}? The current token will be revoked and a replacement shown once.` : `Revoke ${action.label}? Agents using it will lose access.`}</p>}
-      {error && <p role="alert">{error}</p>}<Button disabled={pending} onClick={() => void confirm()}>{pending ? 'Please wait…' : action.kind === 'create' ? 'Create token' : action.kind === 'scope' ? 'Save scope' : action.kind === 'rotate' ? 'Rotate token' : 'Revoke token'}</Button>
+      {!scopeAction && controls}
     </>}
   </Dialog>;
 }

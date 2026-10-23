@@ -155,3 +155,28 @@ summary { padding: .75rem; border: 1px solid #d6e0e3; border-radius: .4rem; }
 .public-profile-header p { line-height: 1.4; }
 .public-agents-table :is(th, td) { padding: .5rem .65rem; }
 .public-agents-toolbar + p { margin-block: .4rem; }
+
+/* P2-X: opt-in fixed title/actions; scope lists own their scroll. */
+dialog.dialog-with-footer[open] { display: flex; flex-direction: column; max-height: calc(100dvh - 2rem); overflow: hidden; gap: .75rem; }
+.dialog-with-footer > h2 { flex-shrink: 0; margin: 0; }
+.dialog-body { display: flex; flex-direction: column; gap: .75rem; min-height: 0; }
+.dialog-body > :not(.token-scope) { flex-shrink: 0; }
+.dialog-body > p { margin: 0; }
+.dialog-footer { flex-shrink: 0; display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; border-top: 1px solid #d6e0e3; padding-top: .75rem; }
+.dialog-footer > [role="alert"] { flex-basis: 100%; margin: 0; color: var(--color-status-failed); font-weight: 600; }
+.token-scope { display: flex; flex-direction: column; gap: .5rem; min-height: 0; min-width: 0; margin: 0; padding: 0; border: 0; }
+.token-scope > :not(.token-scope-list) { flex-shrink: 0; }
+.token-scope h3 { margin: 0; font-size: 1rem; font-weight: 600; }
+.token-scope-choice { display: flex; align-items: center; gap: .75rem; min-height: 44px; padding: .4rem .5rem; border: 1px solid #d6e0e3; border-radius: .4rem; overflow-wrap: anywhere; cursor: pointer; }
+.token-scope-choice input { flex-shrink: 0; margin: 0; }
+.token-scope-choice span { min-width: 0; }
+.token-scope-filter { display: flex; flex-direction: column; gap: .25rem; }
+.token-scope-filter input { width: 100%; min-width: 0; border: 1px solid #9aabb2; border-radius: .4rem; padding: .5rem; }
+.token-scope-tools { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+.token-scope-tools span { margin-right: auto; font-size: .85rem; }
+.token-scope-list { display: flex; flex-direction: column; gap: .5rem; min-height: 0; max-height: 18rem; overflow-y: auto; overscroll-behavior: contain; padding: .3rem; border: 1px solid #d6e0e3; border-radius: .4rem; }
+.token-scope-list > * { flex-shrink: 0; }
+@media (width < 768px) {
+  dialog.dialog-with-footer { padding: 1rem; }
+  .token-scope-choice { padding-block: 0; }
+}
