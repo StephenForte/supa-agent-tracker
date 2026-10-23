@@ -134,6 +134,11 @@ export const closeRunSchema = z.strictObject({
   request_id: requestIdSchema,
 });
 
+export const dismissRunSchema = z.strictObject({
+  expected_revision: revisionSchema,
+  request_id: requestIdSchema,
+});
+
 export const markRunDoneSchema = z.strictObject({
   expected_revision: revisionSchema,
   request_id: requestIdSchema,
