@@ -105,24 +105,26 @@ function DemoTokensPanel() {
       </article></li>)}
     </ul>}
     <div><Button variant="primary" onClick={() => { dismissReveal(); setFormError(null); setScopeToken(null); setMode('all'); setProjectIds([]); setCreateOpen(true); }}>Create token</Button></div>
-    {createOpen && <Dialog open title="Create a fake token" onClose={closeCreate}>
+    {createOpen && <Dialog open title="Create a fake token" onClose={closeCreate} footer={<>
+      {formError && <p role="alert">{formError}</p>}
+      <Button variant="primary" onClick={() => void createToken()}>Create token</Button>
+    </>}>
       <p>The value will be shown once after creation and cannot authenticate anything.</p>
       <div className="mt-3 flex max-w-md flex-col gap-1">
         <label htmlFor="token-label">Label</label>
         <input id="token-label" value={label} onChange={event => setLabel(event.target.value)} className="w-full rounded border border-slate-400 px-2 py-2" />
       </div>
-      <div className="mt-3"><ScopeFields mode={mode} projectIds={projectIds} projects={projects} onMode={setMode} onProjectIds={setProjectIds} /></div>
-      {formError && <p role="alert">{formError}</p>}
-      <div className="mt-3"><Button variant="primary" onClick={() => void createToken()}>Create token</Button></div>
-    </Dialog>}
-    {scopeToken && <Dialog open title="Edit scope" onClose={() => setScopeToken(null)}>
       <ScopeFields mode={mode} projectIds={projectIds} projects={projects} onMode={setMode} onProjectIds={setProjectIds} />
+    </Dialog>}
+    {scopeToken && <Dialog open title="Edit scope" onClose={() => setScopeToken(null)} footer={<>
       {formError && <p role="alert">{formError}</p>}
       <Button variant="primary" onClick={() => void (async () => {
         const result = await tracker.updateTokenScope(scopeToken.id, { allProjects: mode === 'all', projectIds: mode === 'all' ? [] : projectIds });
         if (result.status === 'saved') { setScopeToken(null); setFormError(null); return; }
         setFormError(result.status === 'invalid' ? result.message : 'The demo could not update that scope.');
       })()}>Save scope</Button>
+    </>}>
+      <ScopeFields mode={mode} projectIds={projectIds} projects={projects} onMode={setMode} onProjectIds={setProjectIds} />
     </Dialog>}
     {pending && <Dialog open title={pending.kind === 'revoke' ? 'Revoke token?' : 'Rotate token?'} onClose={() => setPending(null)}>
       <p>{pending.kind === 'revoke' ? `Revoke ${pending.label}? It will show as revoked in this demo and still cannot authenticate anything.` : `Rotate ${pending.label}? The current token will be revoked and a new fake token will be shown once.`}</p>
