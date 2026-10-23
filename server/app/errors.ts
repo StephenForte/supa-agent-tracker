@@ -33,6 +33,11 @@ export function apiError(code: string, message: string, details?: unknown): ApiE
   return { error };
 }
 
+/** Dot-joined schema paths. Empty paths are dropped, so unrecognized key names (they are not path segments) stay out. */
+export function validationFields(issues: readonly { path: readonly PropertyKey[] }[]): string[] {
+  return [...new Set(issues.map((issue) => issue.path.map(String).join('.')))].filter((field) => field.length > 0);
+}
+
 /** 409 body. The current resource is error.details.current so clients can retry. */
 export function conflictBody(message: string, current: unknown): ApiErrorBody {
   return apiError(errorCodes.conflict, message, { current });

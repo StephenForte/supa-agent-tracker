@@ -48,7 +48,7 @@ Tool results contain JSON in the first text content item. Inspect `isError` and 
 
 | Error code | Action |
 |---|---|
-| `validation_error` | Correct fields against tools/list/schema; ended-run heartbeat is rejected. Do not retry unchanged invalid input. |
+| `validation_error` | Correct fields against tools/list/schema; ended-run heartbeat is rejected. Do not retry unchanged invalid input. Read `error.details` before retrying: `details.fields` lists the schema paths that failed, and `details.reason` names a handler rule when the published schema still accepts the call. |
 | `unauthenticated` | Stop sending the rejected token; obtain an issued token in settings. Never paste it into chat. |
 | `forbidden` | Check project grants/authorship and remove any Origin header; do not try another identity. |
 | `not_found` | Check authorized resource IDs; HTTP session 404 means reinitialize. |

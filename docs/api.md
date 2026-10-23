@@ -173,7 +173,23 @@ Stable codes include `not_found`, `forbidden`, `validation_error`, `conflict`,
 `idempotency_mismatch`, `rate_limited`, and safe `internal_error`. Conflicts include
 the current run at `error.details.current`, never private notes. Transport auth and
 rate failures use HTTP 401/429 rather than tool results. Schema failures have the
-same safe `validation_error` shape and do not echo arguments.
+same safe `validation_error` shape and do not echo arguments. The code, message,
+and HTTP mapping stay `validation_error`; `details` is the only addition.
+
+A `validation_error` tool result includes `error.details` only when it can name a
+fix without repeating the call. Schema failures set `details.fields` to the
+de-duplicated, dot-joined issue paths, including array indices. An empty path is
+dropped, and `details` is omitted when no field remains. Unrecognized keys are
+caller-supplied, so their names are not listed. `details` never contains received
+values, issue messages, or unknown key names. Handler rules set `details.reason`
+to a fixed constant, plus `details.fields` when the rule is about particular fields:
+
+| `details.reason` | `details.fields` | When |
+|---|---|---|
+| `task_id_required_for_coding` | `task_id` | `check_in` with `workload_type` `coding` and no `task_id` |
+| `run_not_running` | omitted | `check_out` when the run's execution is not `running` |
+| `completion_summary_required_for_coding` | `completion_summary` | coding `check_out` without a completion summary |
+| `pr_reference_or_no_pr_reason_required_for_coding` | `pr_references`, `no_pr_reason` | coding `check_out` without a pull request or `no_pr_reason` |
 
 | Tool | Fields | Result |
 |---|---|---|
