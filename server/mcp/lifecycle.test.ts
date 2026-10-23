@@ -43,6 +43,12 @@ async function call(name: string, args: Record<string, unknown>, c = client): Pr
   const content = result.content as { text: string }[];
   return JSON.parse(content[0]!.text) as ToolResponse;
 }
+async function toolResult(name: string, args: Record<string, unknown>, c = client) {
+  const result = await c.callTool({ name, arguments: args });
+  responses.push(result);
+  const text = (result.content as { text: string }[]).map((item) => item.text).join('\n');
+  return { text, serialized: JSON.stringify(result), body: JSON.parse((result.content as { text: string }[])[0]!.text) as ToolResponse };
+}
 async function issue(request_id: string, projectIds = [x.id]) {
   const response = await app.inject({ method: 'POST', url: '/api/tokens', headers: { 'x-test-user-id': owner.userId }, payload: { label: 'Agent', project_ids: projectIds, request_id } });
   expect(response.statusCode).toBe(200);
@@ -311,6 +317,58 @@ describe('MCP and tokens over real Postgres and the SDK HTTP client', () => {
       release(); await Promise.allSettled(pending); spy?.mockRestore(); await bounded.close();
     }
   }, 30_000);
+  it('names handler rules and does not store a replay of an invalid body', async () => {
+    const fresh = await connect((await issue('validation-rules-token')).plaintext);
+    const missingTask = { project_id: x.id, agent_name: 'worker', title: 'Implement MCP', workload_type: 'coding', request_id: 'idem-invalid-coding' };
+    const first = await call('check_in', missingTask, fresh);
+    const retry = await call('check_in', missingTask, fresh);
+    expect(first.error).toEqual({ code: 'validation_error', message: 'validation_error', details: { fields: ['task_id'], reason: 'task_id_required_for_coding' } });
+    expect(retry).toEqual(first);
+    expect(retry.run_id).toBeUndefined();
+    expect((await pool.query('select count(*)::int n from idempotency_keys where request_id = $1', ['idem-invalid-coding'])).rows[0].n).toBe(0);
+    const repaired = await call('check_in', { ...missingTask, task_id: 'P2-V' }, fresh);
+    expect(repaired.run_id).toBeTruthy();
+    expect(repaired.error).toBeUndefined();
+
+    const summaryRun = await call('check_in', checkIn('rule-summary-in'), fresh);
+    const missingSummary = await call('check_out', { run_id: summaryRun.run_id, expected_revision: 1, execution_state: 'finished', work_status: 'completed', no_pr_reason: 'No PR', request_id: 'rule-summary-out' }, fresh);
+    expect(missingSummary.error).toEqual({ code: 'validation_error', message: 'validation_error', details: { fields: ['completion_summary'], reason: 'completion_summary_required_for_coding' } });
+    const prRun = await call('check_in', checkIn('rule-pr-in'), fresh);
+    const missingPr = await call('check_out', { run_id: prRun.run_id, expected_revision: 1, execution_state: 'finished', work_status: 'completed', completion_summary: 'Ready', request_id: 'rule-pr-out' }, fresh);
+    expect(missingPr.error).toEqual({ code: 'validation_error', message: 'validation_error', details: { fields: ['pr_references', 'no_pr_reason'], reason: 'pr_reference_or_no_pr_reason_required_for_coding' } });
+    const ended = await call('check_out', { run_id: prRun.run_id, expected_revision: 1, execution_state: 'finished', work_status: 'completed', completion_summary: 'Ready', no_pr_reason: 'No PR', request_id: 'rule-end-out' }, fresh);
+    const notRunning = await call('check_out', { run_id: prRun.run_id, expected_revision: ended.revision, execution_state: 'finished', work_status: 'completed', completion_summary: 'Ready', no_pr_reason: 'No PR', request_id: 'rule-not-running' }, fresh);
+    expect(notRunning.error).toEqual({ code: 'validation_error', message: 'validation_error', details: { reason: 'run_not_running' } });
+
+    const oversize = await call('check_in', { ...checkIn('rule-oversize'), title: 'x'.repeat(201) }, fresh);
+    expect(oversize.error).toMatchObject({ code: 'validation_error', details: { fields: ['title'] } });
+    expect(oversize.error.details).not.toHaveProperty('reason');
+  });
+  it('does not echo a sentinel supplied as a value, a title, or an unknown key', async () => {
+    const sentinel = 'SENTINEL_9f3c';
+    const fresh = await connect((await issue('validation-sentinel-token')).plaintext);
+    const listed = (await fresh.listTools()).tools.find((tool) => tool.name === 'check_in');
+    expect(listed?.description).toBe('check in');
+    const schema = listed?.inputSchema as { required?: string[]; properties?: Record<string, unknown> };
+    expect(schema.properties).toHaveProperty('task_id');
+    expect(schema.required ?? []).not.toContain('task_id');
+    const cases: { args: Record<string, unknown>; fields?: string[] }[] = [
+      { args: { ...checkIn('sentinel-enum'), workload_type: sentinel }, fields: ['workload_type'] },
+      { args: { ...checkIn('sentinel-title'), title: `${sentinel}${'x'.repeat(200)}` }, fields: ['title'] },
+      { args: { ...checkIn('sentinel-key'), [sentinel]: 'plain' } },
+      { args: { ...checkIn('sentinel-value'), extra: sentinel } },
+    ];
+    for (const item of cases) {
+      const result = await toolResult('check_in', item.args, fresh);
+      expect(result.serialized, item.args.request_id as string).not.toContain(sentinel);
+      expect(result.text).not.toContain(sentinel);
+      if (item.fields) {
+        expect(result.body.error).toEqual({ code: 'validation_error', message: 'validation_error', details: { fields: item.fields } });
+      } else {
+        expect(result.body.error).toEqual({ code: 'validation_error', message: 'validation_error' });
+      }
+    }
+  });
   it('never persists plaintext in any text/jsonb column or logs and excludes notes from every tool response', async () => {
     const tables = (await pool.query("select table_name from information_schema.tables where table_schema='public' and table_type='BASE TABLE'")).rows as { table_name: string }[];
     for (const { table_name } of tables) {

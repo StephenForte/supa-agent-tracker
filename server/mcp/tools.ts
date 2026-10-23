@@ -7,7 +7,7 @@ import { createRun, getRun, heartbeatRun, listRuns, updateRun, type Run } from '
 import { listNextSteps } from '../repo/next-steps.js';
 import type { ToolRegistrar } from './registry.js';
 import type { CredentialAccess } from '../repo/access.js';
-import { id, ProtocolError, requestId, revision, short, text, workStatus } from './protocol.js';
+import { id, ProtocolError, requestId, revision, short, text, validationRule, workStatus } from './protocol.js';
 
 export const API_VERSION = '1';
 const prs = z.array(z.strictObject({ number: z.number().int().positive().max(2147483647), title: short,
@@ -61,7 +61,7 @@ export function registerRunTools(register: ToolRegistrar): void {
   register('check_in', { ...mutation, project_id: id, agent_name: short, title: short, workload_type: z.enum(['coding', 'automation']),
     task_id: short.optional(), ...metadata, parent_run_id: id.optional(), external_execution_id: short.optional() }, true,
     async (input, db, ctx) => {
-      if (input.workload_type === 'coding' && !input.task_id) throw new ProtocolError('validation_error');
+      if (input.workload_type === 'coding' && !input.task_id) throw validationRule('task_id_required_for_coding', ['task_id']);
       return withProject(db, ctx.access, input.project_id, async (tx) => {
         const project = await getProject(tx, ctx.access, input.project_id);
         let agent = (await listAgents(tx, ctx.access, input.project_id)).find((a) => a.name === input.agent_name);
@@ -90,9 +90,11 @@ export function registerRunTools(register: ToolRegistrar): void {
     async (input, db, ctx) => {
       const run = await findRun(db, ctx.access, input.run_id);
       if (run.revision !== input.expected_revision) throw new ProtocolError('conflict', run);
-      if (run.executionState !== 'running') throw new ProtocolError('validation_error');
-      if (run.workloadType === 'coding' && (!input.completion_summary?.trim()
-        || !(input.pr_references?.length || run.prReferences.length || input.no_pr_reason || run.noPrReason))) throw new ProtocolError('validation_error');
+      if (run.executionState !== 'running') throw validationRule('run_not_running');
+      if (run.workloadType === 'coding' && !input.completion_summary?.trim()) throw validationRule('completion_summary_required_for_coding', ['completion_summary']);
+      if (run.workloadType === 'coding' && !(input.pr_references?.length || run.prReferences.length || input.no_pr_reason || run.noPrReason)) {
+        throw validationRule('pr_reference_or_no_pr_reason_required_for_coding', ['pr_references', 'no_pr_reason']);
+      }
       const value = saved(await updateRun(db, ctx.access, run.projectId, run.id, input.expected_revision, { executionState: input.execution_state,
         workStatus: input.work_status, completionSummary: input.completion_summary, noPrReason: input.no_pr_reason },
       { event: { kind: 'check_out' }, prReferences: input.pr_references, tools: toolValues(input.tools) }));

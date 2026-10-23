@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { AccessError } from '../repo/access.js';
 import { PaginationError } from '../app/pagination.js';
-import { apiError } from '../app/errors.js';
+import { apiError, validationFields } from '../app/errors.js';
 
 export const id = z.string().min(1).max(128);
 export const short = z.string().trim().min(1).max(200);
@@ -19,13 +19,31 @@ export function requestHash(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
 }
 export class ProtocolError extends Error {
+  validation?: { reason: string; fields?: string[] };
   constructor(public code: string, public current?: unknown) { super(code); }
+}
+/** Handler-rule validation. `reason` is a source constant; `fields` are schema names, never caller values. */
+export function validationRule(reason: string, fields?: readonly string[]): ProtocolError {
+  const error = new ProtocolError('validation_error');
+  error.validation = fields && fields.length > 0 ? { reason, fields: [...fields] } : { reason };
+  return error;
 }
 export function failure(error: unknown) {
   const code = error instanceof ProtocolError || error instanceof AccessError ? error.code
     : error instanceof z.ZodError || error instanceof PaginationError ? 'validation_error' : 'internal_error';
-  return apiError(code, code === 'internal_error' ? 'Internal server error' : code,
-    error instanceof ProtocolError && error.current !== undefined ? { current: error.current } : undefined);
+  return apiError(code, code === 'internal_error' ? 'Internal server error' : code, detailsFor(error));
+}
+function detailsFor(error: unknown): unknown {
+  if (error instanceof ProtocolError && error.current !== undefined) return { current: error.current };
+  if (error instanceof z.ZodError) {
+    const fields = validationFields(error.issues);
+    return fields.length > 0 ? { fields } : undefined;
+  }
+  if (error instanceof ProtocolError && error.validation) {
+    const { reason, fields } = error.validation;
+    return fields && fields.length > 0 ? { fields: [...fields], reason } : { reason };
+  }
+  return undefined;
 }
 export function httpStatus(code: string): number {
   return ({ validation_error: 400, not_found: 404, forbidden: 403, conflict: 409, idempotency_mismatch: 409, rate_limited: 429 } as Record<string, number>)[code] ?? 500;
