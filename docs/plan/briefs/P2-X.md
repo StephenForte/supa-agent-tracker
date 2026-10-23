@@ -67,7 +67,7 @@ R5. Reporting never blocks the task: retry a transient failure with the same req
 
 ## Verification (re-run after merging current main at hand-back)
     SCRATCH=$(mktemp -d -t p2x); trap 'rm -rf "$SCRATCH"' EXIT
-    npm ci && npm run typecheck && npm run lint && npm test && npm run build 2>&1 | tee "$SCRATCH/gate.log"
+    set -o pipefail; ( npm ci && npm run typecheck && npm run lint && npm test && npm run build ) 2>&1 | tee "$SCRATCH/gate.log"
 Run the gate once on the untouched clone first and record its file/test counts as the baseline; report before/after counts — unexplained movement is a finding.
 
 ## Out of scope
