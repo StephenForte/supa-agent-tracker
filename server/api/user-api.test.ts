@@ -22,6 +22,7 @@ import * as steps from '../repo/next-steps.js';
 import { findOwnedRun } from '../repo/views.js';
 import { createScratchDatabase, type ScratchDatabase } from '../test/database.js';
 import { limits } from './schemas.js';
+import { selectAttention } from '../alerts/match.js';
 
 const userA = 'user-a';
 const userB = 'user-b';
@@ -552,6 +553,65 @@ describe('user REST API', () => {
     const completedRefusal = await call('POST', `/api/runs/${completed.id}/mark-done`, userA, { expected_revision: completed.revision, request_id: 'mark-completed' });
     expect(completedRefusal.statusCode).toBe(409);
     expect(completedRefusal.json()).toMatchObject({ error: { code: errorCodes.conflict, message: 'Run is already completed', details: { current: { id: completed.id, workStatus: 'completed' } } } });
+  });
+
+
+  it.each(['failed', 'cancelled'] as const)('dismisses %s blocked work once, preserving history and clearing SQL attention', async executionState => {
+    const run = await runsRepo.createRun(db, accessA, alphaId, { agentId: agentAId, title: `Dismiss ${executionState}`, workloadType: 'coding' });
+    await runsRepo.updateRun(db, accessA, alphaId, run.id, 1, { executionState, workStatus: 'blocked', message: 'Keep failure details' });
+    const before = (await call('GET', `/api/runs/${run.id}`, userA)).json();
+    expect(await selectAttention(db, userA, new Date())).toContainEqual({ runId: run.id, kind: 'blocked' });
+    const body = { expected_revision: before.revision, request_id: `dismiss-${executionState}` };
+    const result = await call('POST', `/api/runs/${run.id}/dismiss`, userA, body);
+    expect(result.statusCode).toBe(200);
+    const after = result.json();
+    expect(after).toEqual({ ...before, workStatus: executionState, revision: before.revision + 1, updatedAt: expect.any(String) });
+    expect(Date.parse(after.updatedAt)).toBeGreaterThan(Date.parse(before.updatedAt));
+    const rows = async () => (await audits.listAuditEvents(db, accessA, alphaId)).filter(row => row.action === 'run_dismissed' && row.target === run.id);
+    expect(await rows()).toEqual([expect.objectContaining({ details: { previousWorkStatus: 'blocked' }, actorUserId: userA })]);
+    expect((await selectAttention(db, userA, new Date())).some(row => row.runId === run.id)).toBe(false);
+    const replay = await call('POST', `/api/runs/${run.id}/dismiss`, userA, body);
+    expect(replay.statusCode).toBe(200);
+    expect(replay.json()).toEqual(after);
+    const stale = await call('POST', `/api/runs/${run.id}/dismiss`, userA, { ...body, request_id: `dismiss-stale-${executionState}` });
+    expect(stale.statusCode).toBe(409);
+    expect(stale.json()).toEqual({ error: { code: 'conflict', message: 'Revision conflict', details: { current: after } } });
+    const again = await call('POST', `/api/runs/${run.id}/dismiss`, userA, { expected_revision: after.revision, request_id: `dismiss-again-${executionState}` });
+    expect(again.statusCode).toBe(409);
+    expect(again.json()).toEqual({ error: { code: 'conflict', message: 'Run is already dismissed', details: { current: after } } });
+    expect((await call('GET', `/api/runs/${run.id}`, userA)).json()).toEqual(after);
+    expect(await rows()).toHaveLength(1);
+    const other = await call('POST', `/api/runs/${run.id}/dismiss`, userB, { expected_revision: after.revision, request_id: `dismiss-other-${executionState}` });
+    expect(other.statusCode).toBe(404);
+    expect(other.json()).toEqual({ error: { code: 'not_found', message: 'Not found' } });
+    const bearer = await app.inject({ method: 'POST', url: `/api/runs/${run.id}/dismiss`, headers: { authorization: `Bearer stub:${userA}:${alphaId}`, 'content-type': 'application/json' }, payload: JSON.stringify(body) });
+    expect(bearer.statusCode).toBe(401);
+    expect(bearer.json()).toEqual({ error: { code: 'unauthenticated', message: 'Sign in required' } });
+  });
+
+  it.each(['running', 'finished'] as const)('refuses to dismiss %s blocked work without writes', async executionState => {
+    const run = await runsRepo.createRun(db, accessA, alphaId, { agentId: agentAId, title: 'Cannot dismiss', workloadType: 'coding' });
+    const credential = await credentials.createCredential(db, accessA, { label: 'Dismiss fixture', tokenHash: `dismiss-fixture-${executionState}`, displaySuffix: 'test', projectIds: [alphaId] });
+    await runsRepo.updateRun(db, { kind: 'credential', userId: userA, credentialId: credential.id, projectIds: [alphaId] }, alphaId, run.id, 1, { executionState, workStatus: 'blocked' });
+    const before = (await call('GET', `/api/runs/${run.id}`, userA)).json();
+    const result = await call('POST', `/api/runs/${run.id}/dismiss`, userA, { expected_revision: before.revision, request_id: `dismiss-no-${executionState}` });
+    expect(result.statusCode).toBe(409);
+    expect(result.json()).toEqual({ error: { code: 'conflict', message: 'Only failed or cancelled runs can be dismissed', details: { current: before } } });
+    expect((await call('GET', `/api/runs/${run.id}`, userA)).json()).toEqual(before);
+    expect((await audits.listAuditEvents(db, accessA, alphaId)).filter(row => row.target === run.id && row.action === 'run_dismissed')).toEqual([]);
+  });
+
+  it('validates dismiss bodies before writing and supports a differing non-blocked status', async () => {
+    const run = await runsRepo.createRun(db, accessA, alphaId, { agentId: agentAId, title: 'Validation', workloadType: 'coding' });
+    await runsRepo.updateRun(db, accessA, alphaId, run.id, 1, { executionState: 'failed', workStatus: 'waiting_for_review' });
+    for (const body of [{ request_id: 'missing-revision' }, { expected_revision: -1, request_id: 'negative' }, { expected_revision: 2, request_id: 'extra', workStatus: 'failed' }]) {
+      expect((await call('POST', `/api/runs/${run.id}/dismiss`, userA, body)).statusCode).toBe(400);
+    }
+    const result = await call('POST', `/api/runs/${run.id}/dismiss`, userA, { expected_revision: 2, request_id: 'dismiss-different-status' });
+    expect(result.statusCode).toBe(200);
+    expect(result.json()).toMatchObject({ workStatus: 'failed', executionState: 'failed', revision: 3 });
+    const operation = await pool.query("SELECT operation FROM idempotency_keys WHERE request_id = $1", ['dismiss-different-status']);
+    expect(operation.rows).toEqual([{ operation: 'run_dismiss' }]);
   });
 
   it('sends nosniff on an authenticated project list', async () => {

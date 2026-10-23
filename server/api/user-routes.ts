@@ -12,7 +12,7 @@ import { createDb } from '../db/client.js';
 import { AccessError, type Transaction, type UserAccess } from '../repo/access.js';
 import { withIdempotency } from '../repo/idempotency-keys.js';
 import { createProject, getProject, listProjects, updateProject } from '../repo/projects.js';
-import { getRun, markRunDone, updateRun } from '../repo/runs.js';
+import { dismissRun, getRun, markRunDone, updateRun } from '../repo/runs.js';
 import { findOwnedRun, listUserAgents, listUserRuns, readAccount } from '../repo/views.js';
 import {
   detailFromGetRun,
@@ -31,6 +31,7 @@ import { deleteUserAvatar, putUserAvatar } from '../public/avatar.js';
 import { AVATAR_MAX_BYTES, avatarMagicMatches, avatarMediaType } from '../public/image.js';
 import {
   closeRunSchema,
+  dismissRunSchema,
   markRunDoneSchema,
   createProjectSchema,
   patchAccountSchema,
@@ -177,6 +178,25 @@ export async function registerUserApiRoutes(app: FastifyInstance, deps: { pool: 
       if (result.status === 'conflict') return conflict('Revision conflict', detailFromGetRun(await getRun(tx, access, owned.projectId, runId)));
       if (result.status === 'not_finished') return conflict('Only finished runs can be marked done', detailFromGetRun(await getRun(tx, access, owned.projectId, runId)));
       if (result.status === 'already_completed') return conflict('Run is already completed', detailFromGetRun(await getRun(tx, access, owned.projectId, runId)));
+      return { statusCode: 200, payload: detailFromGetRun(await getRun(tx, access, owned.projectId, runId)) };
+    });
+  }));
+
+  app.post<{ Params: { runId: string } }>('/api/runs/:runId/dismiss', guard, (request, reply) => handle(reply, async () => {
+    const body = parse(dismissRunSchema, request.body, reply);
+    if (!body) return;
+    const access = accessOf(request);
+    const runId = request.params.runId;
+    return commit(db, reply, access, body.request_id, 'run_dismiss', body, async (tx) => {
+      const owned = await findOwnedRun(tx, access, runId);
+      const current = await getRun(tx, access, owned.projectId, runId);
+      if (current.revision !== body.expected_revision) return conflict('Revision conflict', detailFromGetRun(current));
+      if (current.executionState !== 'failed' && current.executionState !== 'cancelled') return conflict('Only failed or cancelled runs can be dismissed', detailFromGetRun(current));
+      if (current.workStatus === current.executionState) return conflict('Run is already dismissed', detailFromGetRun(current));
+      const result = await dismissRun(tx, access, owned.projectId, runId, body.expected_revision);
+      if (result.status === 'conflict') return conflict('Revision conflict', detailFromGetRun(await getRun(tx, access, owned.projectId, runId)));
+      if (result.status === 'not_dismissible') return conflict('Only failed or cancelled runs can be dismissed', detailFromGetRun(await getRun(tx, access, owned.projectId, runId)));
+      if (result.status === 'already_dismissed') return conflict('Run is already dismissed', detailFromGetRun(await getRun(tx, access, owned.projectId, runId)));
       return { statusCode: 200, payload: detailFromGetRun(await getRun(tx, access, owned.projectId, runId)) };
     });
   }));

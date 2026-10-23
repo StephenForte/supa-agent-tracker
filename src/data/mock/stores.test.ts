@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { createClock } from '../../domain/clock';
 import { createDemoSources } from './createDemoSources';
 import { STORAGE_KEY, type StorageAdapter } from './persistence';
+import { createTrackerStore } from './trackerStore';
+import { seedTracker } from './seed';
+import { needsAttention } from '../../domain/needs-me/attention';
 import type { ProjectInput } from '../../domain/types';
 const now = Date.parse('2026-10-14T20:00:00Z');
 function memoryStorage(): StorageAdapter {
@@ -54,4 +57,26 @@ it('audits metadata corrections without reopening an ended run or altering its e
   expect(JSON.stringify(result)).not.toContain('PRIVATE_SENTINEL');
   expect(await tracker.updateRunMetadata(before.id, { model: 'Stale' }, before.revision)).toMatchObject({ status: 'conflict' });
   if (result.status === 'saved') expect(result.value.events.at(-1)).toMatchObject({ kind: 'status', actorId: 'usr_demo' });
+});
+
+it.each(['failed', 'cancelled'] as const)('dismisses %s blocked demo work, notifies subscribers and removes attention', async executionState => {
+  const initial = seedTracker(now);
+  const run = initial.runs.find(run => run.id === 'run_4')!;
+  Object.assign(run, { executionState, finishedAt: new Date(now - 60_000).toISOString() });
+  const store = createTrackerStore({ clock: createClock(now), initial, persist: () => {}, onReset: () => {} });
+  try {
+    let changes = 0;
+    const stop = store.source.subscribe(() => changes++);
+    const result = await store.source.dismissRun(run.id);
+    expect(result).toEqual({ status: 'saved', value: { ...run, workStatus: executionState, updatedAt: new Date(now).toISOString(), revision: run.revision + 1 } });
+    expect(changes).toBe(1);
+    const attention = needsAttention(initial.account.id, initial.projects, await store.source.listRuns(), initial.agents, now);
+    expect(attention.groups.blocked.some(item => item.id === run.id)).toBe(false);
+    expect(await store.source.dismissRun(run.id)).toMatchObject({ status: 'conflict' });
+    expect(await store.source.dismissRun('run_1')).toMatchObject({ status: 'invalid' });
+    expect(await store.source.dismissRun('run_3')).toMatchObject({ status: 'invalid' });
+    expect(await store.source.dismissRun('missing')).toEqual({ status: 'not_found' });
+    expect(changes).toBe(1);
+    stop();
+  } finally { store.dispose(); }
 });

@@ -124,6 +124,14 @@ export function createTrackerStore({ clock, initial, persist, onReset }: Tracker
       Object.assign(run, { workStatus: 'completed', revision: run.revision + 1, updatedAt: timestamp() });
       commit(); return { status: 'saved', value: copy(run) };
     },
+    async dismissRun(id) {
+      const run = state.runs.find(item => item.id === id);
+      if (!run) return { status: 'not_found' };
+      if (run.executionState !== 'failed' && run.executionState !== 'cancelled') return { status: 'invalid', message: 'Only failed or cancelled runs can be dismissed.' };
+      if (run.workStatus === run.executionState) return { status: 'conflict', current: copy(run) };
+      Object.assign(run, { workStatus: run.executionState, revision: run.revision + 1, updatedAt: timestamp() });
+      commit(); return { status: 'saved', value: copy(run) };
+    },
     async listNextSteps(id) { return copy({ steps: state.steps.filter(step => step.projectId === id).sort((a, b) => a.position - b.position), waitingNote: state.waitingNotes.find(note => note.projectId === id) ?? null }); },
     async setNextStepDone(id, done, expectedRevision) {
       const step = state.steps.find(item => item.id === id);
