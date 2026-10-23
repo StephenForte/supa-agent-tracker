@@ -160,6 +160,7 @@ summary { padding: .75rem; border: 1px solid #d6e0e3; border-radius: .4rem; }
 dialog.dialog-with-footer[open] { display: flex; flex-direction: column; max-height: calc(100dvh - 2rem); overflow: hidden; gap: .75rem; }
 .dialog-with-footer > h2 { flex-shrink: 0; margin: 0; }
 .dialog-body { display: flex; flex-direction: column; gap: .75rem; min-height: 0; }
+.dialog-with-footer .dialog-body { overflow-y: auto; }
 .dialog-body > :not(.token-scope) { flex-shrink: 0; }
 .dialog-body > p { margin: 0; }
 .dialog-footer { flex-shrink: 0; display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; border-top: 1px solid #d6e0e3; padding-top: .75rem; }
@@ -174,7 +175,7 @@ dialog.dialog-with-footer[open] { display: flex; flex-direction: column; max-hei
 .token-scope-filter input { width: 100%; min-width: 0; border: 1px solid #9aabb2; border-radius: .4rem; padding: .5rem; }
 .token-scope-tools { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
 .token-scope-tools span { margin-right: auto; font-size: .85rem; }
-.token-scope-list { display: flex; flex-direction: column; gap: .5rem; min-height: 0; max-height: 18rem; overflow-y: auto; overscroll-behavior: contain; padding: .3rem; border: 1px solid #d6e0e3; border-radius: .4rem; }
+.token-scope-list { display: flex; flex-direction: column; gap: .5rem; min-height: clamp(8.75rem, 40dvh, 10rem); max-height: 18rem; overflow-y: auto; overscroll-behavior: contain; padding: .3rem; border: 1px solid #d6e0e3; border-radius: .4rem; }
 .token-scope-list > * { flex-shrink: 0; }
 @media (width < 768px) {
   dialog.dialog-with-footer { padding: 1rem; }
