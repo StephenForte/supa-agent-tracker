@@ -78,7 +78,7 @@ R5. Reporting never blocks the task: retry a transient failure with the same req
 
 ## Verification (re-run after merging current main at hand-back)
     SCRATCH=$(mktemp -d -t p2w); trap 'rm -rf "$SCRATCH"' EXIT
-    npm ci && npm run typecheck && npm run lint && npm test && npm run build 2>&1 | tee "$SCRATCH/gate.log"
+    set -o pipefail; ( npm ci && npm run typecheck && npm run lint && npm test && npm run build ) 2>&1 | tee "$SCRATCH/gate.log"
 Run the gate once on the untouched clone first and record its file/test counts as the baseline; report before/after counts — unexplained movement is a finding. Server suites need the local Postgres; drop any database you create.
 Manual: run the demo build, put a demo run into failed+blocked (mock seed or devtools), confirm the card shows Dismiss, click it, card and badge go away; run details show the same button.
 
