@@ -79,9 +79,9 @@ The scanner's suggested command is the wrong fix here: it would make body-parser
 ## Verification
     export DATABASE_URL=postgres://localhost:5432/postgres
     npm ci && npm run typecheck && npm run lint && npm test && npm run build && npm run build:server && VITE_DATA_SOURCE=http npm run build
-    npm ls body-parser
-    git diff --exit-code origin/main -- package.json
-    git diff --stat origin/main -- package-lock.json
+    npm ls body-parser undici
+    git diff --exit-code origin/main -- package.json spike/mcp-probe/package.json
+    git diff --stat origin/main -- package-lock.json spike/mcp-probe/package-lock.json
 Baseline on main: planner measured 90 files / 665 tests at P2-Xa (651fd6f); P2-X merged without adding tests since. Report your counts. Unexplained movement is a finding.
 `npm audit` before and after, at the root and in spike/mcp-probe: paste all four. GHSA-27r3-jxmh-p828 and the undici advisories must be gone after.
 In spike/mcp-probe: `npm ci && npm test`.
