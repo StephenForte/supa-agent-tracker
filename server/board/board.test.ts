@@ -218,6 +218,16 @@ describe('project board over real MCP HTTP and owner routes', () => {
     expect(others.items[0]).toMatchObject({ projectId: foreign, openCount: 2, hazardCount: 2, questionCount: 0, latest: { kind: 'hazard' } });
     const latest = (await pool.query('SELECT id,title FROM board_entries WHERE project_id=$1 ORDER BY updated_at DESC,id ASC LIMIT 1', [foreign])).rows[0];
     expect(others.items[0]!.latest).toMatchObject(latest);
+    const latestTime = (others.items[0]!.latest as { updatedAt: string }).updatedAt;
+    expect(latestTime).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+    expect(latestTime).toBe(new Date(latestTime).toISOString());
+    const nonUtcPool = createPool(scratch.connectionString);
+    try {
+      await nonUtcPool.query("SET TIME ZONE 'Pacific/Honolulu'");
+      const nonUtcSummary = await boardSummary(createDb(nonUtcPool), other);
+      expect(nonUtcSummary.items).toEqual(others.items);
+    } finally { await nonUtcPool.end(); }
+
     for (let i = 0; i < 8; i++) {
       const id = (await createProject(db, owner, { name: `Extra ${i}`, type: 'coding' })).id;
       const agentId = randomUUID(); const runId = randomUUID();

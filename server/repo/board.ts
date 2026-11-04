@@ -73,7 +73,7 @@ export async function boardSummary(db: Database, access: UserAccess) {
     SELECT b.project_id AS "projectId", count(*)::int AS "openCount",
       count(*) FILTER (WHERE b.kind = 'question')::int AS "questionCount",
       count(*) FILTER (WHERE b.kind = 'hazard')::int AS "hazardCount",
-      (jsonb_agg(jsonb_build_object('id', b.id, 'kind', b.kind, 'title', b.title, 'updatedAt', b.updated_at) ORDER BY b.updated_at DESC, b.id ASC)->0) AS latest
+      (jsonb_agg(jsonb_build_object('id', b.id, 'kind', b.kind, 'title', b.title, 'updatedAt', to_char(b.updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')) ORDER BY b.updated_at DESC, b.id ASC)->0) AS latest
     FROM ${board} b INNER JOIN ${projects} p ON p.id = b.project_id
     WHERE p.owner_id = ${access.userId} AND b.status = 'open'
     GROUP BY b.project_id ORDER BY b.project_id`);
