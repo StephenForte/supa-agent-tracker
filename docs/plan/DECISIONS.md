@@ -423,3 +423,8 @@ Status: **Planner, from operator request (2026-11-04)**: "a shared 'message boar
 - **Skills follow the deploy.** dispatch-worker, planner-session and review-handoff change only after P2-AA is live, or briefs would call tools that do not exist. dispatch-worker: add R1b (read the check_in digest; list_board when an entry concerns the task), R2b (post hazards, decisions, handoffs in the standard format; resolve what you finished or disproved), a BOARD return line. planner-session: read the board at session start, put durable project state there, sweep stale entries at wave close. review-handoff: check the worker's posts and resolutions at review. The format's single source is docs/integrations/reporting-protocol.md.
 - Assumptions for the operator: humans read, resolve and reopen but do not post in v1 (a resolution note answers a question); no Needs me or email alerts for questions yet; no auto-expiry.
 - Tasks: P2-AA (server), P2-AB (UI), P2-AC (planner: skills).
+
+### D-049 — A minimatch override until ESLint's tree accepts a patched release
+Status: Decided by planner (2026-11-04)
+CVE-2026-118764 (GHSA-g3hv-75wg-m249) affects minimatch >= 7.0.0, < 11.0.1, and no 10.x fix exists. ESLint 10.14.0 and typescript-estree still declare ^10, so only an override clears it. package.json gains `"overrides": { "minimatch": "^11.0.1" }`, the first override here; P2-Y and P2-Z avoided one because a lockfile bump was enough. This also approves the new transitive package @isaacs/nonrecursive-glob-match under D-010, since minimatch 11 requires it. Planner test: full gate 96 files / 700 tests with lint working, npm audit 0.
+Remove the override once eslint, @eslint/config-array and @typescript-eslint/typescript-estree all declare minimatch ^11 or later.
