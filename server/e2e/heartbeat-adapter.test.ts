@@ -182,9 +182,10 @@ describe('heartbeat adapter against the real MCP server', () => {
     } finally { stalled.closeAllConnections(); await new Promise<void>(resolve => stalled.close(() => resolve())); }
   }, 15000);
 
-  it('checks every documented tool against live tools/list and all 12 in the protocol', async () => {
+  it('checks every documented tool against live tools/list and all 16 in the protocol', async () => {
     const names = (await client.listTools()).tools.map(tool => tool.name);
-    expect(names).toHaveLength(12);
+    expect(names).toHaveLength(16);
+    expect(names).toEqual(['list_projects', 'get_project', 'check_in', 'update_status', 'heartbeat', 'check_out', 'record_tool_usage', 'list_next_steps', 'create_next_step', 'update_next_step', 'reorder_next_steps', 'set_waiting_note', 'list_board', 'post_board_message', 'set_board_state', 'resolve_board_entry']);
     const protocol = await readFile(new URL('../../docs/integrations/reporting-protocol.md', import.meta.url), 'utf8');
     const promptDoc = await readFile(new URL('../../docs/integrations/base-prompt.md', import.meta.url), 'utf8');
     for (const doc of [protocol, promptDoc]) {

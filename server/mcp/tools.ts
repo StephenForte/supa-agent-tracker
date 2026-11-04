@@ -5,6 +5,7 @@ import { getProject, listProjects } from '../repo/projects.js';
 import { createAgent, listAgents } from '../repo/agents.js';
 import { createRun, getRun, heartbeatRun, listRuns, updateRun, type Run } from '../repo/runs.js';
 import { listNextSteps } from '../repo/next-steps.js';
+import { boardDigest } from '../repo/board.js';
 import type { ToolRegistrar } from './registry.js';
 import type { CredentialAccess } from '../repo/access.js';
 import { id, ProtocolError, requestId, revision, short, text, validationRule, workStatus } from './protocol.js';
@@ -55,7 +56,7 @@ export function registerRunTools(register: ToolRegistrar): void {
         cursor = page.nextCursor ?? undefined;
       } while (cursor);
       return { project, open_to_dos: next.steps.filter((s) => !s.done), waiting_note: next.waitingNote, running_runs: running,
-        reporting_policy: policy(project), api_version: API_VERSION };
+        board: await boardDigest(tx, ctx.access, input.project_id), reporting_policy: policy(project), api_version: API_VERSION };
     });
   });
   register('check_in', { ...mutation, project_id: id, agent_name: short, title: short, workload_type: z.enum(['coding', 'automation']),
@@ -69,7 +70,7 @@ export function registerRunTools(register: ToolRegistrar): void {
         const run = await createRun(tx, ctx.access, input.project_id, { agentId: agent.id, title: input.title, workloadType: input.workload_type,
           taskId: input.task_id, harness: input.harness, model: input.model, parentRunId: input.parent_run_id,
           externalExecutionId: input.external_execution_id, observedClientInfo: ctx.clientInfo, observedUserAgent: ctx.userAgent });
-        return { run_id: run.id, revision: run.revision, reporting_policy: policy(project) };
+        return { run_id: run.id, revision: run.revision, board: await boardDigest(tx, ctx.access, input.project_id), reporting_policy: policy(project) };
       });
     });
   register('update_status', { ...runMutation, expected_revision: revision, work_status: workStatus.optional(), message: text.optional(),

@@ -82,6 +82,7 @@ describe('public agents page', () => {
     const closerAgent = await agentsRepo.createAgent(db, { kind: 'user', userId: 'user-closer' }, closer.id, { name: 'closer', title: 'Closer', workloadType: 'coding' });
     const capAgent = await agentsRepo.createAgent(db, { kind: 'user', userId: 'user-cap' }, cap.id, { name: 'bulk', title: 'Bulk', workloadType: 'coding' });
     const live = await runsRepo.createRun(db, accessAda, weather.id, { agentId: worker.id, title: 'Status run', workloadType: 'coding', harness: 'cursor' });
+    await pool.query(`INSERT INTO board_entries (project_id, source_run_id, kind, title, body) VALUES ($1, $2, 'hazard', 'SENTINEL_BOARD', 'SENTINEL_BOARD')`, [weather.id, live.id]);
     const stale = await runsRepo.createRun(db, accessAda, weather.id, { agentId: worker.id, title: 'Quiet run', workloadType: 'coding', harness: 'cursor' });
     const ended = await runsRepo.createRun(db, accessAda, weather.id, { agentId: worker.id, title: 'Ended run', workloadType: 'coding', harness: 'cursor' });
     const secretRun = await runsRepo.createRun(db, accessAda, hidden.id, { agentId: secretAgent.id, title: 'SENTINEL_PRIVATE_RUN', workloadType: 'coding' });
@@ -163,6 +164,13 @@ describe('public agents page', () => {
     const folded = await hit('/api/public/ADA-BOT/agents');
     expect(folded.statusCode).toBe(200);
     expect(folded.body).toBe(response.body);
+  });
+
+  it('keeps SENTINEL_BOARD out of every public JSON surface', async () => {
+    for (const surface of ['agents', 'profile', 'avatar']) {
+      const response = await hit(`/api/public/ada-bot/${surface}`);
+      expect(response.body).not.toContain('SENTINEL_BOARD');
+    }
   });
 
   it('hides another owner, a private project, and an archived public project', async () => {

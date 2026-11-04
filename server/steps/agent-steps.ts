@@ -57,7 +57,7 @@ function requireCredential(access: CredentialAccess): void {
 }
 
 /** D-023. The repository only checks that the run is in the project. Authorship is this credential's check_in. */
-async function assertOwnCheckIn(tx: Transaction, access: CredentialAccess, projectId: string, sourceRunId: string): Promise<void> {
+export async function assertOwnCheckIn(tx: Transaction, access: CredentialAccess, projectId: string, sourceRunId: string): Promise<void> {
   const [event] = await tx.select({ id: runEvents.id }).from(runEvents).innerJoin(runs, eq(runs.id, runEvents.runId)).where(and(
     eq(runEvents.runId, sourceRunId),
     eq(runEvents.kind, 'check_in'),
