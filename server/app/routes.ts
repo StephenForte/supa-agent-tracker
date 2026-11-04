@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type pg from 'pg';
 
 import { registerUserApiRoutes } from '../api/user-routes.js';
+import { registerBoardRoutes } from '../board/routes.js';
 import { registerPublicRoutes } from '../public/routes.js';
 import { registerInviteRoutes } from '../invites/routes.js';
 import { registerAuthRoutes } from '../auth/routes.js';
@@ -29,6 +30,7 @@ export async function registerRoutes(app: FastifyInstance, deps: RouteDeps): Pro
   await registerStepsAndNotesRoutes(app, deps);
   await registerUserApiRoutes(app, deps);
   await registerPublicRoutes(app, deps);
+  await registerBoardRoutes(app, deps);
 }
 
 function registerHealthRoutes(app: FastifyInstance, deps: RouteDeps): void {
