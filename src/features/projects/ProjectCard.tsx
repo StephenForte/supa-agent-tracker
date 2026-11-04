@@ -4,6 +4,7 @@ import { latestActivity, projectCounts } from '../../domain/derive';
 import { formatDescription, formatTimestamp, lifecycleLabels, projectCountLabels, projectTypeLabels } from '../../domain/format';
 import { agentName } from '../../domain/runs/grid';
 import type { LogicalAgent, Project, Run } from '../../domain/types';
+import { BoardPreview } from '../board/BoardPreview';
 import { NextStepsPreview } from '../next-steps/NextStepsPreview';
 import { PrivateNotePreview } from '../private-notes/PrivateNotePreview';
 import { ProjectResources } from './ProjectResources';
@@ -25,6 +26,6 @@ export function ProjectCard({ project, runs, agents, now }: { project: Project; 
       {projectCountLabels.map(([key, label]) => <div key={label}><dt className="text-slate-600">{label}</dt><dd className="text-xl font-semibold">{counts[key]}</dd></div>)}
     </dl>
     <section aria-label="Latest update" className="mb-4 text-sm"><h3 className="font-semibold">Latest update</h3>{latest ? <><Link to={`${detail}?run=${latest.id}`}>{agentName(latest, agents)}</Link><p>{latest.message || '—'}</p><time dateTime={latest.updatedAt} className="text-xs text-slate-600">{formatTimestamp(latest.updatedAt)}</time></> : <p>No agent activity yet.</p>}</section>
-    <div className="space-y-4 border-t border-slate-200 pt-4 text-sm"><NextStepsPreview projectId={project.id} /><PrivateNotePreview projectId={project.id} /></div>
+    <div className="space-y-4 border-t border-slate-200 pt-4 text-sm"><NextStepsPreview projectId={project.id} /><BoardPreview projectId={project.id} /><PrivateNotePreview projectId={project.id} /></div>
   </article>;
 }
