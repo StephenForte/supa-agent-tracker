@@ -147,6 +147,20 @@ describe('project board over real MCP HTTP and owner routes', () => {
     expect((await call<Failure>(a, 'post_board_message', { project_id: project, source_run_id: runA, kind: 'note', title: 'Bad supersedes', supersedes_id: value.id, request_id: randomUUID() }, true)).error.code).toBe('validation_error');
     expect(await list({ status: 'all' })).toEqual(before);
   });
+  it('rolls back the new entry and old resolution if supersession fails after insert', async () => {
+    const original = await post(); const before = await list({ status: 'all' });
+    await pool.query(`CREATE FUNCTION fail_board_audit() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN RAISE EXCEPTION 'Injected audit failure'; END $$;
+      CREATE TRIGGER fail_board_audit BEFORE INSERT ON audit_events FOR EACH ROW
+      WHEN (NEW.action = 'board_entry_resolved') EXECUTE FUNCTION fail_board_audit()`);
+    try {
+      const failed = await call<Failure>(a, 'post_board_message', { project_id: project, source_run_id: runA, kind: 'note', title: 'Must roll back', supersedes_id: original.id, request_id: randomUUID() }, true);
+      expect(failed.error.code).toBe('internal_error');
+      expect(await list({ status: 'all' })).toEqual(before);
+    } finally {
+      await pool.query('DROP TRIGGER fail_board_audit ON audit_events; DROP FUNCTION fail_board_audit()');
+    }
+  });
   it('creates state at zero, conflicts at zero/stale, allows replacement by another writer, and reopens', async () => {
     const first = await state(); expect(first).toMatchObject({ key: 'build.version', title: 'build.version', body: 'v1', revision: 1 });
     expect((await state({}, a, true)).error).toMatchObject({ code: 'conflict', details: { current: first } });
