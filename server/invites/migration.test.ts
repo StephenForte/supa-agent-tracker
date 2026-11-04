@@ -14,7 +14,7 @@ it('applies 0003 to populated 0001+0002, preserving all existing data, and rerun
     await pool.query("INSERT INTO users(id,email) VALUES ('migration-user','migration@example.test'); INSERT INTO projects(id,owner_id,name,type) VALUES ('migration-project','migration-user','Kept project','coding'); INSERT INTO agents(id,project_id,name,title,workload_type) VALUES ('migration-agent','migration-project','Agent','Kept agent','coding'); INSERT INTO runs(id,project_id,agent_id,title,workload_type) VALUES ('migration-run','migration-project','migration-agent','Kept run','coding')");
     const snapshot = async () => (await Promise.all(['users', 'projects', 'agents', 'runs'].map(table => pool.query(`SELECT to_jsonb(t) AS row FROM ${table} t`)))).map(result => result.rows);
     const before = await snapshot();
-    expect(await runMigrations(pool, migrationsDir)).toEqual({ applied: ['0003_invites.sql', '0004_token_all_projects.sql', '0005_idempotency_retention.sql', '0006_public_pages.sql', '0007_alerts.sql', '0008_public_profile.sql'] });
+    expect(await runMigrations(pool, migrationsDir)).toEqual({ applied: ['0003_invites.sql', '0004_token_all_projects.sql', '0005_idempotency_retention.sql', '0006_public_pages.sql', '0007_alerts.sql', '0008_public_profile.sql', '0009_message_board.sql'] });
     const after = await snapshot();
     // 0006 adds users.public_handle and projects.is_public. 0007 adds alert flags, defaulted off.
     // 0008 adds profile text (null) and profile_timezone (UTC). Avatar bytes are a new table, not a users column.

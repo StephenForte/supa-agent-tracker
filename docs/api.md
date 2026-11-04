@@ -475,3 +475,31 @@ The response is built field by field. These are the only keys:
 
 `stale` is `true` only when the run is `running` and `lastContactAt` is older than that project's stale threshold. The threshold itself is not in the response. `harness` and `finishedAt` are null when unset. Projects and agents are included even when they have no runs. Runs are the 200 most recently contacted across that owner's public projects, newest first. A 30-day window would still be unbounded, so the cap is a count. Private projects, archived projects, and any other owner's public projects are absent. Descriptions, repository fields, tags, messages, summaries, task ids, models, pull requests, tools, events, next steps, notes, tokens, and account identity are absent.
 
+
+## Project message board (P2-AA, D-048)
+
+Board entries are private to the project owner and project-granted MCP credentials, including boards of public projects. No public response includes a board. Each entry is:
+
+`{ id, projectId, kind, key, title, body, taskRef, addressedTo, status, resolution, resolvedAt, resolvedByRunId, resolvedByUserId, sourceRunId, author: { agentName, taskId }, createdAt, updatedAt, revision }`.
+
+Fields use camelCase and UTC ISO timestamps; absent optional entry fields are null. Author is resolved server-side from the source run. Kinds and the standard text format are defined in [Message board](integrations/reporting-protocol.md#message-board).
+
+| MCP tool | Inputs | Result |
+|---|---|---|
+| `list_board` | `project_id`; optional `status` (`open` default, `resolved`, `all`), `kind`, `key`, `task_ref`, `cursor`, `limit` (50 default, max 100) | `{ items, nextCursor }`, updatedAt descending then id ascending |
+| `post_board_message` | `project_id`, `source_run_id`, `kind` (not state), `title`, `request_id`; optional `body`, `task_ref`, `addressed_to`, `supersedes_id` | Entry; atomically resolves an open same-project non-state target with resolution `Superseded by <new id>`; a resolved target stays unchanged |
+| `set_board_state` | `project_id`, `source_run_id`, `key`, `value`, `expected_revision`, `request_id`; optional `title`, `task_ref` | Entry; 0 creates, existing/stale revisions conflict with `details.current`; title defaults to key; replacement changes source to writer and reopens |
+| `resolve_board_entry` | `project_id`, `entry_id`, `source_run_id`, `expected_revision`, `request_id`; optional `resolution` | Entry resolved by caller's run; stale/already resolved conflicts |
+
+Every mutation's source must be a check-in made by that credential in that project (`forbidden` otherwise). Any granted credential may resolve another credential's entry or replace state. Ungranted projects and cross-project entry/supersedes IDs are `not_found`. Mutations own one idempotency layer: same request/body replays the response without duplicate rows/audits; changed body is `idempotency_mismatch`. At 500 open entries, post/create-state fails `validation_error` with `details.reason: board_full`; existing-state replacement does not count.
+
+`check_in` and `get_project` additionally return `board: { open_count, entries }`. At most 20 open digest entries expose only `{ id, kind, key, title, taskRef, addressedTo, updatedAt, revision, author }`, never body. Hazards first, then questions, then all other kinds; newest first in each group with id ascending for ties. Check-in replay returns the originally stored digest.
+
+| Owner route | Inputs | Result |
+|---|---|---|
+| `GET /api/projects/:projectId/board` | optional query `status`, `kind`, `cursor`, `limit`; same defaults as list_board | `{ items, nextCursor }` |
+| `GET /api/board/summary` | none | `{ items: [{ projectId, openCount, questionCount, hazardCount, latest: { id, kind, title, updatedAt } }] }`; only this owner's projects with open entries, one SQL query |
+| `POST /api/projects/:projectId/board/:entryId/resolve` | `expected_revision`, `request_id`, optional `resolution` | Entry; resolvedByUserId is owner; audit `board_entry_resolved`; idempotency operation `board_entry_resolve` |
+| `POST /api/projects/:projectId/board/:entryId/reopen` | `expected_revision`, `request_id` | Entry; clears resolution fields; audit `board_entry_reopened`; operation `board_entry_reopen` |
+
+All four owner routes require a browser session; bearer-only requests receive 401, another owner 404. Resolve/reopen with stale revision or an already matching status returns 409 with `details.current`. Mutations replay atomically with one audit row. Unknown input fields are rejected. Board bounds: title 1–200, body/value 0–10,000, task_ref/addressed_to 0–200, resolution 0–2,000 characters; key `^[a-z0-9][a-z0-9._-]{0,63}$`; IDs/request IDs `[A-Za-z0-9._:-]{1,128}`, revisions nonnegative integers. Only state has a key. Resolved rows have resolvedAt and exactly one resolving actor; open rows have all resolution fields null.
