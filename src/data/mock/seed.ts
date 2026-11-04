@@ -3,6 +3,7 @@ export const DEMO_LIVE_RUN_IDS = ['run_1', 'run_2', 'run_10'] as const;
 export interface TrackerState {
   /** Mock-only heartbeat participants; never exposed in tracker records. */
   demoLiveRunIds: string[];
+  board: import('../../domain/types').BoardEntry[];
   account: Account; projects: Project[]; agents: LogicalAgent[]; runs: Run[];
   steps: NextStep[]; waitingNotes: WaitingNote[]; tokens: McpToken[]; sequence: number;
 }
@@ -57,7 +58,20 @@ export function seedTracker(now: number): TrackerState {
     { id: 'step_2', projectId: 'prj_offers', position: 2, instruction: 'Confirm the preview opens on a narrow screen.', sourceRunId: 'run_1', done: true, completionChangedBy: 'usr_demo', completionChangedAt: at(-10) },
     { id: 'step_3', projectId: 'prj_dashboard', position: 1, instruction: 'Inspect the failed sorting run and approve a retry in its harness.', sourceRunId: 'run_5', done: false, completionChangedBy: null, completionChangedAt: null },
   ].map(step => ({ ...step, createdAt: at(-90), updatedAt: at(-10), revision: 1 }));
-  return { demoLiveRunIds: [...DEMO_LIVE_RUN_IDS], account: { id: 'usr_demo', name: 'Demo operator', email: 'demo@example.invalid', emailVerified: true, demo: true, publicHandle: null, alerts: { blocked: false, stale: false, review: false }, publicProfile: { name: null, bio: null, github: null, x: null, linkedin: null, timezone: 'UTC', avatarUpdatedAt: null } }, projects, agents, runs, steps,
+  const board: import('../../domain/types').BoardEntry[] = [
+    { kind: 'question', title: 'Which offer flow should ship first?', body: 'Confirm the primary flow with the operator.', key: null },
+    { kind: 'state', title: 'Preview environment', body: 'Ready for review at `preview-v2`.', key: 'preview' },
+    { kind: 'hazard', title: ('Check mobile validation — a lengthy agent handoff describing validation messages, keyboard focus and narrow-screen review before the next release. ').repeat(2).slice(0, 200), body: 'Check the unbroken field identifier: ' + 'offerValidationField'.repeat(20), key: null },
+    { kind: 'decision', title: 'Accessible labels agreed', body: 'Use visible labels on every input.', key: null },
+    { kind: 'handoff', title: 'Dashboard review', body: 'Review sorting before merging.', key: null },
+    { kind: 'note', title: 'Weather source', body: 'The daily briefing uses the demo forecast.', key: null },
+  ].map((entry, i) => ({ ...entry, id: `board_${i + 1}`, projectId: i < 4 ? 'prj_offers' : i === 4 ? 'prj_dashboard' : 'prj_weather',
+    kind: entry.kind as import('../../domain/types').BoardKind, taskRef: i < 4 ? 'T0-11a' : null, addressedTo: i === 0 ? 'Operator' : null,
+    status: i === 3 ? 'resolved' : 'open', resolution: i === 3 ? 'Confirmed in review.' : null,
+    resolvedAt: i === 3 ? at(-5) : null, resolvedByUserId: i === 3 ? 'usr_demo' : null, resolvedByRunId: null,
+    sourceRunId: i < 4 ? 'run_1' : null, author: { agentName: 'Demo agent', taskId: i < 4 ? 'T0-11a' : null },
+    createdAt: at(-30 - i), updatedAt: at(-10 - i), revision: 1 }));
+  return { board, demoLiveRunIds: [...DEMO_LIVE_RUN_IDS], account: { id: 'usr_demo', name: 'Demo operator', email: 'demo@example.invalid', emailVerified: true, demo: true, publicHandle: null, alerts: { blocked: false, stale: false, review: false }, publicProfile: { name: null, bio: null, github: null, x: null, linkedin: null, timezone: 'UTC', avatarUpdatedAt: null } }, projects, agents, runs, steps,
     waitingNotes: [{ projectId: 'prj_offers', text: 'T0-11a is still implementing the second form variant.', sourceRunId: 'run_1', updatedAt: at(-2), revision: 1 }],
     tokens: [1, 2].map(n => ({ id: `tok_${n}`, label: n === 1 ? 'Demo coding client' : 'Demo weather bot', allProjects: false, projectIds: [n === 1 ? 'prj_offers' : 'prj_weather'], display: `sat_demo_…FAKE_${n}`, createdAt: at(-1440), lastUsedAt: n === 1 ? at(-2) : null, revokedAt: null })), sequence: 11 };
 }

@@ -209,3 +209,15 @@ it('shows automation null links, all three historical runs and zero live runs', 
   expect(document.querySelectorAll('[data-run-id]')).toHaveLength(3);
   expect(screen.queryByRole('button', { name: /Demo: close/ })).toBeNull();
 });
+
+it('scrolls a board deep link after asynchronous project data loads, once per navigation', async () => {
+  const scroll = vi.fn();
+  Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: scroll });
+  const { sources } = setup('/projects/prj_offers#project-board');
+  expect(scroll).not.toHaveBeenCalled();
+  await screen.findByRole('region', { name: 'Message board' });
+  await waitFor(() => expect(scroll).toHaveBeenCalledTimes(1));
+  expect(screen.getByRole('link', { name: 'Board' })).toHaveAttribute('href', '#project-board');
+  await act(async () => { const entry = (await sources.tracker.listBoard('prj_offers')).items[0]!; await sources.tracker.resolveBoardEntry('prj_offers', entry.id, entry.revision); });
+  expect(scroll).toHaveBeenCalledTimes(1);
+});

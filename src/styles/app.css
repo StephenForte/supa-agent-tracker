@@ -181,3 +181,17 @@ dialog.dialog-with-footer[open] { display: flex; flex-direction: column; max-hei
   dialog.dialog-with-footer { padding: 1rem; }
   .token-scope-choice { padding-block: 0; }
 }
+
+/* P2-AB: agent board, separate from owner-only notes. */
+.board-preview, .board-panel, .board-entry { min-width: 0; overflow-wrap: anywhere; }
+.board-latest { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#project-board { scroll-margin-top: 145px; margin-block: 1rem; }
+.board-filters { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; margin-block: 1rem; }
+.board-filters label { display: flex; gap: .5rem; align-items: center; min-height: 44px; }
+.board-filters select { min-height: 44px; max-width: 100%; border: 1px solid #9aabb2; border-radius: .375rem; padding: .5rem; }
+.board-list { list-style: none; padding: 0; margin: 0; }
+.board-entry { border-top: 1px solid #d6e0e3; padding-block: 1rem; }
+.board-kind { display: inline-block; margin-right: .5rem; padding: .15rem .5rem; background: #e7edf1; border-radius: .375rem; font-size: .8rem; }
+.board-note { display: block; margin-block: .75rem; }
+.board-note textarea { display: block; width: 100%; max-width: 100%; min-height: 4rem; border: 1px solid #9aabb2; border-radius: .375rem; padding: .5rem; }
+.board-resolution { margin-block: .75rem; padding: .75rem; background: #f1f5f9; border-radius: .375rem; }

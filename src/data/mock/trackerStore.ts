@@ -1,6 +1,8 @@
 import type { TrackerDataSource } from '../contracts';
 import type { McpToken, Project, ProjectInput, TokenIssueResult } from '../../domain/types';
 import { emptyPublicProfile, profileErrorMessage } from '../../domain/public/profile';
+import { boardSummaries, newestBoardEntries } from '../../domain/board/board';
+import type { BoardEntry, WriteResult } from '../../domain/types';
 import { AVATAR_NEEDS_LIVE } from '../public/avatar';
 import type { Clock } from '../../domain/clock';
 import { seedTracker, type TrackerState } from './seed';
@@ -10,6 +12,7 @@ const HANDLE_PATTERN = /^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$/;
 export interface TrackerStoreOptions { clock: Clock; initial?: TrackerState; persist(state: TrackerState): void; onReset(now: number): void }
 export function createTrackerStore({ clock, initial, persist, onReset }: TrackerStoreOptions) {
   let state = structuredClone(initial ?? seedTracker(clock.now()));
+  state.board ??= [];
   const changes = observable();
   const copy = <T,>(value: T): T => structuredClone(value);
   const timestamp = () => new Date(clock.now()).toISOString();
@@ -30,6 +33,17 @@ export function createTrackerStore({ clock, initial, persist, onReset }: Tracker
       changed = true;
     }
     if (changed) commit();
+  }
+  function changeBoard(projectId: string, id: string, revision: number, status: 'open' | 'resolved', resolution?: string): WriteResult<BoardEntry> {
+    const entry = state.board?.find(item => item.projectId === projectId && item.id === id);
+    if (!entry) return { status: 'not_found' };
+    if (entry.revision !== revision || entry.status === status) return { status: 'conflict', current: copy(entry) };
+    if (resolution !== undefined && resolution.length > 2000) return { status: 'invalid', message: 'Resolution must be at most 2000 characters.' };
+    const now = timestamp();
+    Object.assign(entry, { status, resolution: status === 'resolved' ? resolution?.trim() || null : null,
+      resolvedAt: status === 'resolved' ? now : null, resolvedByUserId: status === 'resolved' ? state.account.id : null,
+      resolvedByRunId: null, updatedAt: now, revision: entry.revision + 1 });
+    commit(); return { status: 'saved', value: copy(entry) };
   }
   function issue(label: string, projectIds: string[], allProjects = false): TokenIssueResult {
     if (!label.trim()) return { status: 'invalid', message: 'Provide a label and at least one existing project scope.' };
@@ -132,6 +146,17 @@ export function createTrackerStore({ clock, initial, persist, onReset }: Tracker
       Object.assign(run, { workStatus: run.executionState, revision: run.revision + 1, updatedAt: timestamp() });
       commit(); return { status: 'saved', value: copy(run) };
     },
+    async listBoard(id, query = {}) {
+      const entries = newestBoardEntries(state.board ?? []).filter(entry => entry.projectId === id &&
+        (query.status === 'all' || entry.status === (query.status ?? 'open')) && (!query.kind || entry.kind === query.kind));
+      const start = query.cursor ? entries.findIndex(entry => entry.id === query.cursor) + 1 : 0;
+      const limit = Math.max(1, Math.min(100, query.limit ?? 50));
+      const items = entries.slice(start, start + limit);
+      return copy({ items, nextCursor: start + limit < entries.length ? items.at(-1)!.id : null });
+    },
+    async listBoardSummaries() { return copy(boardSummaries(state.board ?? [])); },
+    async resolveBoardEntry(projectId, id, revision, resolution) { return changeBoard(projectId, id, revision, 'resolved', resolution); },
+    async reopenBoardEntry(projectId, id, revision) { return changeBoard(projectId, id, revision, 'open'); },
     async listNextSteps(id) { return copy({ steps: state.steps.filter(step => step.projectId === id).sort((a, b) => a.position - b.position), waitingNote: state.waitingNotes.find(note => note.projectId === id) ?? null }); },
     async setNextStepDone(id, done, expectedRevision) {
       const step = state.steps.find(item => item.id === id);

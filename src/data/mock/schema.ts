@@ -30,7 +30,16 @@ const step = z.object({ id: z.string(), projectId: z.string(), position: z.numbe
 const waiting = z.object({ projectId: z.string(), text: z.string(), sourceRunId: z.string(), updatedAt: time, revision });
 const token = z.object({ id: z.string(), label: z.string(), allProjects: z.boolean().default(false), projectIds: z.array(z.string()), display: z.string().startsWith('sat_demo_…'), createdAt: time, lastUsedAt: time.nullable(), revokedAt: time.nullable() });
 export const runMetadataPatchSchema = run.pick({ title: true, taskId: true, harness: true, model: true, completionSummary: true, blocker: true, noPrReason: true, prReferences: true }).partial();
+const boardEntry = z.object({
+  id: z.string(), projectId: z.string(), kind: z.enum(['note', 'decision', 'question', 'hazard', 'handoff', 'state']),
+  key: nullableText, title: z.string(), body: z.string(), taskRef: nullableText, addressedTo: nullableText,
+  status: z.enum(['open', 'resolved']), resolution: z.string().max(2000).nullable(), resolvedAt: time.nullable(),
+  resolvedByRunId: nullableText, resolvedByUserId: nullableText, sourceRunId: nullableText,
+  author: z.object({ agentName: nullableText, taskId: nullableText }), createdAt: time, updatedAt: time, revision,
+}).refine(entry => entry.kind === 'state' ? !!entry.key?.trim() : entry.key === null);
 export const trackerSchema: z.ZodType<TrackerState> = z.object({
+  // Existing v1 demo envelopes have no board; preserve their data without inventing messages.
+  board: z.array(boardEntry).default([]),
   // Default preserves pre-heartbeat v1 demo edits instead of discarding saved state.
   demoLiveRunIds: z.array(z.enum(DEMO_LIVE_RUN_IDS)).default(() => [...DEMO_LIVE_RUN_IDS]),
   account: z.object({
@@ -47,7 +56,10 @@ export const trackerSchema: z.ZodType<TrackerState> = z.object({
   const agents = new Map(state.agents.map(item => [item.id, item]));
   const runs = new Map(state.runs.map(item => [item.id, item]));
   const unique = (ids: string[]) => new Set(ids).size === ids.length;
-  return unique(state.demoLiveRunIds) && state.demoLiveRunIds.every(id => runs.has(id)) && unique(state.projects.map(item => item.id)) && unique(state.agents.map(item => item.id)) && unique(state.runs.map(item => item.id)) && unique(state.steps.map(item => item.id)) && unique(state.tokens.map(item => item.id)) &&
+  return unique(state.board.map(item => item.id)) && state.board.every(item => projects.has(item.projectId) &&
+    (item.sourceRunId === null || runs.get(item.sourceRunId)?.projectId === item.projectId) &&
+    (item.resolvedByRunId === null || runs.get(item.resolvedByRunId)?.projectId === item.projectId)) &&
+    unique(state.demoLiveRunIds) && state.demoLiveRunIds.every(id => runs.has(id)) && unique(state.projects.map(item => item.id)) && unique(state.agents.map(item => item.id)) && unique(state.runs.map(item => item.id)) && unique(state.steps.map(item => item.id)) && unique(state.tokens.map(item => item.id)) &&
     state.projects.every(item => item.ownerId === state.account.id) && state.agents.every(item => projects.has(item.projectId)) &&
     state.runs.every(item => agents.get(item.agentId)?.projectId === item.projectId && item.events.every(event => event.runId === item.id) &&
       (item.parentRunId === null || (runs.get(item.parentRunId)?.projectId === item.projectId && runs.get(item.parentRunId)?.childRunIds.includes(item.id))) &&
