@@ -1,5 +1,6 @@
 import type { TrackerDataSource, BrowserAuth } from '../contracts.js';
 import type { Account, LogicalAgent, McpToken, NextStep, Project, ProjectNextSteps, PublicProfile, Run, TokenIssueResult } from '../../domain/types.js';
+import type { BoardEntry, BoardPage, BoardSummary } from '../../domain/types.js';
 import { emptyPublicProfile } from '../../domain/public/profile.js';
 import { actionFields, HttpError, nullable, pages, segment, write, type HttpClient } from './client.js';
 import { createObservable, type Visibility } from './observable.js';
@@ -102,6 +103,22 @@ export function createHttpTracker(client: HttpClient, visibility?: Visibility, o
       const run = await nullable(() => client.request<Run>(`/api/runs/${segment(id)}`));
       return run ? write<Run>(client, `/api/runs/${segment(id)}/dismiss`, 'POST', { expected_revision: run.revision, ...actionFields() }) : { status: 'not_found' as const };
     }),
+    listBoard: (id, query = {}) => {
+      const params = new URLSearchParams();
+      if (query.status) params.set('status', query.status);
+      if (query.kind) params.set('kind', query.kind);
+      if (query.cursor) params.set('cursor', query.cursor);
+      if (query.limit !== undefined) params.set('limit', String(query.limit));
+      return observable.read(`board:${id}:${params}`, () => client.request<BoardPage>(`/api/projects/${segment(id)}/board?${params}`));
+    },
+    // A single cache key for every card, both on mount and on each polling cycle.
+    listBoardSummaries: () => observable.read('board:summary', async () => {
+      const result = await client.request<{ items: BoardSummary[] }>('/api/board/summary');
+      if (!Array.isArray(result.items)) throw new Error('Unable to load message board summaries.');
+      return result.items;
+    }),
+    resolveBoardEntry: (projectId, id, revision, resolution) => mutation(() => write<BoardEntry>(client, `/api/projects/${segment(projectId)}/board/${segment(id)}/resolve`, 'POST', { resolution, expected_revision: revision, ...actionFields() })),
+    reopenBoardEntry: (projectId, id, revision) => mutation(() => write<BoardEntry>(client, `/api/projects/${segment(projectId)}/board/${segment(id)}/reopen`, 'POST', { expected_revision: revision, ...actionFields() })),
     listNextSteps: id => observable.read(`steps:${id}`, async () => {
       const bundle = await client.request<ProjectNextSteps>(`/api/projects/${segment(id)}/next-steps`);
       for (const [step, project] of stepProjects) if (project === id) stepProjects.delete(step);

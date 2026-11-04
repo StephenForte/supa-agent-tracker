@@ -1,5 +1,5 @@
-import { useCallback, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link, useLocation, useParams, useSearchParams } from 'react-router';
 import { useSourceQuery, useTrackerData } from '../../data/hooks';
 import { useNow } from '../../domain/clock';
 import { projectCounts } from '../../domain/derive';
@@ -10,12 +10,15 @@ import { ProjectResources } from '../../features/projects/ProjectResources';
 import type { Project } from '../../domain/types';
 import { NotFound } from '../../app/NotFound';
 import { RunGrid } from '../../features/runs/RunGrid';
+import { BoardPanel } from '../../features/board/BoardPanel';
 import { NextStepsPanel } from '../../features/next-steps/NextStepsPanel';
 import { PrivateNotePanel } from '../../features/private-notes/PrivateNotePanel';
 import { ErrorState } from '../../components/ui/ErrorState';
 export function ProjectDetailPage() {
   const { projectId = '' } = useParams();
   const [params] = useSearchParams();
+  const location = useLocation();
+  const scrolled = useRef<string | null>(null);
   const source = useTrackerData();
   const now = useNow();
   const account = useSourceQuery(source, useCallback(() => source.getAccount(), [source]));
@@ -23,13 +26,21 @@ export function ProjectDetailPage() {
     const [project, runs, agents] = await Promise.all([source.getProject(projectId), source.listRuns(projectId), source.listAgents(projectId)]);
     return { project, runs, agents };
   }, [source, projectId]));
+  const loadedProjectId = result.status === 'ready' ? result.data.project?.id : null;
+  useEffect(() => {
+    const target = `${location.key}:${loadedProjectId}`;
+    if (loadedProjectId && location.hash === '#project-board' && scrolled.current !== target) {
+      document.getElementById('project-board')?.scrollIntoView();
+      scrolled.current = target;
+    }
+  }, [loadedProjectId, location.hash, location.key]);
   if (result.status === 'loading') return <p role="status">Loading project…</p>;
   if (result.status === 'error') return <ErrorState message={result.error.message} />;
   const { project, runs, agents } = result.data;
   if (!project) return <NotFound project />;
   const counts = projectCounts(project, runs, agents, now);
   return <div className="project-detail min-w-0">
-    <nav className="project-jumps" aria-label="Project sections"><a href="#project-runs">Runs</a><a href="#project-steps">Next steps</a><a href="#project-notes">Notes</a></nav>
+    <nav className="project-jumps" aria-label="Project sections"><a href="#project-runs">Runs</a><a href="#project-steps">Next steps</a><a href="#project-board">Board</a><a href="#project-notes">Notes</a></nav>
     <header><p className="eyebrow">Project activity</p><h1>{project.name}</h1><p>{formatDescription(project.description)}</p>
       <div className="flex flex-wrap gap-2"><Badge>{projectTypeLabels[project.type]}</Badge><Badge tone={project.lifecycle}>{lifecycleLabels[project.lifecycle]}</Badge>{project.isPublic && <Badge>Public</Badge>}{project.tags.map(tag => <Badge key={tag}>{tag}</Badge>)}</div>
       {project.isPublic && <PublicAvailability ready={account.status === 'ready'} handle={account.status === 'ready' ? account.data.publicHandle : null} />}
@@ -40,6 +51,7 @@ export function ProjectDetailPage() {
       </dl>
     </header>
     <div id="project-runs"><RunGrid key={`${project.id}:${params.get('run') ?? ''}`} runs={runs} agents={agents} projects={[project]} defaultExpandedRunIds={params.get('run') ? [params.get('run')!] : []} /></div>
+    <div id="project-board"><BoardPanel key={project.id} projectId={project.id} /></div>
     <div className="panel-grid"><div id="project-steps" className="min-w-0"><NextStepsPanel projectId={project.id} /></div><div id="project-notes" className="min-w-0"><PrivateNotePanel projectId={project.id} /></div></div>
   </div>;
 }

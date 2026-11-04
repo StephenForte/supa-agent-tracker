@@ -1,4 +1,5 @@
 import type { Account, LogicalAgent, McpToken, NextStep, Project, ProjectInput, ProjectNextSteps, PublicProfileInput, Run, RunMetadataPatch, TokenIssueResult, WriteResult } from '../domain/types.js';
+import type { BoardEntry, BoardPage, BoardQuery, BoardSummary } from '../domain/types.js';
 import type { PrivateNote } from '../domain/privateNotes.js';
 /** Subscription functions are synchronous by React's external-store protocol; all business operations are async.
  * getSnapshot returns a stable numeric invalidation revision, never records. Lists return ALL records,
@@ -35,6 +36,10 @@ export interface TrackerDataSource extends ObservableSource {
   markRunDone(runId: string): Promise<WriteResult<Run>>;
   /** Failed or cancelled runs whose work status differs from their execution state. No timeline event. */
   dismissRun(runId: string): Promise<WriteResult<Run>>;
+  listBoard(projectId: string, query?: BoardQuery): Promise<BoardPage>;
+  listBoardSummaries(): Promise<BoardSummary[]>;
+  resolveBoardEntry(projectId: string, entryId: string, expectedRevision: number, resolution?: string): Promise<WriteResult<BoardEntry>>;
+  reopenBoardEntry(projectId: string, entryId: string, expectedRevision: number): Promise<WriteResult<BoardEntry>>;
   listNextSteps(projectId: string): Promise<ProjectNextSteps>;
   setNextStepDone(stepId: string, done: boolean, expectedRevision: number): Promise<WriteResult<NextStep>>;
   /** Demo only. A worker may rewrite its own instruction, never user completion or another worker's step. */

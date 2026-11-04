@@ -54,3 +54,19 @@ export interface McpToken {
 }
 export type WriteResult<T> = { status: 'saved'; value: T } | { status: 'conflict'; current: T } | { status: 'not_found' } | { status: 'invalid'; message: string };
 export type TokenIssueResult = { status: 'conflict'; current: McpToken } | { status: 'created'; token: McpToken; plaintext: string } | { status: 'not_found' } | { status: 'invalid'; message: string };
+
+/** D-048: agent-readable project board; never part of public profiles or private notes. */
+export type BoardKind = 'note' | 'decision' | 'question' | 'hazard' | 'handoff' | 'state';
+export interface BoardEntry {
+  id: string; projectId: string; kind: BoardKind; key: string | null; title: string; body: string;
+  taskRef: string | null; addressedTo: string | null; status: 'open' | 'resolved'; resolution: string | null;
+  resolvedAt: string | null; resolvedByRunId: string | null; resolvedByUserId: string | null;
+  sourceRunId: string | null; author: { agentName: string | null; taskId: string | null };
+  createdAt: string; updatedAt: string; revision: number;
+}
+export interface BoardSummary {
+  projectId: string; openCount: number; questionCount: number; hazardCount: number;
+  latest: { id: string; kind: BoardKind; title: string; updatedAt: string };
+}
+export interface BoardQuery { status?: 'open' | 'resolved' | 'all'; kind?: BoardKind; cursor?: string; limit?: number }
+export interface BoardPage { items: BoardEntry[]; nextCursor: string | null }
