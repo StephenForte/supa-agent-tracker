@@ -440,3 +440,7 @@ Status: **Planner, from operator request (2026-11-05)**: "alter the MCP to allow
 - **Agent rule:** close a step only when evidence shows it is finished, and cite it. Leave steps that ask the operator to look, decide or try something.
 - **Confirmed by operator (2026-11-05): any credential granted the project, not planner-only.** The operator first chose planner-only, then reversed it the same day, before any code was written. Assumption still open: project settings, project creation and run dismiss or mark-done stay owner-only over the web.
 - Tasks: P2-AE (server, migration, panel); then the planner sweeps the stale steps and updates the skills after the deploy.
+
+### D-051 — Unknown key names stay out of validation_error details
+Status: **Confirmed by operator (2026-11-06)**, closing the question left open by P2-V.
+`validation_error` details name schema paths only. A key the schema doesn't know is rejected, but its name is not returned, because it is caller-supplied text and errors must not echo caller input. `validationFields` in server/app/errors.ts drops the empty path that an unrecognized key produces; server/mcp/lifecycle.test.ts covers it ("does not echo a sentinel supplied as a value, a title, or an unknown key"). Agents find the valid keys in tools/list. No code change.
