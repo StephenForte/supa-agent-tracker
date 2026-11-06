@@ -243,6 +243,8 @@ export const nextSteps = pgTable('next_steps', {
   sourceRunId: text('source_run_id').notNull(),
   completionChangedBy: text('completion_changed_by'),
   completionChangedAt: timestamp('completion_changed_at', { withTimezone: true, mode: 'date' }),
+  completedByRunId: text('completed_by_run_id'),
+  completionNote: text('completion_note'),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
   revision: integer('revision').notNull().default(1),
@@ -251,8 +253,11 @@ export const nextSteps = pgTable('next_steps', {
   foreignKey({ columns: [t.projectId], foreignColumns: [projects.id] }).onDelete('restrict'),
   foreignKey({ columns: [t.sourceRunId, t.projectId], foreignColumns: [runs.id, runs.projectId] }).onDelete('restrict'),
   foreignKey({ columns: [t.completionChangedBy], foreignColumns: [users.id] }).onDelete('restrict'),
+  foreignKey({ columns: [t.completedByRunId, t.projectId], foreignColumns: [runs.id, runs.projectId], name: 'next_steps_completed_by_run_fk' }).onDelete('restrict'),
   check('next_steps_position_valid', sql`position >= 0`),
   check('next_steps_completion_actor', sql`(completion_changed_by IS NULL) = (completion_changed_at IS NULL)`),
+  check('next_steps_completed_by_run_requires_done', sql`completed_by_run_id IS NULL OR done`),
+  check('next_steps_completion_note_pair', sql`(completion_note IS NULL) = (completed_by_run_id IS NULL)`),
   index('next_steps_completion').on(t.projectId, t.done, t.position, t.id),
 ]);
 

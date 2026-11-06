@@ -4,7 +4,7 @@ import { ErrorState } from '../../components/ui/ErrorState';
 import { Button } from '../../components/ui/Button';
 import { useSourceQuery, useTrackerData } from '../../data/hooks';
 import { formatNullable, formatTimestamp } from '../../domain/format';
-import { completedSteps, completionActorLabel, openSteps, orderedSteps, simulatedInstructionRewrite, sourceAgentName, staleRevision } from '../../domain/next-steps/steps';
+import { completedSteps, openSteps, orderedSteps, simulatedInstructionRewrite, sourceAgentName, staleRevision, stepCompletionCredit } from '../../domain/next-steps/steps';
 import type { Account, LogicalAgent, NextStep, Run, WaitingNote } from '../../domain/types';
 import { InstructionText } from './InstructionText';
 import { stopCardActivation } from './stopCardActivation';
@@ -215,12 +215,24 @@ function StepRow({ step, projectId, runs, agents, account, pending, onToggle }: 
       <div className="min-w-0">
         <InstructionText instruction={step.instruction} />
         <p className="text-sm text-[#526670]">Source agent {formatNullable(sourceAgentName(step.sourceRunId, runs, agents))}{' · '}<SourceRunLink projectId={projectId} runId={step.sourceRunId} />{' · '}Updated {formatTimestamp(step.updatedAt)}</p>
-        {step.done && <p className="text-sm text-[#526670]">Completed by {formatNullable(completionActorLabel(step.completionChangedBy, account))} · {formatTimestamp(step.completionChangedAt)}</p>}
+        <CompletionLine step={step} projectId={projectId} runs={runs} agents={agents} account={account} />
       </div>
     </div>
   </li>;
 }
 
-function SourceRunLink({ projectId, runId }: { projectId: string; runId: string }) {
-  return <Link to={sourceRunPath(projectId, runId)} aria-label={`View source run ${runId}`} onClick={stopCardActivation} onMouseDown={stopCardActivation}>View source run</Link>;
+function CompletionLine({ step, projectId, runs, agents, account }: {
+  step: NextStep; projectId: string; runs: readonly Run[]; agents: readonly LogicalAgent[]; account: Account;
+}) {
+  const credit = stepCompletionCredit(step, account, runs, agents);
+  if (credit?.kind === 'agent') return <>
+    <p className="text-sm text-[#526670]">Completed by {formatNullable(credit.agentName)}{' · '}<SourceRunLink projectId={projectId} runId={credit.runId} label="View run" />{' · '}{formatTimestamp(credit.at)}</p>
+    <InstructionText instruction={credit.note} />
+  </>;
+  if (credit?.kind === 'owner') return <p className="text-sm text-[#526670]">Completed by {formatNullable(credit.label)} · {formatTimestamp(credit.at)}</p>;
+  return null;
+}
+
+function SourceRunLink({ projectId, runId, label = 'View source run' }: { projectId: string; runId: string; label?: string }) {
+  return <Link to={sourceRunPath(projectId, runId)} aria-label={`${label} ${runId}`} onClick={stopCardActivation} onMouseDown={stopCardActivation}>{label}</Link>;
 }

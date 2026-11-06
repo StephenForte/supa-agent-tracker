@@ -27,6 +27,19 @@ export function completionActorLabel(actorId: string | null, account: { id: stri
   return actorId === account.id ? account.name : actorId;
 }
 
+export type StepCompletionCredit =
+  | { kind: 'agent'; runId: string; agentName: string | null; note: string; at: string | null }
+  | { kind: 'owner'; label: string | null; at: string | null };
+
+/** Agent attribution wins. completionChangedBy is the token owner on an agent close, so it cannot name the actor. */
+export function stepCompletionCredit(step: NextStep, account: { id: string; name: string }, runs: readonly Run[], agents: readonly LogicalAgent[]): StepCompletionCredit | null {
+  if (!step.done) return null;
+  if (step.completedByRunId) {
+    return { kind: 'agent', runId: step.completedByRunId, agentName: sourceAgentName(step.completedByRunId, runs, agents), note: step.completionNote ?? '', at: step.completionChangedAt };
+  }
+  return { kind: 'owner', label: completionActorLabel(step.completionChangedBy, account), at: step.completionChangedAt };
+}
+
 /** One less than the revision the caller believes is current, so the write cannot match. */
 export function staleRevision(revision: number): number {
   return revision - 1;

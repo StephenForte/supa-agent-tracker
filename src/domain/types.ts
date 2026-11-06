@@ -44,6 +44,7 @@ export interface NextStep {
   id: string; projectId: string; position: number; instruction: string; done: boolean; sourceRunId: string;
   createdAt: Timestamp; updatedAt: Timestamp; revision: number;
   completionChangedBy: string | null; completionChangedAt: Timestamp | null;
+  completedByRunId: string | null; completionNote: string | null;
 }
 export interface WaitingNote { projectId: string; text: string; sourceRunId: string; updatedAt: Timestamp; revision: number }
 export interface ProjectNextSteps { steps: NextStep[]; waitingNote: WaitingNote | null }

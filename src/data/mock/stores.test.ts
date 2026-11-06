@@ -21,7 +21,19 @@ describe('next step ownership and optimistic concurrency', () => {
     const edited = await tracker.simulateAgentStepUpdate(step.id, 'Updated instruction', step.sourceRunId, done.value.revision);
     expect(edited).toMatchObject({ status: 'saved', value: { done: true, completionChangedBy: 'usr_demo', completionChangedAt: done.value.completionChangedAt, instruction: 'Updated instruction' } });
     if (edited.status !== 'saved') return;
-    const reopened = await tracker.setNextStepDone(step.id, false, edited.value.revision); expect(reopened).toMatchObject({ status: 'saved', value: { done: false } });
+    const reopened = await tracker.setNextStepDone(step.id, false, edited.value.revision); expect(reopened).toMatchObject({ status: 'saved', value: { done: false, completedByRunId: null, completionNote: null } });
+  });
+  it('clears agent attribution when the owner reopens or ticks again, and leaves it through a text edit', async () => {
+    const { tracker } = setup();
+    const step = (await tracker.listNextSteps('prj_offers')).steps.find(item => item.id === 'step_4')!;
+    const edited = await tracker.simulateAgentStepUpdate(step.id, 'Still the agent close', step.sourceRunId, step.revision);
+    expect(edited).toMatchObject({ status: 'saved', value: { done: true, completedByRunId: 'run_1', completionNote: step.completionNote, completionChangedBy: 'usr_demo' } });
+    if (edited.status !== 'saved') return;
+    const reopened = await tracker.setNextStepDone(step.id, false, edited.value.revision);
+    expect(reopened).toMatchObject({ status: 'saved', value: { done: false, completedByRunId: null, completionNote: null } });
+    if (reopened.status !== 'saved') return;
+    const again = await tracker.setNextStepDone(step.id, true, reopened.value.revision);
+    expect(again).toMatchObject({ status: 'saved', value: { done: true, completedByRunId: null, completionNote: null, completionChangedBy: 'usr_demo' } });
   });
   it('returns fresh data on stale revisions and changes nothing', async () => { const { tracker } = setup(); const step = (await tracker.listNextSteps('prj_offers')).steps[0]!; await tracker.setNextStepDone(step.id, true, step.revision); const before = await tracker.listNextSteps('prj_offers'); const revision = tracker.getSnapshot(); expect(await tracker.simulateAgentStepUpdate(step.id, 'stale', step.sourceRunId, step.revision)).toMatchObject({ status: 'conflict', current: { done: true } }); expect(await tracker.setNextStepDone(step.id, false, step.revision)).toMatchObject({ status: 'conflict' }); expect(await tracker.listNextSteps('prj_offers')).toEqual(before); expect(tracker.getSnapshot()).toBe(revision); });
   it('forbids one source run from editing another run’s instruction', async () => { const { tracker } = setup(); const step = (await tracker.listNextSteps('prj_offers')).steps[0]!; expect(await tracker.simulateAgentStepUpdate(step.id, 'overwrite', 'run_1', step.revision)).toMatchObject({ status: 'invalid' }); });

@@ -16,7 +16,7 @@ function step(overrides: Partial<NextStep>): NextStep {
   return {
     id: 'step', projectId: 'prj_sample', position: 1, instruction: 'Do the thing', done: false, sourceRunId: 'run',
     createdAt: '2026-10-14T00:00:00.000Z', updatedAt: '2026-10-14T00:00:00.000Z', revision: 1,
-    completionChangedBy: null, completionChangedAt: null, ...overrides,
+    completionChangedBy: null, completionChangedAt: null, completedByRunId: null, completionNote: null, ...overrides,
   };
 }
 
