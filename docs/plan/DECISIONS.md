@@ -438,5 +438,5 @@ Status: **Planner, from operator request (2026-11-05)**: "alter the MCP to allow
 - **Attribution is explicit.** Migration 0010 adds `completed_by_run_id` and `completion_note`. `completion_changed_by` still holds the owner's id, because `next_steps_completion_actor` requires it; the panel shows the agent and note when the run is set. Any owner completion or reopen clears both.
 - **D-023 is unchanged.** Text and position edits stay with the authoring credential (PRD acceptance 18). A planner who cannot edit a step closes it and creates a new one.
 - **Agent rule:** close a step only when evidence shows it is finished, and cite it. Leave steps that ask the operator to look, decide or try something.
-- Assumptions for the operator: any credential rather than planner-only; project settings, project creation and run dismiss or mark-done stay owner-only over the web.
+- **Confirmed by operator (2026-11-05): any credential granted the project, not planner-only.** The operator first chose planner-only, then reversed it the same day, before any code was written. Assumption still open: project settings, project creation and run dismiss or mark-done stay owner-only over the web.
 - Tasks: P2-AE (server, migration, panel); then the planner sweeps the stale steps and updates the skills after the deploy.
