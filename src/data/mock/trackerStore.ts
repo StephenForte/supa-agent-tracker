@@ -162,7 +162,7 @@ export function createTrackerStore({ clock, initial, persist, onReset }: Tracker
       const step = state.steps.find(item => item.id === id);
       if (!step) return { status: 'not_found' };
       if (step.revision !== expectedRevision) return { status: 'conflict', current: copy(step) };
-      Object.assign(step, { done, revision: step.revision + 1, updatedAt: timestamp(), completionChangedBy: state.account.id, completionChangedAt: timestamp() });
+      Object.assign(step, { done, revision: step.revision + 1, updatedAt: timestamp(), completionChangedBy: state.account.id, completionChangedAt: timestamp(), completedByRunId: null, completionNote: null });
       commit(); return { status: 'saved', value: copy(step) };
     },
     async simulateAgentStepUpdate(id, instruction, sourceRunId, expectedRevision) {

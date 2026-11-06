@@ -26,7 +26,11 @@ const run = z.object({
   prReferences: z.array(z.object({ number: z.number().int().positive(), title: z.string(), url: link.unwrap(), repositoryName: z.string(), primary: z.boolean() })),
   tools: z.array(tool).nullable(), events: z.array(event), revision,
 });
-const step = z.object({ id: z.string(), projectId: z.string(), position: z.number(), instruction: z.string(), done: z.boolean(), sourceRunId: z.string(), createdAt: time, updatedAt: time, revision, completionChangedBy: nullableText, completionChangedAt: time.nullable() });
+const step = z.object({
+  id: z.string(), projectId: z.string(), position: z.number(), instruction: z.string(), done: z.boolean(), sourceRunId: z.string(), createdAt: time, updatedAt: time, revision, completionChangedBy: nullableText, completionChangedAt: time.nullable(),
+  // Saved v1 envelopes predate agent completion. Missing columns are null, not a reason to drop the envelope.
+  completedByRunId: nullableText.default(null), completionNote: nullableText.default(null),
+});
 const waiting = z.object({ projectId: z.string(), text: z.string(), sourceRunId: z.string(), updatedAt: time, revision });
 const token = z.object({ id: z.string(), label: z.string(), allProjects: z.boolean().default(false), projectIds: z.array(z.string()), display: z.string().startsWith('sat_demo_…'), createdAt: time, lastUsedAt: time.nullable(), revokedAt: time.nullable() });
 export const runMetadataPatchSchema = run.pick({ title: true, taskId: true, harness: true, model: true, completionSummary: true, blocker: true, noPrReason: true, prReferences: true }).partial();

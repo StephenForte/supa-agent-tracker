@@ -54,9 +54,10 @@ export function seedTracker(now: number): TrackerState {
   runs[2]!.prReferences = [74, 77].map((number, index) => ({ number, title: index ? 'Follow-up validation improvements' : 'Add accessible offer inputs', url: `https://github.com/example-org/offers/pull/${number}`, repositoryName: 'example-org/offers', primary: !index }));
   runs[2]!.noPrReason = null;
   const steps: NextStep[] = [
-    { id: 'step_1', projectId: 'prj_offers', position: 1, instruction: 'Review and merge PR #74 after checking the form.', sourceRunId: 'run_3', done: false, completionChangedBy: null, completionChangedAt: null },
-    { id: 'step_2', projectId: 'prj_offers', position: 2, instruction: 'Confirm the preview opens on a narrow screen.', sourceRunId: 'run_1', done: true, completionChangedBy: 'usr_demo', completionChangedAt: at(-10) },
-    { id: 'step_3', projectId: 'prj_dashboard', position: 1, instruction: 'Inspect the failed sorting run and approve a retry in its harness.', sourceRunId: 'run_5', done: false, completionChangedBy: null, completionChangedAt: null },
+    { id: 'step_1', projectId: 'prj_offers', position: 1, instruction: 'Review and merge PR #74 after checking the form.', sourceRunId: 'run_3', done: false, completionChangedBy: null, completionChangedAt: null, completedByRunId: null, completionNote: null },
+    { id: 'step_2', projectId: 'prj_offers', position: 2, instruction: 'Confirm the preview opens on a narrow screen.', sourceRunId: 'run_1', done: true, completionChangedBy: 'usr_demo', completionChangedAt: at(-10), completedByRunId: null, completionNote: null },
+    { id: 'step_3', projectId: 'prj_dashboard', position: 1, instruction: 'Inspect the failed sorting run and approve a retry in its harness.', sourceRunId: 'run_5', done: false, completionChangedBy: null, completionChangedAt: null, completedByRunId: null, completionNote: null },
+    { id: 'step_4', projectId: 'prj_offers', position: 3, instruction: 'Record the agent close in the tracker.', sourceRunId: 'run_3', done: true, completionChangedBy: 'usr_demo', completionChangedAt: at(-5), completedByRunId: 'run_1', completionNote: 'Shipped in PR #74. <b>not bold</b>' },
   ].map(step => ({ ...step, createdAt: at(-90), updatedAt: at(-10), revision: 1 }));
   const board: import('../../domain/types').BoardEntry[] = [
     { kind: 'question', title: 'Which offer flow should ship first?', body: 'Confirm the primary flow with the operator.', key: null },

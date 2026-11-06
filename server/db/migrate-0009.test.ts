@@ -28,11 +28,21 @@ describe('0009 message board forward migration and database invariants', () => {
       INSERT INTO runs(id,project_id,agent_id,title,workload_type) VALUES ('r','p','a','Keep me','coding'),('s','q','b','Other','coding');
       INSERT INTO next_steps(id,project_id,source_run_id,position,instruction) VALUES ('step','p','r',0,'Keep this too')`);
     before = await snapshot();
-    expect((await runMigrations(pool, migrationsDir)).applied).toEqual(['0009_message_board.sql']);
+    expect((await runMigrations(pool, migrationsDir)).applied).toEqual(['0009_message_board.sql', '0010_agent_step_completion.sql']);
   });
   afterAll(async () => { await pool?.end(); await scratch?.drop(); });
-  it('preserves populated rows byte-for-byte and reruns as a no-op', async () => {
-    expect(await snapshot()).toEqual(before);
+  it('preserves populated rows and reruns as a no-op', async () => {
+    const after = await snapshot();
+    // 0010 adds two nullable next_steps columns. Earlier columns stay byte-for-byte; the new ones are null.
+    const strip = (sets: { row: Record<string, unknown> }[][]) => sets.map((rows) => rows.map(({ row }) => {
+      const copy = { ...row };
+      delete copy.completed_by_run_id;
+      delete copy.completion_note;
+      return copy;
+    }));
+    expect(strip(after as { row: Record<string, unknown> }[][])).toEqual(strip(before as { row: Record<string, unknown> }[][]));
+    const steps = after[4] as { row: { completed_by_run_id: null; completion_note: null } }[];
+    expect(steps.every(({ row }) => row.completed_by_run_id === null && row.completion_note === null)).toBe(true);
     expect((await runMigrations(pool, migrationsDir)).applied).toEqual([]);
     expect((await pool.query('SELECT count(*)::int n FROM board_entries')).rows[0].n).toBe(0);
   });

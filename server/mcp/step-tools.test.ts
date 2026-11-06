@@ -24,6 +24,7 @@ const responses: unknown[] = [];
 interface Step {
   id: string; sourceRunId: string; instruction: string; position: number; revision: number; done: boolean;
   completionChangedBy: string | null; completionChangedAt: string | null;
+  completedByRunId: string | null; completionNote: string | null;
 }
 interface WaitingNote { text: string; sourceRunId: string; revision: number }
 interface Listing { steps: Step[]; waitingNote: WaitingNote | null }
@@ -52,6 +53,14 @@ async function checkIn(client: Client, request_id: string) {
   return result.run_id;
 }
 const list = () => call<Listing>(a, 'list_next_steps', { project_id: project.id });
+async function footprint(stepId: string) {
+  const row = (await pool.query('select to_jsonb(t) as row from next_steps t where id=$1', [stepId])).rows[0].row;
+  const audit = (await pool.query('select count(*)::int n from audit_events where target=$1', [stepId])).rows[0].n as number;
+  return { row, audit };
+}
+async function keys(requestId: string) {
+  return (await pool.query('select count(*)::int n from idempotency_keys where request_id=$1', [requestId])).rows[0].n as number;
+}
 async function create(instruction: string, request_id: string, position?: number) {
   return call<Step>(a, 'create_next_step', { project_id: project.id, source_run_id: runA, instruction, request_id, position });
 }
@@ -156,6 +165,7 @@ describe('next-step tools over /mcp with SDK clients and issued tokens', () => {
       ['update_next_step', { source_run_id: runA, step_id: step.id, expected_revision: step.revision, instruction: 'Denied' }],
       ['reorder_next_steps', { order: before.steps.map((row) => ({ step_id: row.id, expected_revision: row.revision })) }],
       ['set_waiting_note', { source_run_id: runA, expected_revision: 1, text: 'Denied' }],
+      ['complete_next_step', { source_run_id: runA, step_id: step.id, expected_revision: step.revision, resolution: 'Denied' }],
     ];
     for (const [name, fields] of cases) {
       const args = { project_id: project.id, ...fields, ...(name === 'list_next_steps' ? {} : { request_id: `ungranted-${name}` }) };
@@ -174,6 +184,124 @@ describe('next-step tools over /mcp with SDK clients and issued tokens', () => {
       const result = await call<ErrorValue>(a, 'update_next_step', args, true);
       expect(result.error).toEqual({ code: 'validation_error', message: 'validation_error' });
     }
+  });
+
+  it('lets a second granted credential close a step the first created, once', async () => {
+    const step = await create('Close from the other token', 'step-close-create');
+    const credentialB = (await pool.query(`select id from mcp_credentials where label='step-token-b'`)).rows[0].id as string;
+    const args = { project_id: project.id, step_id: step.id, source_run_id: runB, expected_revision: step.revision, resolution: 'Merged long ago', request_id: 'step-close-b' };
+    const closed = await call<Step>(b, 'complete_next_step', args);
+    expect(closed).toMatchObject({ done: true, revision: step.revision + 1, completedByRunId: runB, completionNote: 'Merged long ago', completionChangedBy: owner.userId, sourceRunId: runA });
+    expect(closed.completionChangedAt).toEqual(expect.any(String));
+    expect(await call<Step>(b, 'complete_next_step', args)).toEqual(closed);
+    const audit = await pool.query(`select action, user_id, actor_user_id, actor_credential_id, details from audit_events where target=$1 and action='next_step_completed' order by created_at`, [step.id]);
+    expect(audit.rows).toEqual([{ action: 'next_step_completed', user_id: owner.userId, actor_user_id: null, actor_credential_id: credentialB, details: { done: true, revision: step.revision + 1, source_run_id: runB } }]);
+    const mismatch = await call<ErrorValue>(b, 'complete_next_step', { ...args, resolution: 'A different reason' }, true);
+    expect(mismatch.error.code).toBe('idempotency_mismatch');
+    expect((await list()).steps.find((row) => row.id === step.id)).toEqual(closed);
+    expect((await pool.query(`select count(*)::int n from audit_events where target=$1 and action='next_step_completed'`, [step.id])).rows[0].n).toBe(1);
+    const projectView = await call<{ open_to_dos: { id: string }[] }>(b, 'get_project', { project_id: project.id });
+    expect(projectView.open_to_dos.map((row) => row.id)).not.toContain(step.id);
+  });
+
+  it('refuses another credential’s run, another project’s run, and an ungranted close without writing', async () => {
+    const step = await create('Stay open', 'step-stay-open');
+    const other = await createProject(db, owner, { name: 'Other project', type: 'automation' });
+    const both = await connect('step-both', [project.id, other.id]);
+    const foreign = await call<{ run_id: string }>(both, 'check_in', { project_id: other.id, agent_name: 'elsewhere', title: 'Elsewhere', workload_type: 'automation', request_id: 'step-foreign-in' });
+    const before = await footprint(step.id);
+    for (const [client, source, request_id] of [[b, runA, 'step-other-credential'], [both, foreign.run_id, 'step-other-project']] as const) {
+      const denied = await call<ErrorValue>(client, 'complete_next_step', { project_id: project.id, step_id: step.id, source_run_id: source, expected_revision: step.revision, resolution: 'No', request_id }, true);
+      expect(denied.error.code).toBe('forbidden');
+      expect(await footprint(step.id)).toEqual(before);
+      expect(await keys(request_id)).toBe(0);
+    }
+    const ungrantedBefore = await footprint(step.id);
+    const hidden = await call<ErrorValue>(ungranted, 'complete_next_step', { project_id: project.id, step_id: step.id, source_run_id: runA, expected_revision: step.revision, resolution: 'No', request_id: 'step-ungranted-close' }, true);
+    expect(hidden.error.code).toBe('not_found');
+    expect(await footprint(step.id)).toEqual(ungrantedBefore);
+  });
+
+  it('conflicts on a stale revision and an already-done step without storing the key or the note', async () => {
+    const step = await create('Conflict me', 'step-conflict-create');
+    const staleId = 'step-stale-close';
+    const stale = await call<ErrorValue>(b, 'complete_next_step', { project_id: project.id, step_id: step.id, source_run_id: runB, expected_revision: step.revision + 1, resolution: 'Too soon', request_id: staleId }, true);
+    expect(stale.error).toMatchObject({ code: 'conflict', details: { current: expect.objectContaining({ id: step.id, revision: step.revision, completionNote: null }) } });
+    expect(await keys(staleId)).toBe(0);
+    const closed = await call<Step>(b, 'complete_next_step', { project_id: project.id, step_id: step.id, source_run_id: runB, expected_revision: step.revision, resolution: 'Now', request_id: staleId });
+    expect(closed.completionNote).toBe('Now');
+    const again = await call<ErrorValue>(a, 'complete_next_step', { project_id: project.id, step_id: step.id, source_run_id: runA, expected_revision: closed.revision, resolution: 'Overwrite', request_id: 'step-already-done' }, true);
+    expect(again.error).toMatchObject({ code: 'conflict', details: { current: expect.objectContaining({ completionNote: 'Now', completedByRunId: runB }) } });
+    expect(await keys('step-already-done')).toBe(0);
+    expect((await list()).steps.find((row) => row.id === step.id)?.completionNote).toBe('Now');
+  });
+
+  it('forbids closing a step the owner reopened, and owner reopen or retick clears agent columns', async () => {
+    const step = await create('Owner gate', 'step-owner-gate');
+    const closed = await call<Step>(b, 'complete_next_step', { project_id: project.id, step_id: step.id, source_run_id: runB, expected_revision: step.revision, resolution: 'Agent finished', request_id: 'step-owner-gate-close' });
+    const reopen = await app.inject({ method: 'POST', url: `/api/projects/${project.id}/next-steps/${step.id}/completion`, headers: { 'x-test-user-id': owner.userId }, payload: { done: false, expected_revision: closed.revision, request_id: 'step-owner-reopen' } });
+    expect(reopen.statusCode).toBe(200);
+    expect(reopen.json()).toMatchObject({ done: false, completedByRunId: null, completionNote: null });
+    const reopened = reopen.json() as Step;
+    const before = await footprint(step.id);
+    const denied = await call<ErrorValue>(b, 'complete_next_step', { project_id: project.id, step_id: step.id, source_run_id: runB, expected_revision: reopened.revision, resolution: 'Again', request_id: 'step-owner-reopened' }, true);
+    expect(denied.error.code).toBe('forbidden');
+    expect(await footprint(step.id)).toEqual(before);
+    expect(await keys('step-owner-reopened')).toBe(0);
+    const retick = await app.inject({ method: 'POST', url: `/api/projects/${project.id}/next-steps/${step.id}/completion`, headers: { 'x-test-user-id': owner.userId }, payload: { done: true, expected_revision: reopened.revision, request_id: 'step-owner-retick' } });
+    expect(retick.statusCode).toBe(200);
+    expect(retick.json()).toMatchObject({ done: true, completedByRunId: null, completionNote: null, completionChangedBy: owner.userId });
+  });
+
+  it('closes with an ended run and with the replacement after the authoring token is rotated', async () => {
+    const endedRun = await checkIn(a, 'step-ended-run');
+    await call(a, 'check_out', { run_id: endedRun, expected_revision: 1, execution_state: 'finished', work_status: 'completed', request_id: 'step-ended-out' });
+    const endedStep = await create('After the run ended', 'step-ended-create');
+    const endedClose = await call<Step>(a, 'complete_next_step', { project_id: project.id, step_id: endedStep.id, source_run_id: endedRun, expected_revision: endedStep.revision, resolution: 'Closed after checkout', request_id: 'step-ended-close' });
+    expect(endedClose).toMatchObject({ done: true, completedByRunId: endedRun, completionNote: 'Closed after checkout' });
+
+    const issued = await app.inject({ method: 'POST', url: '/api/tokens', headers: { 'x-test-user-id': owner.userId }, payload: { label: 'step-rotate', project_ids: [project.id], request_id: 'step-rotate-issue' } });
+    expect(issued.statusCode).toBe(200);
+    const oldToken = issued.json() as { plaintext: string; token: { id: string; revision: number } };
+    const oldClient = new Client({ name: 'step-tools-test', version: '1' });
+    clients.push(oldClient);
+    await oldClient.connect(new StreamableHTTPClientTransport(new URL(`${base}/mcp`), { requestInit: { headers: { Authorization: `Bearer ${oldToken.plaintext}` } } }));
+    const oldRun = await checkIn(oldClient, 'step-rotate-run');
+    const authored = await call<Step>(oldClient, 'create_next_step', { project_id: project.id, source_run_id: oldRun, instruction: 'Written before rotation', request_id: 'step-rotate-create' });
+    const rotated = await app.inject({ method: 'POST', url: `/api/tokens/${oldToken.token.id}/rotate`, headers: { 'x-test-user-id': owner.userId }, payload: { request_id: 'step-rotate', expected_revision: oldToken.token.revision } });
+    expect(rotated.statusCode).toBe(200);
+    const replacement = new Client({ name: 'step-tools-test', version: '1' });
+    clients.push(replacement);
+    await replacement.connect(new StreamableHTTPClientTransport(new URL(`${base}/mcp`), { requestInit: { headers: { Authorization: `Bearer ${rotated.json().plaintext}` } } }));
+    const newRun = await checkIn(replacement, 'step-rotate-new');
+    const closed = await call<Step>(replacement, 'complete_next_step', { project_id: project.id, step_id: authored.id, source_run_id: newRun, expected_revision: authored.revision, resolution: 'Closed by the rotated token', request_id: 'step-rotate-close' });
+    expect(closed).toMatchObject({ done: true, completedByRunId: newRun, completionNote: 'Closed by the rotated token', sourceRunId: oldRun });
+  });
+
+  it('rejects a missing or 2,001-character resolution before writing', async () => {
+    const step = await create('Validate the note', 'step-validate-create');
+    const before = await footprint(step.id);
+    const missing = await call<ErrorValue>(a, 'complete_next_step', { project_id: project.id, step_id: step.id, source_run_id: runA, expected_revision: step.revision, request_id: 'step-no-resolution' }, true);
+    expect(missing.error.code).toBe('validation_error');
+    const marker = 'NOTE-TOO-LONG-MARKER';
+    const huge = await call<ErrorValue>(a, 'complete_next_step', { project_id: project.id, step_id: step.id, source_run_id: runA, expected_revision: step.revision, resolution: marker + 'x'.repeat(2001 - marker.length), request_id: 'step-long-resolution' }, true);
+    expect(huge.error.code).toBe('validation_error');
+    expect(JSON.stringify(huge)).not.toContain(marker);
+    expect(await footprint(step.id)).toEqual(before);
+    expect(await keys('step-no-resolution')).toBe(0);
+    expect(await keys('step-long-resolution')).toBe(0);
+  });
+
+  it('leaves completion fields unchanged when a closed step is edited or reordered', async () => {
+    const step = await create('Edit after close', 'step-edit-closed-create');
+    const closed = await call<Step>(b, 'complete_next_step', { project_id: project.id, step_id: step.id, source_run_id: runB, expected_revision: step.revision, resolution: 'Keep this note', request_id: 'step-edit-closed' });
+    const edited = await call<Step>(a, 'update_next_step', { project_id: project.id, step_id: step.id, source_run_id: runA, expected_revision: closed.revision, instruction: 'Text only', request_id: 'step-edit-closed-text' });
+    expect(edited).toMatchObject({ instruction: 'Text only', done: true, completedByRunId: closed.completedByRunId, completionNote: closed.completionNote, completionChangedBy: closed.completionChangedBy, completionChangedAt: closed.completionChangedAt });
+    const before = await list();
+    const order = [...before.steps].reverse().map((row) => ({ step_id: row.id, expected_revision: row.revision }));
+    const reordered = await call<Step[]>(b, 'reorder_next_steps', { project_id: project.id, order, request_id: 'step-reorder-closed' });
+    const moved = reordered.find((row) => row.id === step.id)!;
+    expect(moved).toMatchObject({ done: true, completionNote: 'Keep this note', completedByRunId: runB, completionChangedAt: closed.completionChangedAt, completionChangedBy: closed.completionChangedBy });
   });
 
   it('keeps seeded private-note text out of every step tool response, including errors and conflicts', () => {

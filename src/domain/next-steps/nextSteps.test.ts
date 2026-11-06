@@ -4,10 +4,10 @@ import type { LogicalAgent, NextStep, Run } from '../types';
 import type { PrivateNote } from '../privateNotes';
 import { instructionSegments } from './instruction';
 import { notePreview, reconcilePrivateNote } from './privateNote';
-import { completedSteps, completionActorLabel, openSteps, orderedSteps, simulatedInstructionRewrite, sourceAgentName, staleRevision } from './steps';
+import { completedSteps, completionActorLabel, openSteps, orderedSteps, simulatedInstructionRewrite, sourceAgentName, staleRevision, stepCompletionCredit } from './steps';
 
 function step(patch: Partial<NextStep> & Pick<NextStep, 'id' | 'position' | 'done'>): NextStep {
-  return { projectId: 'prj', instruction: patch.id, sourceRunId: 'run', createdAt: '2026-10-14T18:00:00.000Z', updatedAt: '2026-10-14T19:00:00.000Z', revision: 1, completionChangedBy: null, completionChangedAt: null, ...patch };
+  return { projectId: 'prj', instruction: patch.id, sourceRunId: 'run', createdAt: '2026-10-14T18:00:00.000Z', updatedAt: '2026-10-14T19:00:00.000Z', revision: 1, completionChangedBy: null, completionChangedAt: null, completedByRunId: null, completionNote: null, ...patch };
 }
 function note(patch: Partial<PrivateNote> = {}): PrivateNote {
   return { projectId: 'prj', text: 'Saved', updatedAt: '2026-10-14T19:00:00.000Z', revision: 1, ...patch };
@@ -50,6 +50,16 @@ describe('source and completion labels', () => {
     expect(completionActorLabel('usr_demo', account)).toBe('Demo operator');
     expect(completionActorLabel('usr_other', account)).toBe('usr_other');
     expect(completionActorLabel(null, account)).toBeNull();
+  });
+  it('credits the completing run before the owner id stored on an agent close', () => {
+    const account = { id: 'usr_demo', name: 'Demo operator' };
+    const run = { id: 'run_9', agentId: 'agt_9' } as Run;
+    const agent = { id: 'agt_9', name: 'Worker' } as LogicalAgent;
+    const agentClosed = step({ id: 'closed', position: 1, done: true, completionChangedBy: 'usr_demo', completionChangedAt: '2026-10-14T20:00:00.000Z', completedByRunId: 'run_9', completionNote: 'Shipped. <b>not bold</b>' });
+    expect(stepCompletionCredit(agentClosed, account, [run], [agent])).toEqual({ kind: 'agent', runId: 'run_9', agentName: 'Worker', note: 'Shipped. <b>not bold</b>', at: '2026-10-14T20:00:00.000Z' });
+    const ownerClosed = step({ id: 'owner', position: 2, done: true, completionChangedBy: 'usr_demo', completionChangedAt: '2026-10-14T21:00:00.000Z' });
+    expect(stepCompletionCredit(ownerClosed, account, [run], [agent])).toEqual({ kind: 'owner', label: 'Demo operator', at: '2026-10-14T21:00:00.000Z' });
+    expect(stepCompletionCredit(step({ id: 'open', position: 3, done: false }), account, [run], [agent])).toBeNull();
   });
 });
 

@@ -210,11 +210,12 @@ to a fixed constant, plus `details.fields` when the rule is about particular fie
 | `update_next_step` | `project_id`, `step_id`, `source_run_id`, `expected_revision`, `request_id`; at least one of `instruction`, `position` | Saved `NextStep`; preserves user completion and its actor/time |
 | `reorder_next_steps` | `project_id`, `order: [{ step_id, expected_revision }]`, `request_id` | Saved `NextStep[]` in order with positions `0..n-1` |
 | `set_waiting_note` | `project_id`, `source_run_id`, `expected_revision`, `text`, `request_id` | Saved `WaitingNote`; use revision 0 to create |
+| `complete_next_step` | `project_id`, `step_id`, `source_run_id`, `expected_revision`, `resolution`, `request_id` | Saved `NextStep` with `done: true`, `completedByRunId`, and `completionNote` |
 
 Inputs reuse the exported schemas in `server/steps/agent-steps.ts`: IDs and request
 IDs match `[A-Za-z0-9._:-]{1,128}`, revisions are nonnegative integers, positions
 are integers from 0 through 1,000,000, instruction length is 1–10,000 characters,
-waiting text length is 0–10,000, and reorder accepts at most 1,000 entries. Unknown
+waiting text length is 0–10,000, resolution length is 1–2,000, and reorder accepts at most 1,000 entries. Unknown
 fields are rejected. Results are the service values without a status envelope or
 added fields; resource fields are camelCase and timestamps are ISO-8601 strings.
 
@@ -223,11 +224,13 @@ credential may create/edit its steps or set a waiting note with that run; anothe
 token of the same user receives `forbidden`. After rotation, the new token cannot
 edit the old token's steps. Any credential granted the project may reorder, but
 must supply every current step exactly once at its current revision. Reorder leaves
-text, source run and completion untouched. A stale or incomplete order returns
+text, source run and completion untouched, including `completedByRunId` and `completionNote`. A stale or incomplete order returns
 `conflict` with `error.details.current` and changes nothing; stale step/waiting-note
 edits also return the current service value there. Ungranted projects return
 `not_found`; authorship failures return `forbidden`; invalid inputs return
 `validation_error`. Private notes appear in no step-tool result or error.
+
+`complete_next_step` (D-050) closes a step. `source_run_id` is the caller's own check-in, which may already have ended; it is not the step's source run. Any credential granted the project may close any step in it, including one written by another credential or by a token that has since been rotated. The write sets `done`, `completedByRunId` to that run, `completionNote` to `resolution`, `completionChangedAt`, `updatedAt`, `revision + 1`, and `completionChangedBy` to the token's user. The audit row is `next_step_completed` with the credential actor and `details` `{ done: true, revision, source_run_id }`. There is no agent reopen. A step the owner reopened (`done` false and `completionChangedAt` set) is `forbidden` and writes nothing, including no audit row and no idempotency key. A stale revision or a step that is already done is `conflict` with the current step and also stores no idempotency key. `update_next_step` still cannot send `done` and does not change completion fields.
 
 Retries with the same `request_id` and body return the original result for 30 days (24 hours for heartbeats). Reusing
 that ID with a different body returns `idempotency_mismatch`. Step mutations use
@@ -326,13 +329,13 @@ Browser session routes. Every one uses `requireUser`. A request that sends `Auth
 
 `GET` next steps returns every step, including completed ones, ordered by position then id. `waitingNote` is `null` when the project has none.
 
-`done` is a boolean. The completion write records `completionChangedBy` (the signed-in user) and `completionChangedAt`, and appends an audit event (`next_step_completed` or `next_step_reopened`) in the same transaction. It succeeds after the source run has failed or ended. Repeating the same `request_id` and body returns the original step and does not append a second audit. A different body with that `request_id` is `409 idempotency_mismatch`. A stale `expected_revision` is `409 conflict` and `error.details.current` is the stored step.
+`done` is a boolean. The completion write records `completionChangedBy` (the signed-in user) and `completionChangedAt`, clears `completedByRunId` and `completionNote`, and appends an audit event (`next_step_completed` or `next_step_reopened`) in the same transaction. Clearing those columns is what lets the owner reopen an agent-closed step and what keeps a later owner tick from being shown as the agent's. It succeeds after the source run has failed or ended. Repeating the same `request_id` and body returns the original step and does not append a second audit. A different body with that `request_id` is `409 idempotency_mismatch`. A stale `expected_revision` is `409 conflict` and `error.details.current` is the stored step. Agent close is `complete_next_step`, not this route.
 
 `PUT` with `expected_revision: 0` creates the note. Later writes send the stored revision. An absent note reads as `{ projectId, text: "", revision: 0, updatedAt: null }`. `text` may be empty and is capped at **20,000** characters (JavaScript string length, UTF-16 code units). A longer text is `400 validation_error` and is not stored. The same cap is `PRIVATE_NOTE_MAX_CHARS` in `server/notes/routes.ts`.
 
 Another user's project, or an unknown step, is `404 not_found`. The handler writes nothing.
 
-Agent reorder is not an HTTP route. D-023, implemented by `reorderNextSteps` in `server/steps/agent-steps.ts`: any credential granted the project may reorder. The request must name every current step of that project exactly once with its current revision. Anything else — a missing step, a duplicate, an unknown id, or one stale revision — is a conflict and no row changes. On success, positions become `0..n-1` in the given order. A step whose position changes increments its revision. A step that stays at the same index keeps its revision, so checking it off is not invalidated by a reorder that did not move it. Instruction text, source run, `done`, and the completion actor and time are left as stored.
+Agent reorder is not an HTTP route. D-023, implemented by `reorderNextSteps` in `server/steps/agent-steps.ts`: any credential granted the project may reorder. The request must name every current step of that project exactly once with its current revision. Anything else — a missing step, a duplicate, an unknown id, or one stale revision — is a conflict and no row changes. On success, positions become `0..n-1` in the given order. A step whose position changes increments its revision. A step that stays at the same index keeps its revision, so checking it off is not invalidated by a reorder that did not move it. Instruction text, source run, `done`, the completion actor and time, `completedByRunId`, and `completionNote` are left as stored.
 ## Authentication
 
 Browser auth is mounted under `/api/auth`. Requests and responses use JSON; errors
