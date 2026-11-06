@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createClock } from '../../domain/clock';
 import { createDemoSources } from './createDemoSources';
-import { STORAGE_KEY, type StorageAdapter } from './persistence';
+import { createPersistence, STORAGE_KEY, type StorageAdapter } from './persistence';
 import { createTrackerStore } from './trackerStore';
 import { seedTracker } from './seed';
 import { needsAttention } from '../../domain/needs-me/attention';
@@ -22,6 +22,20 @@ describe('next step ownership and optimistic concurrency', () => {
     expect(edited).toMatchObject({ status: 'saved', value: { done: true, completionChangedBy: 'usr_demo', completionChangedAt: done.value.completionChangedAt, instruction: 'Updated instruction' } });
     if (edited.status !== 'saved') return;
     const reopened = await tracker.setNextStepDone(step.id, false, edited.value.revision); expect(reopened).toMatchObject({ status: 'saved', value: { done: false, completedByRunId: null, completionNote: null } });
+  });
+  it('keeps a saved v1 step that has no agent-completion columns', () => {
+    const tracker = seedTracker(now);
+    const steps = tracker.steps.map(step => {
+      const copy: Record<string, unknown> = { ...step };
+      delete copy.completedByRunId;
+      delete copy.completionNote;
+      return copy;
+    });
+    const storage = memoryStorage();
+    storage.setItem(STORAGE_KEY, JSON.stringify({ version: 1, tracker: { ...tracker, steps }, privateNotes: [] }));
+    const loaded = createPersistence(storage).load();
+    expect(loaded?.tracker.steps.every(step => step.completedByRunId === null && step.completionNote === null)).toBe(true);
+    expect(loaded?.tracker.steps[0]?.instruction).toBe(tracker.steps[0]?.instruction);
   });
   it('clears agent attribution when the owner reopens or ticks again, and leaves it through a text edit', async () => {
     const { tracker } = setup();
