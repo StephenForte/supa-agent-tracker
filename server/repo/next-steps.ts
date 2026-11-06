@@ -41,9 +41,32 @@ export async function setStepCompletion(db: Database, access: UserAccess, projec
     if (!current) throw new AccessError('not_found');
     if (current.revision !== expectedRevision) return { status: 'conflict', current };
     const now = new Date();
-    const [value] = await tx.update(nextSteps).set({ done, completionChangedBy: access.userId, completionChangedAt: now, updatedAt: now, revision: expectedRevision + 1 }).where(eq(nextSteps.id, stepId)).returning();
+    // Both directions clear agent attribution. A reopen that left completed_by_run_id set would fail the done check.
+    const [value] = await tx.update(nextSteps).set({
+      done, completedByRunId: null, completionNote: null, completionChangedBy: access.userId, completionChangedAt: now, updatedAt: now, revision: expectedRevision + 1,
+    }).where(eq(nextSteps.id, stepId)).returning();
     await tx.insert(auditEvents).values({ userId: access.userId, projectId, ...actorColumns(access),
       action: done ? 'next_step_completed' : 'next_step_reopened', target: stepId, details: { done, revision: value!.revision } });
+    return { status: 'saved', value: value! };
+  });
+}
+/** Credential close. Not setStepCompletion: that guard is what keeps the REST route owner-only. */
+export async function completeStepForAgent(db: Database, access: CredentialAccess, projectId: string, stepId: string, sourceRunId: string, expectedRevision: number, resolution: string): Promise<WriteResult<NextStep>> {
+  if (access.kind !== 'credential') throw new AccessError('forbidden');
+  checkRevision(expectedRevision);
+  return withProject(db, access, projectId, async (tx) => {
+    const [current] = await tx.select().from(nextSteps).where(and(eq(nextSteps.id, stepId), eq(nextSteps.projectId, projectId))).for('update');
+    if (!current) throw new AccessError('not_found');
+    if (current.revision !== expectedRevision) return { status: 'conflict', current };
+    if (current.done) return { status: 'conflict', current };
+    if (current.completionChangedAt !== null) throw new AccessError('forbidden');
+    const now = new Date();
+    const [value] = await tx.update(nextSteps).set({
+      done: true, completedByRunId: sourceRunId, completionNote: resolution, completionChangedBy: access.userId,
+      completionChangedAt: now, updatedAt: now, revision: expectedRevision + 1,
+    }).where(eq(nextSteps.id, stepId)).returning();
+    await tx.insert(auditEvents).values({ userId: access.userId, projectId, ...actorColumns(access),
+      action: 'next_step_completed', target: stepId, details: { done: true, revision: value!.revision, source_run_id: sourceRunId } });
     return { status: 'saved', value: value! };
   });
 }

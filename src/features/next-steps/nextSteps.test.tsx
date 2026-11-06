@@ -92,6 +92,20 @@ describe('agent next steps', () => {
     expect(within(preview).queryByText('Confirm the preview opens on a narrow screen.')).not.toBeInTheDocument();
   });
 
+  it('shows an agent close as the run, the note and the time, and an owner close as the operator', async () => {
+    const { sources } = setup();
+    show('prj_offers', sources);
+    const closed = (await sources.tracker.listNextSteps('prj_offers')).steps.find(step => step.id === 'step_4')!;
+    const owner = (await sources.tracker.listNextSteps('prj_offers')).steps.find(step => step.id === 'step_2')!;
+    const link = await screen.findByRole('link', { name: 'View run run_1' });
+    expect(link).toHaveAttribute('href', '/projects/prj_offers?run=run_1');
+    expect(link.closest('p')).toHaveTextContent(`Completed by T0-11a · View run · ${formatTimestamp(closed.completionChangedAt)}`);
+    const note = screen.getByText('Shipped in PR #74. <b>not bold</b>', { selector: 'span' });
+    expect(note.innerHTML).toBe('Shipped in PR #74. &lt;b&gt;not bold&lt;/b&gt;');
+    expect(screen.getByText(`Completed by Demo operator · ${formatTimestamp(owner.completionChangedAt)}`)).toBeVisible();
+    expect(screen.getByText(/Demo only/)).toBeVisible();
+  });
+
   it('shows who completed a step and lets a failed source run still be completed and reopened', async () => {
     const user = userEvent.setup();
     const offers = setup();

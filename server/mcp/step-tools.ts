@@ -4,6 +4,7 @@ import {
   updateNextStep, updateNextStepInput,
   reorderNextSteps, reorderNextStepsInput,
   setWaitingNote, setWaitingNoteInput,
+  completeNextStep, completeNextStepInput,
   type AgentMutation,
 } from '../steps/agent-steps.js';
 import { ProtocolError } from './protocol.js';
@@ -27,4 +28,6 @@ export function registerStepTools(register: ToolRegistrar): void {
     async (input, db, ctx) => saved(await reorderNextSteps(db, ctx.access, input)));
   register('set_waiting_note', setWaitingNoteInput.shape, false,
     async (input, db, ctx) => saved(await setWaitingNote(db, ctx.access, input)));
+  register('complete_next_step', completeNextStepInput.shape, false,
+    async (input, db, ctx) => saved(await completeNextStep(db, ctx.access, input)));
 }

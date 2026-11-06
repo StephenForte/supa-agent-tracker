@@ -11,6 +11,8 @@ import { ConflictError, jsonSafe, parseInput, requestHash } from './protocol.js'
 export const INSTRUCTION_MAX_CHARS = 10_000;
 /** JavaScript string length. The waiting note is one project-wide status line. */
 export const WAITING_NOTE_MAX_CHARS = 10_000;
+/** JavaScript string length. An agent close must say why. */
+export const RESOLUTION_MAX_CHARS = 2_000;
 
 const id = z.string().regex(/^[A-Za-z0-9._:-]{1,128}$/);
 const revision = z.number().int().nonnegative();
@@ -44,6 +46,14 @@ export const setWaitingNoteInput = z.object({
   source_run_id: id,
   expected_revision: revision,
   text: z.string().max(WAITING_NOTE_MAX_CHARS),
+  request_id: id,
+}).strict();
+export const completeNextStepInput = z.object({
+  project_id: id,
+  step_id: id,
+  source_run_id: id,
+  expected_revision: revision,
+  resolution: z.string().min(1).max(RESOLUTION_MAX_CHARS),
   request_id: id,
 }).strict();
 
@@ -109,6 +119,18 @@ export async function updateNextStep(db: Database, access: CredentialAccess, inp
     if (parsed.instruction !== undefined) patch.instruction = parsed.instruction;
     if (parsed.position !== undefined) patch.position = parsed.position;
     const written = await stepRepo.updateNextStep(tx, access, parsed.project_id, parsed.step_id, parsed.source_run_id, parsed.expected_revision, patch);
+    if (written.status === 'conflict') throw new ConflictError(jsonSafe(written.current));
+    return written.value;
+  });
+}
+
+export async function completeNextStep(db: Database, access: CredentialAccess, input: unknown): Promise<AgentMutation<stepRepo.NextStep>> {
+  requireCredential(access);
+  const parsed = parseInput(completeNextStepInput, input);
+  return mutate(db, access, parsed.request_id, requestHash({ operation: 'complete_next_step', ...parsed }), 'complete_next_step', async (tx) => {
+    await stepRepo.listNextSteps(tx, access, parsed.project_id);
+    await assertOwnCheckIn(tx, access, parsed.project_id, parsed.source_run_id);
+    const written = await stepRepo.completeStepForAgent(tx, access, parsed.project_id, parsed.step_id, parsed.source_run_id, parsed.expected_revision, parsed.resolution);
     if (written.status === 'conflict') throw new ConflictError(jsonSafe(written.current));
     return written.value;
   });
