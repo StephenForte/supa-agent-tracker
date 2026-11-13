@@ -444,3 +444,14 @@ Status: **Planner, from operator request (2026-11-05)**: "alter the MCP to allow
 ### D-051 — Unknown key names stay out of validation_error details
 Status: **Confirmed by operator (2026-11-06)**, closing the question left open by P2-V.
 `validation_error` details name schema paths only. A key the schema doesn't know is rejected, but its name is not returned, because it is caller-supplied text and errors must not echo caller input. `validationFields` in server/app/errors.ts drops the empty path that an unrecognized key produces; server/mcp/lifecycle.test.ts covers it ("does not echo a sentinel supplied as a value, a title, or an unknown key"). Agents find the valid keys in tools/list. No code change.
+
+### D-052 — Manual close can record Completed; Close run also on running Blocked cards
+Status: **Planner, from operator request (2026-11-12)**: "when a session is blocked or stale, sometimes it picks back up again and completes … If the agent did not update the state, my only options in 'needs me' is canceled or failed. Need the other status as well." Amends D-036's in-place actions and D-047. Operator may overrule the assumptions below.
+- Cause (source, main bbcbfce): `closeRunSchema.outcome` is `failed | cancelled` (server/api/schemas.ts); `updateRun` forbids a `manual_close` to any other state (server/repo/runs.ts, `!['failed', 'cancelled'].includes(state)`); CloseRunDialog offers only those two. Stale cards show Close run; a **running** Blocked card shows only Open run (D-047), so it has no exit at all from Needs me.
+- `POST /api/runs/:runId/close` gains outcome `completed`: execution state `finished`, work status `completed`. `failed` and `cancelled` are unchanged. Still running runs only (an ended run stays 409 `Run has already ended`), reason still required, still one `manual_close` event, `finishedAt` set, `lastContactAt` not advanced, next steps untouched. No migration: both values are already allowed by the run and event check constraints.
+- The dialog offers Completed, Failed, Cancelled, with no preselected outcome, so a mis-click cannot record a success.
+- Needs me: a running Blocked card gets Close run next to Open run. Ended Blocked cards keep D-047's Dismiss / Mark done. Stale cards keep Close run. The run grid's Close run gets the new outcome through the same dialog.
+- Assumptions open for the operator: (a) Completed means `completed`, not `waiting_for_review` — the operator is the reviewer when closing by hand; (b) no "back to in progress" action — a stale run that reports again leaves Stale by itself, and a blocked agent that resumes should send update_status.
+- An agent that reports after a manual close still gets `run_not_running` on check_out, as today.
+- Task: P2-AG.
+
