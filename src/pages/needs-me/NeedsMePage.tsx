@@ -32,7 +32,7 @@ export function NeedsMePage() {
       <p data-latest-status className="truncate text-xs text-slate-600" title={run.message}>{run.message.trim() || 'No status message'}</p>
       <div className="needs-actions">
         {group === 'review' && <><MarkDoneButton run={run} />{pr && <a href={pr.url} target="_blank" rel="noopener noreferrer">Open PR</a>}</>}
-        {group === 'stale' && <button type="button" onClick={() => setClosing(run)}>{demo ? 'Demo: close run' : 'Close run'}</button>}
+        {(group === 'stale' || (group === 'blocked' && run.executionState === 'running')) && <button type="button" onClick={() => setClosing(run)}>{demo ? 'Demo: close run' : 'Close run'}</button>}
         {group === 'blocked' && <><Link to={`/projects/${run.projectId}?run=${encodeURIComponent(run.id)}`}>Open run</Link><DismissRunButton run={run} /><MarkDoneButton run={run} /></>}
       </div>
     </li>;

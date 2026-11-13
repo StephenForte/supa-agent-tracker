@@ -185,3 +185,13 @@ describe('query-aware visible polling', () => {
     const listener = vi.fn(); const off = tracker.subscribe(listener); await tracker.createProject(input); expect(listener).toHaveBeenCalledTimes(1); off();
   });
 });
+
+it('sends Completed through closeRun with the current revision and returns finished/completed', async () => {
+  const closed = { id: 'run-completed', revision: 8, executionState: 'finished', workStatus: 'completed' };
+  const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValueOnce(json({ id: closed.id, revision: 7, executionState: 'running' })).mockResolvedValueOnce(json(closed));
+  const sources = createHttpSources({ fetch });
+  expect(await sources.tracker.closeRun(closed.id, 'completed', 'Verified success')).toEqual({ status: 'saved', value: closed });
+  expect(fetch.mock.calls[1]![0]).toBe('/api/runs/run-completed/close');
+  expect(fetch.mock.calls[1]![1]?.method).toBe('POST');
+  expect(JSON.parse(String(fetch.mock.calls[1]![1]?.body))).toEqual({ outcome: 'completed', reason: 'Verified success', expected_revision: 7, request_id: expect.any(String) });
+});
