@@ -59,7 +59,7 @@ export async function updateRun(db: Database, access: Access, projectId: string,
     const state = patch.executionState ?? current.executionState;
     const eventInput: EventInput = { ...report.event, kind: access.kind === 'user' && state !== current.executionState
       ? 'manual_close' : report.event?.kind ?? (state !== current.executionState ? 'check_out' : 'status') };
-    if (eventInput.kind === 'manual_close' && (access.kind !== 'user' || current.executionState !== 'running' || !['failed', 'cancelled'].includes(state))) throw new AccessError('forbidden');
+    if (eventInput.kind === 'manual_close' && (access.kind !== 'user' || current.executionState !== 'running' || !['finished', 'failed', 'cancelled'].includes(state))) throw new AccessError('forbidden');
     const now = new Date();
     const [value] = await tx.update(runs).set({ title: patch.title, taskId: patch.taskId, executionState: patch.executionState,
       workStatus: patch.workStatus, harness: patch.harness, model: patch.model, message: patch.message,

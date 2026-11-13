@@ -59,6 +59,7 @@ it('closes a stale run with the existing dialog and removes it without completin
   await screen.findByText('3 items need you');
   fireEvent.click(within(card('run_11')).getByRole('button', { name: 'Demo: close run' }));
   const dialog = screen.getByRole('dialog', { name: 'Demo: manually close run_11' });
+  fireEvent.change(within(dialog).getByLabelText('Outcome'), { target: { value: 'cancelled' } });
   fireEvent.change(within(dialog).getByLabelText('Reason (required)'), { target: { value: 'Abandoned' } });
   fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm demo close' }));
   await screen.findByText('2 items need you');
@@ -78,6 +79,7 @@ it('shows the existing close conflict and leaves the dialog open', async () => {
   await screen.findByText('3 items need you');
   fireEvent.click(within(card('run_11')).getByRole('button', { name: 'Demo: close run' }));
   const dialog = screen.getByRole('dialog');
+  fireEvent.change(within(dialog).getByLabelText('Outcome'), { target: { value: 'cancelled' } });
   fireEvent.change(within(dialog).getByLabelText('Reason (required)'), { target: { value: 'Abandoned' } });
   fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm demo close' }));
   expect(await screen.findByRole('alert')).toHaveTextContent('This run changed or is no longer available. Please refresh and try again.');
@@ -140,6 +142,7 @@ it.each(['failed', 'cancelled'] as const)('dismisses an ended %s blocked card an
   const { sources, container } = endedBlocked(state);
   const dismiss = vi.spyOn(sources.tracker, 'dismissRun');
   await screen.findByText('3 items need you');
+  expect(within(card('run_4')).queryByRole('button', { name: /close run/i })).toBeNull();
   expect(within(card('run_4')).getByText(`${state === 'failed' ? 'Failed' : 'Cancelled'} · ended 3 hours ago`)).toBeVisible();
   expect(within(card('run_4')).getByRole('link', { name: 'Open run' })).toBeVisible();
   expectMobileTapTargets(container);
@@ -149,9 +152,10 @@ it.each(['failed', 'cancelled'] as const)('dismisses an ended %s blocked card an
   expect(badge()).toHaveTextContent('2');
   expect(dismiss).toHaveBeenCalledExactlyOnceWith('run_4');
 });
-it('offers mark done on finished blocked cards and only Open run on live blocked cards', async () => {
+it('offers mark done on finished blocked cards and Close run plus Open run on live blocked cards', async () => {
   const { unmount } = endedBlocked('finished');
   await screen.findByText('3 items need you');
+  expect(within(card('run_4')).queryByRole('button', { name: /close run/i })).toBeNull();
   expect(within(card('run_4')).queryByRole('button', { name: /dismiss/i })).toBeNull();
   fireEvent.click(within(card('run_4')).getByRole('button', { name: /mark done/i }));
   await screen.findByText('2 items need you');
@@ -159,7 +163,7 @@ it('offers mark done on finished blocked cards and only Open run on live blocked
   unmount();
   setup();
   await screen.findByText('3 items need you');
-  expect(within(card('run_4')).queryByRole('button')).toBeNull();
+  expect(within(card('run_4')).getByRole('button', { name: 'Demo: close run' })).toBeVisible();
   expect(within(card('run_4')).getByRole('link', { name: 'Open run' })).toBeVisible();
 });
 it('offers dismiss from project RunDetails and keeps the failed execution after success', async () => {
@@ -169,4 +173,40 @@ it('offers dismiss from project RunDetails and keeps the failed execution after 
   fireEvent.click(button);
   await waitFor(() => expect(screen.queryByRole('button', { name: 'Demo: dismiss run_4' })).toBeNull());
   expect(await sources.tracker.getRun('run_4')).toMatchObject({ executionState: 'failed', workStatus: 'failed' });
+});
+
+it('requires an explicit outcome and reason, then closes blocked work as Completed and updates attention', async () => {
+  const { sources } = setup();
+  const close = vi.spyOn(sources.tracker, 'closeRun');
+  const before = (await sources.tracker.getRun('run_4'))!;
+  const stepsBefore = await sources.tracker.listNextSteps(before.projectId);
+  await screen.findByText('3 items need you');
+  fireEvent.click(within(card('run_4')).getByRole('button', { name: 'Demo: close run' }));
+  const dialog = screen.getByRole('dialog');
+  const outcome = within(dialog).getByLabelText('Outcome');
+  const reason = within(dialog).getByLabelText('Reason (required)');
+  const confirm = within(dialog).getByRole('button', { name: 'Confirm demo close' });
+  expect(outcome).toHaveValue('');
+  expect(confirm).toBeDisabled();
+  fireEvent.change(reason, { target: { value: 'Agent finished successfully' } });
+  expect(confirm).toBeDisabled();
+  fireEvent.submit(confirm.closest('form')!);
+  expect(close).not.toHaveBeenCalled();
+  fireEvent.change(outcome, { target: { value: 'completed' } });
+  fireEvent.change(reason, { target: { value: '   ' } });
+  expect(confirm).toBeDisabled();
+  fireEvent.submit(confirm.closest('form')!);
+  expect(close).not.toHaveBeenCalled();
+  fireEvent.change(reason, { target: { value: '  Agent finished successfully  ' } });
+  expect(confirm).toBeEnabled();
+  fireEvent.click(confirm);
+  await screen.findByText('2 items need you');
+  expect(card('run_4')).toBeNull();
+  expect(badge()).toHaveTextContent('2');
+  expect(close).toHaveBeenCalledExactlyOnceWith('run_4', 'completed', 'Agent finished successfully');
+  const after = (await sources.tracker.getRun('run_4'))!;
+  expect(after).toMatchObject({ executionState: 'finished', workStatus: 'completed', lastContactAt: before.lastContactAt, message: 'Agent finished successfully', revision: before.revision + 1 });
+  expect(after.finishedAt).not.toBeNull();
+  expect(after.events.filter(event => event.kind === 'manual_close')).toEqual([expect.objectContaining({ executionState: 'finished', workStatus: 'completed', message: 'Agent finished successfully' })]);
+  expect(await sources.tracker.listNextSteps(before.projectId)).toEqual(stepsBefore);
 });

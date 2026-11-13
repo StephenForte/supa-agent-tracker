@@ -149,7 +149,7 @@ export function toRunPatch(input: PatchRunBody): { patch: RunPatch; prReferences
 }
 
 export function toClosePatch(input: CloseRunBody): RunPatch {
-  return { executionState: input.outcome, workStatus: input.outcome, message: input.reason };
+  return { executionState: input.outcome === 'completed' ? 'finished' : input.outcome, workStatus: input.outcome, message: input.reason };
 }
 
 interface RunGraph {

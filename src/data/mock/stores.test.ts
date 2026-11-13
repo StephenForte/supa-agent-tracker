@@ -106,3 +106,18 @@ it.each(['failed', 'cancelled'] as const)('dismisses %s blocked demo work, notif
     stop();
   } finally { store.dispose(); }
 });
+
+it('closes Completed demo work as finished/completed and refuses a second close', async () => {
+  const sources = setup(memoryStorage());
+  try {
+    const before = (await sources.tracker.getRun('run_4'))!;
+    const stepsBefore = await sources.tracker.listNextSteps(before.projectId);
+    expect(await sources.tracker.closeRun(before.id, 'completed', '  Verified success  ')).toMatchObject({ status: 'saved', value: { executionState: 'finished', workStatus: 'completed', lastContactAt: before.lastContactAt, message: 'Verified success', revision: before.revision + 1 } });
+    const after = (await sources.tracker.getRun(before.id))!;
+    expect(after.finishedAt).not.toBeNull();
+    expect(after.events.filter(event => event.kind === 'manual_close')).toEqual([expect.objectContaining({ executionState: 'finished', workStatus: 'completed', message: 'Verified success' })]);
+    expect(await sources.tracker.listNextSteps(before.projectId)).toEqual(stepsBefore);
+    expect(await sources.tracker.closeRun(before.id, 'completed', 'Again')).toMatchObject({ status: 'invalid' });
+    expect(await sources.tracker.getRun(before.id)).toEqual(after);
+  } finally { sources.dispose(); }
+});

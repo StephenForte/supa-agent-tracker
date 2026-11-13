@@ -124,10 +124,11 @@ export function createTrackerStore({ clock, initial, persist, onReset }: Tracker
       const run = state.runs.find(item => item.id === id);
       if (!run) return { status: 'not_found' };
       if (run.executionState !== 'running') return { status: 'invalid', message: 'Only running executions may be manually closed.' };
-      if (!['failed', 'cancelled'].includes(outcome) || !reason.trim()) return { status: 'invalid', message: 'Choose Failed or Cancelled and provide an audit reason.' };
+      if (!['completed', 'failed', 'cancelled'].includes(outcome) || !reason.trim()) return { status: 'invalid', message: 'Choose Completed, Failed or Cancelled and provide an audit reason.' };
       const now = timestamp();
-      Object.assign(run, { executionState: outcome, workStatus: outcome, finishedAt: now, updatedAt: now, message: reason.trim(), revision: run.revision + 1 });
-      run.events.push({ id: `evt_demo_${++state.sequence}`, runId: id, kind: 'manual_close', receivedAt: now, occurredAt: null, actorId: state.account.id, message: reason.trim(), executionState: outcome, workStatus: outcome });
+      const executionState = outcome === 'completed' ? 'finished' : outcome;
+      Object.assign(run, { executionState, workStatus: outcome, finishedAt: now, updatedAt: now, message: reason.trim(), revision: run.revision + 1 });
+      run.events.push({ id: `evt_demo_${++state.sequence}`, runId: id, kind: 'manual_close', receivedAt: now, occurredAt: null, actorId: state.account.id, message: reason.trim(), executionState, workStatus: outcome });
       commit(); return { status: 'saved', value: copy(run) };
     },
     async markRunDone(id) {

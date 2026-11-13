@@ -49,6 +49,7 @@ it('closes a stale run, updates counts, freezes finish, audits reason and preser
   trigger.focus(); fireEvent.click(trigger);
   const dialog = screen.getByRole('dialog');
   expect(within(dialog).getByRole('button', { name: 'Confirm demo close' })).toBeDisabled();
+  fireEvent.change(within(dialog).getByLabelText('Outcome'), { target: { value: 'cancelled' } });
   fireEvent.change(within(dialog).getByLabelText('Reason (required)'), { target: { value: 'Abandoned demo session' } });
   fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm demo close' }));
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());

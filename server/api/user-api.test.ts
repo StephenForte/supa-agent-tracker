@@ -330,6 +330,58 @@ describe('user REST API', () => {
     expect((failed.json() as { events: Array<{ kind: string }> }).events.filter((event) => event.kind === 'manual_close')).toHaveLength(1);
   });
 
+  it('closes blocked work as finished/completed once, preserving liveness and steps on replay', async () => {
+    const running = await runsRepo.createRun(db, accessA, alphaId, { agentId: agentAId, title: 'Recovered and completed', workloadType: 'coding' });
+    await pool.query("UPDATE runs SET work_status = 'blocked', last_contact_at = '2020-01-01T00:00:00Z' WHERE id = $1", [running.id]);
+    const credential = await credentials.createCredential(db, accessA, { label: 'Completed close', tokenHash: `completed-${running.id}`, displaySuffix: 'done', projectIds: [alphaId] });
+    await steps.createNextStep(db, { kind: 'credential', userId: userA, credentialId: credential.id, projectIds: [alphaId] }, alphaId, { instruction: 'Still needs human review', position: 5, sourceRunId: running.id });
+    const stepsBefore = await steps.listNextSteps(db, accessA, alphaId);
+    const body = { outcome: 'completed', reason: '  Verified success  ', expected_revision: 1, request_id: nextRequestId() };
+    const closed = await call('POST', `/api/runs/${running.id}/close`, userA, body);
+    expect(closed.statusCode).toBe(200);
+    const value = closed.json();
+    expect(value).toMatchObject({ executionState: 'finished', workStatus: 'completed', message: 'Verified success', revision: 2, lastContactAt: '2020-01-01T00:00:00.000Z' });
+    expect(value.finishedAt).toEqual(expect.any(String));
+    expect(value.events.filter((event: { kind: string }) => event.kind === 'manual_close')).toEqual([expect.objectContaining({ actorId: userA, executionState: 'finished', workStatus: 'completed', message: 'Verified success' })]);
+    expect((await audits.listAuditEvents(db, accessA, alphaId)).filter(row => row.action === 'manual_close' && row.target === running.id)).toEqual([expect.objectContaining({ details: { executionState: 'finished', revision: 2 } })]);
+    expect(await steps.listNextSteps(db, accessA, alphaId)).toEqual(stepsBefore);
+    const beforeReplay = await snapshot();
+    const replay = await call('POST', `/api/runs/${running.id}/close`, userA, body);
+    expect(replay.statusCode).toBe(200);
+    expect(replay.json()).toEqual(value);
+    expect(await snapshot()).toEqual(beforeReplay);
+    const mismatch = await call('POST', `/api/runs/${running.id}/close`, userA, { ...body, reason: 'Different' });
+    expect(mismatch.statusCode).toBe(409);
+    expect(mismatch.json()).toMatchObject({ error: { code: 'idempotency_mismatch' } });
+    expect(await snapshot()).toEqual(beforeReplay);
+  });
+
+  it.each(['finished', 'failed', 'cancelled'] as const)('refuses Completed close on an ended %s run without changing it', async executionState => {
+    const run = await runsRepo.createRun(db, accessA, alphaId, { agentId: agentAId, title: 'Ended already', workloadType: 'coding' });
+    await pool.query('UPDATE runs SET execution_state = $1, finished_at = now() WHERE id = $2', [executionState, run.id]);
+    const before = (await call('GET', `/api/runs/${run.id}`, userA)).json();
+    const body = { outcome: 'completed', reason: 'Too late', expected_revision: 1, request_id: nextRequestId() };
+    const response = await call('POST', `/api/runs/${run.id}/close`, userA, body);
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({ error: { code: 'conflict', message: 'Run has already ended', details: { current: before } } });
+    expect((await call('GET', `/api/runs/${run.id}`, userA)).json()).toEqual(before);
+    const replay = await call('POST', `/api/runs/${run.id}/close`, userA, body);
+    expect(replay.statusCode).toBe(409);
+    expect(replay.json()).toEqual(response.json());
+    expect((await audits.listAuditEvents(db, accessA, alphaId)).filter(row => row.action === 'manual_close' && row.target === run.id)).toEqual([]);
+  });
+
+  it('requires a non-empty reason for Completed close and refuses bearer-only close', async () => {
+    const run = await runsRepo.createRun(db, accessA, alphaId, { agentId: agentAId, title: 'Reason required', workloadType: 'coding' });
+    for (const reason of [undefined, '', '   ']) {
+      const response = await call('POST', `/api/runs/${run.id}/close`, userA, { outcome: 'completed', reason, expected_revision: 1, request_id: nextRequestId() });
+      expect(response.statusCode).toBe(400);
+    }
+    const denied = await app.inject({ method: 'POST', url: `/api/runs/${run.id}/close`, headers: { authorization: 'Bearer not-a-browser-session' }, payload: { outcome: 'completed', reason: 'Done', expected_revision: 1, request_id: nextRequestId() } });
+    expect(denied.statusCode).toBe(401);
+    expect((await call('GET', `/api/runs/${run.id}`, userA)).json()).toMatchObject({ executionState: 'running', revision: 1 });
+  });
+
   it('keeps last_contact_at and execution_state when metadata is corrected', async () => {
     const run = await runsRepo.createRun(db, accessA, alphaId, { agentId: agentAId, title: 'Metadata', workloadType: 'coding' });
     await pool.query(`UPDATE runs SET last_contact_at = '2020-01-01T00:00:00.000Z' WHERE id = $1`, [run.id]);
