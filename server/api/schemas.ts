@@ -128,7 +128,7 @@ export const patchAccountSchema = z.strictObject({
 }).refine((value) => value.publicHandle !== undefined || value.alerts !== undefined || value.publicProfile !== undefined);
 
 export const closeRunSchema = z.strictObject({
-  outcome: z.enum(['failed', 'cancelled']),
+  outcome: z.enum(['completed', 'failed', 'cancelled']),
   reason: z.string().trim().min(1).max(limits.closeReason),
   expected_revision: revisionSchema,
   request_id: requestIdSchema,

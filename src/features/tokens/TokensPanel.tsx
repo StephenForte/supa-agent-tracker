@@ -83,6 +83,7 @@ function DemoTokensPanel() {
   const visible = orderedTokens(tokens, showRevoked);
   return <div className="flex min-w-0 flex-col gap-4">
     <p className="lede">MCP tokens in this demo are fake. A new value is shown once, then discarded.</p>
+    <div><Button variant="primary" onClick={() => { dismissReveal(); setFormError(null); setScopeToken(null); setMode('all'); setProjectIds([]); setCreateOpen(true); }}>Create token</Button></div>
     {actionError && <p role="alert">{actionError}</p>}
     {plaintext && <TokenReveal key={revealGeneration} plaintext={plaintext} mcpUrl={MCP_PLACEHOLDER_URL} onDismiss={dismissReveal} />}
     {revoked > 0 && <div><Button aria-pressed={showRevoked} onClick={() => setShowRevoked(value => !value)}>Show revoked ({revoked})</Button></div>}
@@ -104,7 +105,6 @@ function DemoTokensPanel() {
         </div>}
       </article></li>)}
     </ul>}
-    <div><Button variant="primary" onClick={() => { dismissReveal(); setFormError(null); setScopeToken(null); setMode('all'); setProjectIds([]); setCreateOpen(true); }}>Create token</Button></div>
     {createOpen && <Dialog open title="Create a fake token" onClose={closeCreate} footer={<>
       {formError && <p role="alert">{formError}</p>}
       <Button variant="primary" onClick={() => void createToken()}>Create token</Button>

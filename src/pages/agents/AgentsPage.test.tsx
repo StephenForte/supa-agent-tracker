@@ -257,6 +257,7 @@ it('closing a stale run on this page updates the project counts and leaves its n
   const stepsBefore = await sources.tracker.listNextSteps('prj_dashboard');
   fireEvent.click(screen.getByRole('button', { name: 'Demo: close run run_4' }));
   const dialog = screen.getByRole('dialog');
+  fireEvent.change(within(dialog).getByLabelText('Outcome'), { target: { value: 'cancelled' } });
   fireEvent.change(within(dialog).getByLabelText('Reason (required)'), { target: { value: 'Abandoned from all agents' } });
   fireEvent.click(within(dialog).getByRole('button', { name: 'Confirm demo close' }));
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());

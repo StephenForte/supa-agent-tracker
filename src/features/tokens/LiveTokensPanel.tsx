@@ -21,6 +21,7 @@ export function LiveTokensPanel() {
   const revoked = revokedTokenCount(tokens);
   const visible = orderedTokens(tokens, showRevoked);
   return <div className="grid gap-4"><p>MCP tokens can cover all of your projects, including ones you create later, or a specific list. A new value is shown once.</p>
+    <div><Button onClick={() => setAction({ kind: 'create' })}>Create token</Button></div>
     {revoked > 0 && <div><Button aria-pressed={showRevoked} onClick={() => setShowRevoked(value => !value)}>Show revoked ({revoked})</Button></div>}
     {!tokens.length && <p>No MCP tokens. Create a token to connect an agent.</p>}
     {tokens.length > 0 && !visible.length && <p>No active tokens.</p>}
@@ -29,7 +30,6 @@ export function LiveTokensPanel() {
       <dt>Created</dt><dd>{formatTimestamp(token.createdAt)}</dd><dt>Last used</dt><dd>{formatLastUsed(token.lastUsedAt)}</dd><dt>Status</dt><dd>{tokenStatus(token)}</dd></dl>
       {!token.revokedAt && <div className="link-list"><Button onClick={() => setAction({ kind: 'scope', token })}>Edit scope</Button><Button onClick={() => setAction({ kind: 'rotate', id: token.id, label: token.label })}>Rotate {token.label}</Button><Button onClick={() => setAction({ kind: 'revoke', id: token.id, label: token.label })}>Revoke {token.label}</Button></div>}
     </article>)}
-    <div><Button onClick={() => setAction({ kind: 'create' })}>Create token</Button></div>
     {action && <TokenActionDialog key={action.kind === 'scope' ? `scope-${action.token.id}` : JSON.stringify(action)} action={action} projects={projects} onClose={() => setAction(null)} />}
   </div>;
 }

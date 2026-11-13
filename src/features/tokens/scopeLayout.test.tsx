@@ -65,6 +65,15 @@ for (const live of [false, true]) {
       return { sources, create, update };
     }
 
+    it('places Create token above the first token in document order', async () => {
+      const { sources } = setup();
+      try {
+        const first = await screen.findByRole('article', { name: 'Demo coding client tok_1' });
+        const opener = screen.getByRole('button', { name: 'Create token' });
+        expect(opener.compareDocumentPosition(first) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      } finally { sources.dispose(); }
+    });
+
     for (const edit of [false, true]) {
       it(`${edit ? 'saves' : 'creates'} the full hidden selection and keeps title, error and actions outside the list`, async () => {
         const user = userEvent.setup();

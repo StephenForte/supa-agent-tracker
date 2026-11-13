@@ -299,8 +299,14 @@ describe('access-controlled repositories on real Postgres', () => {
     expect(closed.status).toBe('saved');
     expect((await audits.listAuditEvents(db, a, x.id)).some((row) => row.action === 'manual_close' && row.target === fresh.id)).toBe(true);
     const stillRunning = await runs.createRun(db, a, x.id, runInput());
-    await denied(() => runs.updateRun(db, a, x.id, stillRunning.id, 1, { executionState: 'finished' }));
-    await denied(() => runs.updateRun(db, token, x.id, stillRunning.id, 1, { executionState: 'failed' }, { event: { kind: 'manual_close' } }));
+    expect(await runs.updateRun(db, a, x.id, stillRunning.id, 1, { executionState: 'finished', workStatus: 'completed' })).toMatchObject({ status: 'saved', value: { executionState: 'finished', workStatus: 'completed' } });
+    await denied(() => runs.updateRun(db, a, x.id, stillRunning.id, 2, { executionState: 'finished' }, { event: { kind: 'manual_close' } }));
+    const credentialRun = await runs.createRun(db, a, x.id, runInput());
+    for (const executionState of ['finished', 'failed', 'cancelled'] as const) {
+      await denied(() => runs.updateRun(db, token, x.id, credentialRun.id, 1, { executionState }, { event: { kind: 'manual_close' } }));
+      expect(await runs.getRun(db, a, x.id, credentialRun.id)).toMatchObject({ executionState: 'running', revision: 1 });
+    }
+    await denied(() => runs.updateRun(db, a, x.id, credentialRun.id, 1, {}, { event: { kind: 'manual_close' } }));
     await audits.appendAuditEvent(db, a, null, { action: 'credential_issued', target: credential.id });
     expect(await audits.listAuditEvents(db, b, null)).toEqual([]);
     await denied(() => audits.listAuditEvents(db, token, null));
